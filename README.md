@@ -1,5 +1,11 @@
 # StudentConnect
 
+![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
+![Angular](https://img.shields.io/badge/Angular-22-DD0031?logo=angular&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-local-4169E1?logo=postgresql&logoColor=white)
+![Azure](https://img.shields.io/badge/Azure-Blob%20Storage-0078D4?logo=microsoftazure&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 A beginner-friendly, cloud-bound student learning and school management portal, built
 incrementally as a teaching project for an Azure Fundamentals program. See
 [StudentConnect.md](StudentConnect.md) for the full blueprint (roles, phases, Azure
@@ -172,9 +178,15 @@ Terminal 1 — API (applies pending EF Core migrations automatically on startup)
 cd backend/StudentConnect.Api
 dotnet run --launch-profile http
 ```
-Runs at `http://localhost:5286`. Requires a local PostgreSQL server reachable at the
-connection string in `appsettings.json` (`Host=localhost;Port=5432;Database=studentconnect_db;...`)
-— the database itself is created once (`CREATE DATABASE studentconnect_db;`) and its
+Runs at `http://localhost:5286`. Requires a local PostgreSQL server. `appsettings.json`
+only contains placeholder values — the real connection string and JWT signing key are
+kept out of the repo via `dotnet user-secrets` (never committed). Set them once per machine:
+```bash
+cd backend/StudentConnect.Api
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=studentconnect_db;Username=<user>;Password=<password>;SSL Mode=Disable"
+dotnet user-secrets set "Jwt:Secret" "<any long random string>"
+```
+The database itself is created once (`CREATE DATABASE studentconnect_db;`) and its
 schema is kept up to date automatically by EF Core migrations on startup.
 
 Terminal 2 — Frontend:
@@ -202,4 +214,8 @@ cd backend/StudentConnect.Api
 dotnet ef migrations add <MigrationName>
 dotnet ef database update
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
 

@@ -1,0 +1,22 @@
+.registrations-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.registrations-table th,
+.registrations-table td {
+  text-align: left;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.registrations-table thead th {
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}

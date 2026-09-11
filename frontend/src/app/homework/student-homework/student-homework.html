@@ -1,0 +1,34 @@
+<section class="page">
+  <a class="back-link" [routerLink]="['/students', studentId]">← Back to Profile</a>
+  <h1>My Homework</h1>
+
+  @if (state().loading) {
+    <p class="loading">Loading homework...</p>
+  } @else if (state().error) {
+    <p class="error-message">
+      Unable to load homework. Please check whether the StudentConnect API is running.
+    </p>
+  } @else if (state().homework.length === 0) {
+    <p class="empty">No homework assigned yet.</p>
+  } @else {
+    <ul class="homework-list">
+      @for (item of state().homework; track item.id) {
+        <li class="homework-card">
+          <div class="homework-info">
+            <span class="title">{{ item.title }}</span>
+            <span class="meta">{{ item.subjectName }} — Due {{ item.dueDate }}</span>
+          </div>
+          <span
+            class="status"
+            [class.status-submitted]="item.status === 'Submitted'"
+            [class.status-late]="item.status === 'Late'"
+            [class.status-not-submitted]="item.status === 'Not Submitted'"
+          >
+            {{ item.status }}
+          </span>
+          <a class="view-link" [routerLink]="['/students', studentId, 'homework', item.id]">View Homework</a>
+        </li>
+      }
+    </ul>
+  }
+</section>

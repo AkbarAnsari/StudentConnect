@@ -1,0 +1,32 @@
+h1 {
+  margin-bottom: 0.25rem;
+}
+
+.role {
+  color: #6b7280;
+  margin-top: 0;
+}
+
+.dashboard-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+}
+
+.dashboard-list a {
+  display: block;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.dashboard-list a:hover {
+  background: #f9fafb;
+}

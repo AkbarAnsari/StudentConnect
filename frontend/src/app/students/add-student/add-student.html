@@ -1,0 +1,67 @@
+<section class="page page-narrow">
+  <a class="back-link" routerLink="/students">← Back to Students</a>
+  <h1>Add Student</h1>
+
+  @if (errorMessage()) {
+    <p class="error-message">{{ errorMessage() }}</p>
+  }
+
+  <form [formGroup]="form" (ngSubmit)="onSubmit()">
+    <label>
+      Student ID
+      <input type="text" formControlName="studentId" placeholder="e.g. STU011" />
+      @if (form.controls.studentId.invalid && form.controls.studentId.touched) {
+        <span class="field-error">Student ID is required.</span>
+      }
+    </label>
+
+    <label>
+      First Name
+      <input type="text" formControlName="firstName" />
+      @if (form.controls.firstName.invalid && form.controls.firstName.touched) {
+        <span class="field-error">First name is required.</span>
+      }
+    </label>
+
+    <label>
+      Last Name
+      <input type="text" formControlName="lastName" />
+      @if (form.controls.lastName.invalid && form.controls.lastName.touched) {
+        <span class="field-error">Last name is required.</span>
+      }
+    </label>
+
+    <label>
+      Email
+      <input type="email" formControlName="email" />
+      @if (form.controls.email.invalid && form.controls.email.touched) {
+        <span class="field-error">A valid email is required.</span>
+      }
+    </label>
+
+    <label>
+      Grade
+      <select formControlName="gradeId">
+        <option [value]="0">Select a grade</option>
+        @for (grade of grades(); track grade.id) {
+          <option [value]="grade.id">{{ grade.name }}</option>
+        }
+      </select>
+      @if (form.controls.gradeId.invalid && form.controls.gradeId.touched) {
+        <span class="field-error">Grade is required.</span>
+      }
+    </label>
+
+    <label>
+      Section
+      <input type="text" formControlName="section" placeholder="e.g. A" />
+      @if (form.controls.section.invalid && form.controls.section.touched) {
+        <span class="field-error">Section is required.</span>
+      }
+    </label>
+
+    <button type="submit" [disabled]="submitting()">
+      {{ submitting() ? 'Saving...' : 'Add Student' }}
+    </button>
+  </form>
+</section>

@@ -1,0 +1,63 @@
+<section class="page">
+  <a class="back-link" [routerLink]="['/students', studentId, 'homework']">← Back to My Homework</a>
+
+  @if (state().loading) {
+    <p class="loading">Loading homework...</p>
+  } @else if (state().error) {
+    <p class="error-message">
+      Unable to load homework. Please check whether the StudentConnect API is running.
+    </p>
+  } @else if (state().homework; as h) {
+    <h1>{{ h.title }}</h1>
+
+    <dl class="details">
+      <dt>Subject</dt>
+      <dd>{{ h.subjectName }}</dd>
+      <dt>Teacher</dt>
+      <dd>{{ h.teacherName }}</dd>
+      <dt>Due</dt>
+      <dd>{{ h.dueDate }}</dd>
+    </dl>
+
+    <section class="panel">
+      <h3>Instructions</h3>
+      <p>{{ h.description }}</p>
+    </section>
+
+    <section class="panel">
+      <h3>Your Submission</h3>
+
+      @if (!checkedForSubmission()) {
+        <p class="loading">Loading submission status...</p>
+      } @else if (existingSubmission(); as s) {
+        <dl class="details">
+          <dt>Submitted</dt>
+          <dd>{{ s.submittedDate }}</dd>
+          <dt>Status</dt>
+          <dd>{{ s.status }}</dd>
+          <dt>Comments</dt>
+          <dd>{{ s.comments }}</dd>
+        </dl>
+      } @else {
+        @if (successMessage()) {
+          <p class="success-message">{{ successMessage() }}</p>
+        }
+        @if (errorMessage()) {
+          <p class="error-message">{{ errorMessage() }}</p>
+        }
+        <form [formGroup]="form" (ngSubmit)="onSubmit()">
+          <label>
+            Comments / Answer
+            <textarea formControlName="comments" rows="4" placeholder="e.g. I completed questions 1-20."></textarea>
+            @if (form.controls.comments.invalid && form.controls.comments.touched) {
+              <span class="field-error">Comments are required.</span>
+            }
+          </label>
+          <button type="submit" [disabled]="submitting()">
+            {{ submitting() ? 'Submitting...' : 'Submit Homework' }}
+          </button>
+        </form>
+      }
+    </section>
+  }
+</section>

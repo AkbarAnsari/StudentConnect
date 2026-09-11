@@ -1,0 +1,33 @@
+<section class="page page-narrow">
+  @if (authService.currentUser(); as user) {
+    <h1>Welcome, {{ user.displayName }}!</h1>
+    <p class="role">Role: {{ user.role }}</p>
+
+    @if (user.role === 'Student' && user.studentId) {
+      <ul class="dashboard-list">
+        <li><a [routerLink]="['/students', user.studentId]">My Profile</a></li>
+        <li><a [routerLink]="['/students', user.studentId, 'attendance']">My Attendance</a></li>
+        <li><a [routerLink]="['/students', user.studentId, 'marks']">My Marks</a></li>
+        <li><a [routerLink]="['/students', user.studentId, 'homework']">My Homework</a></li>
+        <li><a [routerLink]="['/students', user.studentId, 'materials']">My Learning Materials</a></li>
+        <li><a [routerLink]="['/students', user.studentId, 'activities']">My Activities</a></li>
+      </ul>
+    } @else if (user.role === 'Teacher') {
+      <ul class="dashboard-list">
+        <li><a routerLink="/record-attendance">Manage Attendance</a></li>
+        <li><a routerLink="/enter-marks">Manage Marks</a></li>
+        <li><a routerLink="/teacher-homework">Create Homework</a></li>
+        <li><a routerLink="/teacher-materials">Manage Learning Materials</a></li>
+        <li><a routerLink="/activity-management">Manage Activities</a></li>
+      </ul>
+    } @else if (user.role === 'Admin') {
+      <ul class="dashboard-list">
+        <li><a routerLink="/students">Manage Students</a></li>
+        <li><a routerLink="/activity-management">Manage Activities</a></li>
+        <li><a routerLink="/assessments">Manage Assessments</a></li>
+        <li><a routerLink="/teacher-homework">Manage Homework</a></li>
+        <li><a routerLink="/teacher-materials">Manage Learning Materials</a></li>
+      </ul>
+    }
+  }
+</section>

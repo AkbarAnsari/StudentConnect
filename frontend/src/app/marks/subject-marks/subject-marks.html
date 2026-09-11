@@ -1,0 +1,33 @@
+<section class="page">
+  <a class="back-link" [routerLink]="['/students', studentId, 'marks']">← Back to My Marks</a>
+
+  @if (state().loading) {
+    <p class="loading">Loading marks...</p>
+  } @else if (state().error) {
+    <p class="error-message">
+      Unable to load marks. Please check whether the StudentConnect API is running.
+    </p>
+  } @else if (state().records.length === 0) {
+    <p class="empty">No marks recorded for this subject yet.</p>
+  } @else {
+    <h1>{{ state().records[0].subjectName }} Marks</h1>
+    <table class="marks-table">
+      <thead>
+        <tr>
+          <th>Assessment</th>
+          <th>Date</th>
+          <th>Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (record of state().records; track record.id) {
+          <tr>
+            <td>{{ record.assessmentTitle }}</td>
+            <td>{{ record.assessmentDate }}</td>
+            <td>{{ record.marksObtained }} / {{ record.maximumMarks }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>

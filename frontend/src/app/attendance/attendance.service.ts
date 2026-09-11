@@ -1,0 +1,56 @@
+import { HttpClient } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
+import {
+  AttendanceCreateInput,
+  AttendanceRecord,
+  AttendanceSummary,
+  BulkAttendanceInput,
+  Subject,
+} from './attendance.model';
+
+// AttendanceComponent -> AttendanceService -> HttpClient -> ASP.NET Core API -> EF Core -> SQL Server.
+// Components never talk to HttpClient directly — only through this service.
+@Injectable({ providedIn: 'root' })
+export class AttendanceService {
+  private readonly http = inject(HttpClient);
+  private readonly baseUrl = `${environment.apiBaseUrl}/attendance`;
+  private readonly subjectsUrl = `${environment.apiBaseUrl}/subjects`;
+
+  getStudentAttendance(studentId: number): Observable<AttendanceRecord[]> {
+    return this.http.get<AttendanceRecord[]>(`${this.baseUrl}/student/${studentId}`);
+  }
+
+  getStudentSubjectAttendance(studentId: number, subjectId: number): Observable<AttendanceRecord[]> {
+    return this.http.get<AttendanceRecord[]>(`${this.baseUrl}/student/${studentId}/subject/${subjectId}`);
+  }
+
+  getStudentAttendanceSummary(studentId: number): Observable<AttendanceSummary[]> {
+    return this.http.get<AttendanceSummary[]>(`${this.baseUrl}/student/${studentId}/summary`);
+  }
+
+  createAttendance(record: AttendanceCreateInput): Observable<AttendanceRecord> {
+    return this.http.post<AttendanceRecord>(this.baseUrl, record);
+  }
+
+  updateAttendance(id: number, status: AttendanceStatusInput): Observable<AttendanceRecord> {
+    return this.http.put<AttendanceRecord>(`${this.baseUrl}/${id}`, status);
+  }
+
+  deleteAttendance(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  }
+
+  saveBulkAttendance(request: BulkAttendanceInput): Observable<{ message: string; count: number }> {
+    return this.http.post<{ message: string; count: number }>(`${this.baseUrl}/bulk`, request);
+  }
+
+  getSubjects(): Observable<Subject[]> {
+    return this.http.get<Subject[]>(this.subjectsUrl);
+  }
+}
+
+interface AttendanceStatusInput {
+  status: 'Present' | 'Absent';
+}

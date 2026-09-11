@@ -1,0 +1,34 @@
+.attendance-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.attendance-table th,
+.attendance-table td {
+  text-align: left;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.attendance-table thead th {
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.attendance-table a {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.attendance-table tfoot td {
+  font-weight: 700;
+  color: #1e3a5f;
+  border-bottom: none;
+}

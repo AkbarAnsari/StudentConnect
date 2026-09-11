@@ -1,0 +1,474 @@
+/* Global design system — shared by every page. Component-level CSS should only
+   contain styles unique to that page; common patterns (page shell, headers,
+   alerts, buttons, forms, tables) live here so the whole app looks consistent. */
+
+:root {
+  --color-primary-900: #0b2138;
+  --color-primary-800: #14314f;
+  --color-primary-700: #1e3a5f;
+  --color-primary-600: #2c4d75;
+
+  --color-accent-50: #eff6ff;
+  --color-accent-100: #dbeafe;
+  --color-accent-600: #2563eb;
+  --color-accent-700: #1d4ed8;
+
+  --color-success-50: #f0fdf4;
+  --color-success-200: #bbf7d0;
+  --color-success-700: #15803d;
+
+  --color-warning-50: #fffbeb;
+  --color-warning-200: #fde68a;
+  --color-warning-700: #92400e;
+
+  --color-danger-50: #fef2f2;
+  --color-danger-200: #fecaca;
+  --color-danger-600: #dc2626;
+  --color-danger-700: #b91c1c;
+
+  --color-neutral-900: #111827;
+  --color-neutral-700: #374151;
+  --color-neutral-600: #4b5563;
+  --color-neutral-500: #6b7280;
+  --color-neutral-300: #d1d5db;
+  --color-neutral-200: #e5e7eb;
+  --color-neutral-100: #f3f4f6;
+  --color-neutral-50: #f9fafb;
+  --color-surface: #ffffff;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(15, 41, 66, 0.06), 0 1px 1px rgba(15, 41, 66, 0.04);
+  --shadow-md: 0 6px 16px rgba(15, 41, 66, 0.08), 0 2px 4px rgba(15, 41, 66, 0.06);
+  --shadow-lg: 0 16px 40px rgba(15, 41, 66, 0.14);
+
+  --header-height: 64px;
+  --page-max-width: 1080px;
+  --page-max-width-wide: 1280px;
+  --page-max-width-narrow: 520px;
+
+  --font-sans:
+    'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  background-color: var(--color-neutral-50);
+  color: var(--color-neutral-700);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--color-primary-700);
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0 0 0.5rem;
+}
+
+h1 {
+  font-size: 1.65rem;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: 1.3rem;
+}
+
+h3 {
+  font-size: 1.05rem;
+}
+
+p {
+  margin: 0 0 0.75rem;
+}
+
+a {
+  color: var(--color-accent-600);
+}
+
+/* ---------- Page shell (used by every route component) ---------- */
+
+.page {
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3.5rem;
+}
+
+.page-wide {
+  max-width: var(--page-max-width-wide);
+}
+
+.page-narrow {
+  max-width: var(--page-max-width-narrow);
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.page-header h1 {
+  margin-bottom: 0.15rem;
+}
+
+/* ---------- Buttons & button-styled links ---------- */
+
+button,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: var(--color-accent-600);
+  color: #fff;
+  border: 1px solid transparent;
+  padding: 0.55rem 1.1rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.05s ease;
+  white-space: nowrap;
+}
+
+button:hover,
+.btn:hover {
+  background: var(--color-accent-700);
+}
+
+button:active,
+.btn:active {
+  transform: translateY(1px);
+}
+
+button:disabled,
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+.btn:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--color-accent-600);
+  outline-offset: 2px;
+}
+
+.btn-secondary {
+  background: #fff;
+  color: var(--color-primary-700);
+  border-color: var(--color-neutral-300);
+}
+
+.btn-secondary:hover {
+  background: var(--color-neutral-100);
+}
+
+.btn-danger {
+  background: #fff;
+  color: var(--color-danger-700);
+  border-color: var(--color-danger-200);
+}
+
+.btn-danger:hover {
+  background: var(--color-danger-50);
+}
+
+.add-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--color-accent-600);
+  color: #fff;
+  text-decoration: none;
+  padding: 0.55rem 1.1rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  transition: background-color 0.15s ease;
+}
+
+.add-link:hover {
+  background: var(--color-accent-700);
+}
+
+/* ---------- Forms ---------- */
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: var(--color-primary-700);
+  font-size: 0.9rem;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-neutral-300);
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-weight: normal;
+  color: var(--color-neutral-700);
+  background: #fff;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--color-accent-600);
+  box-shadow: 0 0 0 3px var(--color-accent-100);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-500);
+}
+
+.field-error {
+  color: var(--color-danger-700);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+/* ---------- Status / alert callouts ---------- */
+
+.notice,
+.error-message,
+.success-message {
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  border: 1px solid transparent;
+  margin-bottom: 1rem;
+}
+
+.notice {
+  background: var(--color-warning-50);
+  border-color: var(--color-warning-200);
+  color: var(--color-warning-700);
+}
+
+.notice code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+}
+
+.error-message {
+  background: var(--color-danger-50);
+  border-color: var(--color-danger-200);
+  color: var(--color-danger-700);
+}
+
+.success-message {
+  background: var(--color-success-50);
+  border-color: var(--color-success-200);
+  color: var(--color-success-700);
+}
+
+.loading,
+.empty {
+  color: var(--color-neutral-500);
+  padding: 1.5rem 0;
+  text-align: center;
+}
+
+/* ---------- Filter / control bars ---------- */
+
+.controls {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 1.5rem;
+  background: #fff;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.controls label {
+  margin: 0;
+}
+
+/* ---------- Tables ---------- */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--color-neutral-200);
+}
+
+thead th {
+  background: var(--color-neutral-50);
+  color: var(--color-neutral-500);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+tbody tr:hover {
+  background: var(--color-neutral-50);
+}
+
+/* ---------- Cards ---------- */
+
+.card {
+  background: #fff;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------- Status badges ---------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-600);
+  white-space: nowrap;
+}
+
+.badge-success {
+  background: var(--color-success-50);
+  color: var(--color-success-700);
+}
+
+.badge-warning {
+  background: var(--color-warning-50);
+  color: var(--color-warning-700);
+}
+
+.badge-danger {
+  background: var(--color-danger-50);
+  color: var(--color-danger-700);
+}
+
+.badge-info {
+  background: var(--color-accent-50);
+  color: var(--color-accent-700);
+}
+
+/* ---------- Domain status pills (attendance / homework / activities) ---------- */
+/* Used directly via [class.status-x] bindings across many pages, with or without
+   a wrapping .badge/.status element — so each variant carries full pill styling. */
+
+.status-registered,
+.status-submitted,
+.status-present {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  background: var(--color-success-50);
+  color: var(--color-success-700);
+}
+
+.status-late {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  background: var(--color-warning-50);
+  color: var(--color-warning-700);
+}
+
+.status-not-submitted,
+.status-absent,
+.status-full,
+.status-closed {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  background: var(--color-danger-50);
+  color: var(--color-danger-700);
+}
+
+.status-cancelled {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-500);
+}
+

@@ -1,0 +1,28 @@
+<section class="page page-wide">
+  <div class="page-header">
+    <h1>Assessments</h1>
+    <a class="add-link" routerLink="/assessments/add">+ Create Assessment</a>
+  </div>
+
+  @if (state().loading) {
+    <p class="loading">Loading assessments...</p>
+  } @else if (state().error) {
+    <p class="error-message">Unable to load assessments. Please check whether the StudentConnect API is running.</p>
+  } @else if (state().assessments.length === 0) {
+    <p class="empty">No assessments yet.</p>
+  } @else {
+    @for (group of bySubject(); track group[0]) {
+      <section class="subject-group">
+        <h2>{{ group[0] }}</h2>
+        <ul class="assessment-list">
+          @for (assessment of group[1]; track assessment.id) {
+            <li>
+              <span class="title">{{ assessment.title }}</span>
+              <span class="meta">{{ assessment.date }} — {{ assessment.maximumMarks }} marks</span>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  }
+</section>

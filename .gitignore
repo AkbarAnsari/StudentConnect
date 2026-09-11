@@ -1,0 +1,37 @@
+# ===== .NET / backend =====
+backend/**/bin/
+backend/**/obj/
+*.user
+*.suo
+.vs/
+
+# Local uploaded files (Phase 8 LocalFileStorage) — never commit user content
+backend/StudentConnect.Api/storage/
+
+# Runtime/debug logs generated during local dev & smoke tests
+*.log
+backend/StudentConnect.Api/*.out.log
+backend/StudentConnect.Api/*.err.log
+
+# ===== Angular / frontend =====
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/coverage/
+npm-debug.log*
+
+# ===== Editors / OS =====
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# ===== Secrets (should never live in the repo — use dotnet user-secrets / env vars) =====
+**/appsettings.Local.json
+**/appsettings.*.local.json
+.env
+.env.*

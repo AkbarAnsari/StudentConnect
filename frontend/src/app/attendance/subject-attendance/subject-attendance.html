@@ -1,0 +1,33 @@
+<section class="page">
+  <a class="back-link" [routerLink]="['/students', studentId, 'attendance']">← Back to Attendance</a>
+
+  @if (state().loading) {
+    <p class="loading">Loading attendance...</p>
+  } @else if (state().error) {
+    <p class="error-message">
+      Unable to load attendance. Please check whether the StudentConnect API is running.
+    </p>
+  } @else if (state().records.length === 0) {
+    <p class="empty">No attendance records for this subject yet.</p>
+  } @else {
+    <h1>{{ state().records[0].subjectName }} Attendance</h1>
+    <table class="attendance-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (record of state().records; track record.id) {
+          <tr>
+            <td>{{ record.date }}</td>
+            <td [class.status-present]="record.status === 'Present'" [class.status-absent]="record.status === 'Absent'">
+              {{ record.status }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>

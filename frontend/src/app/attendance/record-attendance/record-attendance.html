@@ -1,0 +1,69 @@
+<section class="page page-wide">
+  <h1>Record Attendance</h1>
+
+  <div class="controls">
+    <label>
+      Grade
+      <select [ngModel]="gradeId()" (ngModelChange)="gradeId.set($event)">
+        <option [ngValue]="null">Select a grade</option>
+        @for (grade of grades(); track grade.id) {
+          <option [ngValue]="grade.id">{{ grade.name }}</option>
+        }
+      </select>
+    </label>
+
+    <label>
+      Subject
+      <select [ngModel]="subjectId()" (ngModelChange)="subjectId.set($event)">
+        <option [ngValue]="null">Select a subject</option>
+        @for (subject of subjects(); track subject.id) {
+          <option [ngValue]="subject.id">{{ subject.name }}</option>
+        }
+      </select>
+    </label>
+
+    <label>
+      Date
+      <input type="date" [ngModel]="date()" (ngModelChange)="date.set($event)" />
+    </label>
+  </div>
+
+  @if (successMessage()) {
+    <p class="success-message">{{ successMessage() }}</p>
+  }
+  @if (errorMessage()) {
+    <p class="error-message">{{ errorMessage() }}</p>
+  }
+
+  @if (gradeId() === null) {
+    <p class="empty">Select a grade to see its students.</p>
+  } @else if (classStudents().length === 0) {
+    <p class="empty">No students found for this grade.</p>
+  } @else {
+    <table class="roster-table">
+      <thead>
+        <tr>
+          <th>Student</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (student of classStudents(); track student.id) {
+          <tr>
+            <td>{{ student.firstName }} {{ student.lastName }}</td>
+            <td>
+              <select [ngModel]="statusFor(student.id)" (ngModelChange)="onStatusChange(student.id, $event)">
+                <option value="Present">Present</option>
+                <option value="Absent">Absent</option>
+              </select>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <button type="button" [disabled]="saving()" (click)="onSave()">
+      {{ saving() ? 'Saving...' : 'Save Attendance' }}
+    </button>
+  }
+</section>

@@ -1,0 +1,67 @@
+<section class="page page-narrow">
+  <a class="back-link" routerLink="/activity-management">← Back to Activity Management</a>
+  <h1>Create Activity</h1>
+
+  @if (errorMessage()) {
+    <p class="error-message">{{ errorMessage() }}</p>
+  }
+
+  <form [formGroup]="form" (ngSubmit)="onSubmit()">
+    <label>
+      Title
+      <input type="text" formControlName="title" placeholder="e.g. Coding Workshop" />
+      @if (form.controls.title.invalid && form.controls.title.touched) {
+        <span class="field-error">Title is required.</span>
+      }
+    </label>
+
+    <label>
+      Description
+      <textarea formControlName="description" rows="3" placeholder="e.g. Learn the basics of programming"></textarea>
+      @if (form.controls.description.invalid && form.controls.description.touched) {
+        <span class="field-error">Description is required.</span>
+      }
+    </label>
+
+    <label>
+      Date
+      <input type="datetime-local" formControlName="date" />
+      @if (form.controls.date.invalid && form.controls.date.touched) {
+        <span class="field-error">Date is required.</span>
+      }
+    </label>
+
+    <label>
+      Location
+      <input type="text" formControlName="location" placeholder="e.g. Computer Lab" />
+      @if (form.controls.location.invalid && form.controls.location.touched) {
+        <span class="field-error">Location is required.</span>
+      }
+    </label>
+
+    <label>
+      Grade
+      <select formControlName="gradeId">
+        <option [value]="0">Select a grade</option>
+        @for (grade of grades(); track grade.id) {
+          <option [value]="grade.id">{{ grade.name }}</option>
+        }
+      </select>
+      @if (form.controls.gradeId.invalid && form.controls.gradeId.touched) {
+        <span class="field-error">Grade is required.</span>
+      }
+    </label>
+
+    <label>
+      Capacity
+      <input type="number" formControlName="capacity" min="1" />
+      @if (form.controls.capacity.invalid && form.controls.capacity.touched) {
+        <span class="field-error">Capacity must be greater than zero.</span>
+      }
+    </label>
+
+    <button type="submit" [disabled]="submitting()">
+      {{ submitting() ? 'Saving...' : 'Create Activity' }}
+    </button>
+  </form>
+</section>

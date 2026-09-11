@@ -1,0 +1,28 @@
+<section class="page page-wide">
+  <div class="page-header">
+    <h1>My Homework (Teacher)</h1>
+    <a class="add-link" routerLink="/create-homework">+ Create Homework</a>
+  </div>
+
+  @if (state().loading) {
+    <p class="loading">Loading homework...</p>
+  } @else if (state().error) {
+    <p class="error-message">
+      Unable to load homework. Please check whether the StudentConnect API is running.
+    </p>
+  } @else if (state().homework.length === 0) {
+    <p class="empty">No homework created yet.</p>
+  } @else {
+    <ul class="homework-list">
+      @for (item of state().homework; track item.id) {
+        <li class="homework-card">
+          <div class="homework-info">
+            <span class="title">{{ item.title }}</span>
+            <span class="meta">{{ item.gradeName }} — {{ item.subjectName }} — Due {{ item.dueDate }}</span>
+          </div>
+          <a class="view-link" [routerLink]="['/homework', item.id, 'submissions']">View Submissions</a>
+        </li>
+      }
+    </ul>
+  }
+</section>

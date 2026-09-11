@@ -1,0 +1,36 @@
+<section class="page">
+  <a class="back-link" [routerLink]="['/students', studentId]">← Back to Profile</a>
+  <h1>My Learning Materials</h1>
+
+  @if (state().loading) {
+    <p class="loading">Loading learning materials...</p>
+  } @else if (state().error) {
+    <p class="error-message">
+      Unable to load learning materials. Please check whether the StudentConnect API is running.
+    </p>
+  } @else if (state().materials.length === 0) {
+    <p class="empty">No learning materials yet.</p>
+  } @else {
+    <div class="filters">
+      <select (change)="onSubjectChange($any($event.target).value)">
+        <option value="">All Subjects</option>
+        @for (subject of subjects(); track subject[0]) {
+          <option [value]="subject[0]">{{ subject[1] }}</option>
+        }
+      </select>
+    </div>
+
+    <ul class="material-list">
+      @for (material of filteredMaterials(); track material.id) {
+        <li class="material-card">
+          <div class="material-info">
+            <span class="subject">{{ material.subjectName }}</span>
+            <span class="title">{{ material.title }}</span>
+            <span class="meta">{{ material.fileName }} — {{ formatSize(material.fileSize) }}</span>
+          </div>
+          <a class="download-link" [href]="downloadUrl(material.id)" target="_blank">Download</a>
+        </li>
+      }
+    </ul>
+  }
+</section>

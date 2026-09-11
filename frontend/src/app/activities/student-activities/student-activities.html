@@ -1,0 +1,78 @@
+<section class="page">
+  <a class="back-link" [routerLink]="['/students', studentId]">← Back to Profile</a>
+  <h1>Activities</h1>
+
+  @if (state().loading) {
+    <p class="loading">Loading activities...</p>
+  } @else if (state().error) {
+    <p class="error-message">
+      Unable to load activities. Please check whether the StudentConnect API is running.
+    </p>
+  } @else {
+    @if (state().activities.length === 0) {
+      <p class="empty">No activities available for your grade yet.</p>
+    } @else {
+      <ul class="activity-list">
+        @for (activity of state().activities; track activity.id) {
+          <li class="activity-card">
+            <div class="activity-info">
+              <span class="title">{{ activity.title }}</span>
+              <span class="meta">{{ activity.date }} — {{ activity.location }}</span>
+              <span class="seats">
+                @if (activity.availableSeats > 0) {
+                  {{ activity.availableSeats }} seats available
+                } @else {
+                  Full
+                }
+              </span>
+            </div>
+            <div class="actions">
+              <a class="view-link" [routerLink]="['/students', studentId, 'activities', activity.id]">View Details</a>
+              @if (registrationFor(activity.id); as registration) {
+                <span class="status status-registered">Registered</span>
+                <button type="button" class="cancel-button" (click)="onCancel(registration.id)">Cancel Registration</button>
+              } @else if (isPast(activity)) {
+                <span class="status status-closed">Registration Closed</span>
+              } @else if (activity.availableSeats === 0) {
+                <span class="status status-full">Full</span>
+              } @else {
+                <button type="button" class="register-button" (click)="onRegister(activity.id)">Register</button>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    }
+
+    <h2>My Registered Activities</h2>
+    @if (myRegistrations().length === 0) {
+      <p class="empty">You haven't registered for any activities yet.</p>
+    } @else {
+      <table class="registrations-table">
+        <thead>
+          <tr>
+            <th>Activity</th>
+            <th>Date</th>
+            <th>Location</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (registration of state().registrations; track registration.id) {
+            <tr>
+              <td>{{ registration.activityTitle }}</td>
+              <td>{{ registration.activityDate }}</td>
+              <td>{{ registration.location }}</td>
+              <td
+                [class.status-registered]="registration.status === 'Registered'"
+                [class.status-cancelled]="registration.status === 'Cancelled'"
+              >
+                {{ registration.status }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+</section>

@@ -1,0 +1,39 @@
+<section class="page">
+  <a class="back-link" [routerLink]="['/students', studentId]">← Back to Profile</a>
+  <h1>My Attendance</h1>
+
+  @if (state().loading) {
+    <p class="loading">Loading attendance...</p>
+  } @else if (state().error) {
+    <p class="error-message">
+      Unable to load attendance. Please check whether the StudentConnect API is running.
+    </p>
+  } @else if (state().summary.length === 0) {
+    <p class="empty">No attendance records yet.</p>
+  } @else {
+    <table class="attendance-table">
+      <thead>
+        <tr>
+          <th>Subject</th>
+          <th>Attendance</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (subject of state().summary; track subject.subjectId) {
+          <tr>
+            <td>
+              <a [routerLink]="['/students', studentId, 'attendance', subject.subjectId]">{{ subject.subjectName }}</a>
+            </td>
+            <td>{{ subject.percentage }}%</td>
+          </tr>
+        }
+      </tbody>
+      <tfoot>
+        <tr>
+          <td>Overall</td>
+          <td>{{ overallPercentage(state().summary) }}%</td>
+        </tr>
+      </tfoot>
+    </table>
+  }
+</section>

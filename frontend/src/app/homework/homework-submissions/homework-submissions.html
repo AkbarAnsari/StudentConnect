@@ -1,0 +1,41 @@
+<section class="page page-wide">
+  <a class="back-link" routerLink="/teacher-homework">← Back to My Homework</a>
+  <h1>Submissions</h1>
+
+  @if (state().loading) {
+    <p class="loading">Loading submissions...</p>
+  } @else if (state().error) {
+    <p class="error-message">
+      Unable to load submissions. Please check whether the StudentConnect API is running.
+    </p>
+  } @else if (state().submissions.length === 0) {
+    <p class="empty">No students found for this homework's grade.</p>
+  } @else {
+    <table class="submissions-table">
+      <thead>
+        <tr>
+          <th>Student</th>
+          <th>Status</th>
+          <th>Submitted</th>
+          <th>Comments</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of state().submissions; track row.studentId) {
+          <tr>
+            <td>{{ row.studentName }}</td>
+            <td
+              [class.status-submitted]="row.status === 'Submitted'"
+              [class.status-late]="row.status === 'Late'"
+              [class.status-not-submitted]="row.status === 'Not Submitted'"
+            >
+              {{ row.status }}
+            </td>
+            <td>{{ row.submittedDate ?? '—' }}</td>
+            <td>{{ row.comments ?? '—' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>

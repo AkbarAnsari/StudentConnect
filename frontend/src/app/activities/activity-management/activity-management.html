@@ -1,0 +1,37 @@
+<section class="page page-wide">
+  <div class="page-header">
+    <h1>Activity Management</h1>
+    <a class="add-link" routerLink="/create-activity">+ Create Activity</a>
+  </div>
+
+  @if (deleteError()) {
+    <p class="error-message">{{ deleteError() }}</p>
+  }
+
+  @if (state().loading) {
+    <p class="loading">Loading activities...</p>
+  } @else if (state().error) {
+    <p class="error-message">
+      Unable to load activities. Please check whether the StudentConnect API is running.
+    </p>
+  } @else if (state().activities.length === 0) {
+    <p class="empty">No activities created yet.</p>
+  } @else {
+    <ul class="activity-list">
+      @for (activity of state().activities; track activity.id) {
+        <li class="activity-card">
+          <div class="activity-info">
+            <span class="title">{{ activity.title }}</span>
+            <span class="meta">{{ activity.gradeName }} — {{ activity.location }} — {{ activity.date }}</span>
+            <span class="meta">Registered {{ activity.currentRegistrations }} / {{ activity.capacity }}</span>
+          </div>
+          <div class="actions">
+            <a class="action-link" [routerLink]="['/activity-management', activity.id, 'registrations']">View Registrations</a>
+            <a class="action-link" [routerLink]="['/activity-management', activity.id, 'edit']">Edit</a>
+            <button type="button" class="delete-button" (click)="onDelete(activity.id)">Delete</button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</section>

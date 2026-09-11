@@ -1,0 +1,46 @@
+<section class="page page-wide">
+  <div class="page-header">
+    <h1>Students</h1>
+    <a class="add-link" routerLink="/students/add">+ Add Student</a>
+  </div>
+
+  <div class="filters">
+    <input
+      type="text"
+      class="search-box"
+      placeholder="Search students..."
+      [value]="searchTerm()"
+      (input)="onSearchChange($any($event.target).value)"
+    />
+    <select class="grade-select" (change)="onGradeChange($any($event.target).value)">
+      <option value="">All Grades</option>
+      @for (grade of grades(); track grade[0]) {
+        <option [value]="grade[0]">{{ grade[1] }}</option>
+      }
+    </select>
+  </div>
+
+  @if (state().loading) {
+    <p class="loading">Loading students...</p>
+  } @else if (state().error) {
+    <p class="error">
+      Unable to load students. Please check whether the StudentConnect API is running.
+    </p>
+  } @else if (filteredStudents().length === 0) {
+    <p class="empty">No students match your search.</p>
+  } @else {
+    <ul class="student-list">
+      @for (student of filteredStudents(); track student.id) {
+        <li class="student-card">
+          <div class="student-info">
+            <span class="student-id">{{ student.studentId }}</span>
+            <span class="student-name">{{ student.firstName }} {{ student.lastName }}</span>
+            <span class="student-meta">{{ student.gradeName }} - Section {{ student.section }}</span>
+          </div>
+          <a class="view-link" [routerLink]="['/students', student.id]">View Profile</a>
+        </li>
+      }
+    </ul>
+  }
+</section>
+

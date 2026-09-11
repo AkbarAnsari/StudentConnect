@@ -1,0 +1,36 @@
+<section class="page page-wide">
+  <div class="page-header">
+    <h1>Learning Materials (Teacher)</h1>
+    <a class="add-link" routerLink="/upload-material">+ Upload Material</a>
+  </div>
+
+  @if (deleteError()) {
+    <p class="error-message">Unable to delete learning material. Please check whether the StudentConnect API is running.</p>
+  }
+
+  @if (state().loading) {
+    <p class="loading">Loading learning materials...</p>
+  } @else if (state().error) {
+    <p class="error-message">
+      Unable to load learning materials. Please check whether the StudentConnect API is running.
+    </p>
+  } @else if (state().materials.length === 0) {
+    <p class="empty">No learning materials uploaded yet.</p>
+  } @else {
+    <ul class="material-list">
+      @for (material of state().materials; track material.id) {
+        <li class="material-card">
+          <div class="material-info">
+            <span class="subject">{{ material.subjectName }} — {{ material.gradeName }}</span>
+            <span class="title">{{ material.title }}</span>
+            <span class="meta">{{ material.fileName }} — {{ formatSize(material.fileSize) }}</span>
+          </div>
+          <div class="actions">
+            <a class="download-link" [href]="downloadUrl(material.id)" target="_blank">Download</a>
+            <button type="button" class="delete-button" (click)="onDelete(material.id)">Delete</button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</section>

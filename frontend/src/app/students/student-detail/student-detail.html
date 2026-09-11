@@ -1,0 +1,136 @@
+<section class="page">
+  <a class="back-link" routerLink="/students">← Back to Students</a>
+
+  @if (state().loading) {
+    <p class="loading">Loading student...</p>
+  } @else if (state().error) {
+    <p class="error-message">
+      Unable to load student. Please check whether the StudentConnect API is running.
+    </p>
+  } @else if (state().notFound) {
+    <p class="not-found">Student not found.</p>
+    <a class="back-link" routerLink="/students">Back to Students</a>
+  } @else if (state().student; as s) {
+    <h1>Student Profile</h1>
+    <h2>{{ s.firstName }} {{ s.lastName }}</h2>
+
+    <div class="profile-actions">
+      <a class="btn" [routerLink]="['/students', s.id, 'edit']">Edit</a>
+      <button type="button" class="btn btn-danger" (click)="onDelete(s.id)">Delete</button>
+    </div>
+
+    @if (deleteError()) {
+      <p class="error-message">Unable to delete student. Please check whether the StudentConnect API is running.</p>
+    }
+
+    <dl class="profile-details">
+      <dt>Student ID</dt>
+      <dd>{{ s.studentId }}</dd>
+      <dt>Grade</dt>
+      <dd>{{ s.gradeName }}</dd>
+      <dt>Section</dt>
+      <dd>{{ s.section }}</dd>
+      <dt>Email</dt>
+      <dd>{{ s.email }}</dd>
+    </dl>
+
+    <section class="panel">
+      <h3>My Subjects</h3>
+      <ul>
+        @for (subject of subjects; track subject) {
+          <li>{{ subject }}</li>
+        }
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h3>Attendance</h3>
+      @if (attendanceState().loading) {
+        <p class="loading">Loading attendance...</p>
+      } @else if (attendanceState().error) {
+        <p class="error-message">Unable to load attendance.</p>
+      } @else if (attendanceState().summary.length === 0) {
+        <p class="coming-soon">No attendance records yet.</p>
+      } @else {
+        <ul class="attendance-summary">
+          @for (subject of attendanceState().summary; track subject.subjectId) {
+            <li><span>{{ subject.subjectName }}</span><span>{{ subject.percentage }}%</span></li>
+          }
+        </ul>
+        <a class="view-link" [routerLink]="['/students', s.id, 'attendance']">View Attendance</a>
+      }
+    </section>
+
+    <section class="panel">
+      <h3>Marks</h3>
+      @if (marksState().loading) {
+        <p class="loading">Loading marks...</p>
+      } @else if (marksState().error) {
+        <p class="error-message">Unable to load marks.</p>
+      } @else if (marksState().summary.length === 0) {
+        <p class="coming-soon">No marks recorded yet.</p>
+      } @else {
+        <ul class="attendance-summary">
+          @for (subject of marksState().summary; track subject.subjectId) {
+            <li><span>{{ subject.subjectName }}</span><span>{{ subject.percentage }}%</span></li>
+          }
+        </ul>
+        <a class="view-link" [routerLink]="['/students', s.id, 'marks']">View Marks</a>
+      }
+    </section>
+
+    <section class="panel">
+      <h3>Homework</h3>
+      @if (homeworkState().loading) {
+        <p class="loading">Loading homework...</p>
+      } @else if (homeworkState().error) {
+        <p class="error-message">Unable to load homework.</p>
+      } @else if (homeworkState().homework.length === 0) {
+        <p class="coming-soon">No homework assigned yet.</p>
+      } @else {
+        <ul class="attendance-summary">
+          @for (item of homeworkState().homework; track item.id) {
+            <li><span>{{ item.title }}</span><span>{{ item.status }}</span></li>
+          }
+        </ul>
+        <a class="view-link" [routerLink]="['/students', s.id, 'homework']">View Homework</a>
+      }
+    </section>
+
+    <section class="panel">
+      <h3>Learning Materials</h3>
+      @if (materialsState().loading) {
+        <p class="loading">Loading learning materials...</p>
+      } @else if (materialsState().error) {
+        <p class="error-message">Unable to load learning materials.</p>
+      } @else if (materialsState().materials.length === 0) {
+        <p class="coming-soon">No learning materials yet.</p>
+      } @else {
+        <ul class="attendance-summary">
+          @for (material of materialsState().materials; track material.id) {
+            <li><span>{{ material.title }}</span><span>{{ material.subjectName }}</span></li>
+          }
+        </ul>
+        <a class="view-link" [routerLink]="['/students', s.id, 'materials']">View Learning Materials</a>
+      }
+    </section>
+
+    <section class="panel">
+      <h3>Activities</h3>
+      @if (activitiesState().loading) {
+        <p class="loading">Loading activities...</p>
+      } @else if (activitiesState().error) {
+        <p class="error-message">Unable to load activities.</p>
+      } @else if (activitiesState().registrations.length === 0) {
+        <p class="coming-soon">No activity registrations yet.</p>
+      } @else {
+        <ul class="attendance-summary">
+          @for (registration of activitiesState().registrations; track registration.id) {
+            <li><span>{{ registration.activityTitle }}</span><span>{{ registration.status }}</span></li>
+          }
+        </ul>
+      }
+      <a class="view-link" [routerLink]="['/students', s.id, 'activities']">View Activities</a>
+    </section>
+  }
+</section>

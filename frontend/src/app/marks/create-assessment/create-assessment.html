@@ -1,0 +1,62 @@
+<section class="page page-narrow">
+  <a class="back-link" routerLink="/assessments">← Back to Assessments</a>
+  <h1>Create Assessment</h1>
+
+  @if (errorMessage()) {
+    <p class="error-message">{{ errorMessage() }}</p>
+  }
+
+  <form [formGroup]="form" (ngSubmit)="onSubmit()">
+    <label>
+      Subject
+      <select formControlName="subjectId">
+        <option [value]="0">Select a subject</option>
+        @for (subject of subjects(); track subject.id) {
+          <option [value]="subject.id">{{ subject.name }}</option>
+        }
+      </select>
+      @if (form.controls.subjectId.invalid && form.controls.subjectId.touched) {
+        <span class="field-error">Subject is required.</span>
+      }
+    </label>
+
+    <label>
+      Title
+      <input type="text" formControlName="title" placeholder="e.g. Unit Test 2" />
+      @if (form.controls.title.invalid && form.controls.title.touched) {
+        <span class="field-error">Title is required.</span>
+      }
+    </label>
+
+    <label>
+      Type
+      <select formControlName="assessmentType">
+        @for (type of assessmentTypes; track type) {
+          <option [value]="type">{{ type }}</option>
+        }
+      </select>
+    </label>
+
+    <label>
+      Date
+      <input type="date" formControlName="date" />
+    </label>
+
+    <label>
+      Maximum Marks
+      <input type="number" formControlName="maximumMarks" min="1" />
+      @if (form.controls.maximumMarks.invalid && form.controls.maximumMarks.touched) {
+        <span class="field-error">Maximum marks must be greater than zero.</span>
+      }
+    </label>
+
+    <label>
+      Description
+      <input type="text" formControlName="description" placeholder="Optional" />
+    </label>
+
+    <button type="submit" [disabled]="submitting()">
+      {{ submitting() ? 'Saving...' : 'Create Assessment' }}
+    </button>
+  </form>
+</section>

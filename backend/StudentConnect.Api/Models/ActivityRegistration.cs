@@ -1,0 +1,20 @@
+namespace StudentConnect.Api.Models;
+
+// The relationship itself carries information (RegistrationDate, Status) — this is why
+// Student <-> Activity many-to-many needs its own entity rather than a simple list.
+// Business rule: one row per student+activity — re-registering after cancellation flips
+// Status back to Registered instead of inserting a second row (enforced by a unique index).
+public class ActivityRegistration
+{
+    public int Id { get; set; }
+
+    public int StudentId { get; set; }
+    public Student? Student { get; set; }
+
+    public int ActivityId { get; set; }
+    public Activity? Activity { get; set; }
+
+    // Set by the server at registration time — never trusted from the client.
+    public DateTime RegistrationDate { get; set; }
+    public ActivityRegistrationStatus Status { get; set; }
+}

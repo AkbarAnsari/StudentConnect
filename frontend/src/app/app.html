@@ -1,0 +1,70 @@
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" routerLink="/" (click)="closeMobileMenu()">
+      <span class="brand-mark">SC</span>
+      <span class="brand-name">StudentConnect</span>
+    </a>
+
+    <button
+      type="button"
+      class="nav-toggle"
+      [class.open]="mobileMenuOpen()"
+      (click)="toggleMobileMenu()"
+      aria-label="Toggle navigation menu"
+    >
+      <span></span><span></span><span></span>
+    </button>
+
+    <nav class="site-nav" [class.open]="mobileMenuOpen()">
+      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" (click)="closeMobileMenu()">Home</a>
+      @if (authService.isAuthenticated()) {
+        <a routerLink="/dashboard" routerLinkActive="active" (click)="closeMobileMenu()">Dashboard</a>
+      }
+      @if (authService.role() === 'Teacher' || authService.role() === 'Admin') {
+        <a routerLink="/students" routerLinkActive="active" (click)="closeMobileMenu()">Students</a>
+
+        <div class="nav-dropdown" [class.open]="manageMenuOpen()">
+          <button type="button" class="nav-dropdown-toggle" (click)="toggleManageMenu()">
+            Manage
+            <svg class="chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
+              <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" />
+            </svg>
+          </button>
+          <div class="nav-dropdown-menu">
+            <a routerLink="/record-attendance" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Record Attendance</a>
+            <a routerLink="/assessments" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Assessments</a>
+            <a routerLink="/enter-marks" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Enter Marks</a>
+            <a routerLink="/teacher-homework" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Homework</a>
+            <a routerLink="/teacher-materials" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Learning Materials</a>
+            <a routerLink="/activity-management" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Activities</a>
+          </div>
+        </div>
+      }
+      <a routerLink="/about" routerLinkActive="active" (click)="closeMobileMenu()">About</a>
+      <a routerLink="/contact" routerLinkActive="active" (click)="closeMobileMenu()">Contact</a>
+
+      <div class="nav-auth">
+        @if (authService.currentUser(); as user) {
+          <div class="user-chip">
+            <span class="avatar">{{ initials() }}</span>
+            <span class="user-meta">
+              <span class="user-name">{{ user.displayName }}</span>
+              <span class="user-role">{{ user.role }}</span>
+            </span>
+          </div>
+          <button type="button" class="logout-button" (click)="onLogout()">Logout</button>
+        } @else {
+          <a class="login-link" routerLink="/login" (click)="closeMobileMenu()">Login</a>
+        }
+      </div>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <router-outlet />
+</main>
+
+<footer class="site-footer">
+  <p>&copy; 2026 StudentConnect. Built as a learning project for Azure Fundamentals.</p>
+</footer>

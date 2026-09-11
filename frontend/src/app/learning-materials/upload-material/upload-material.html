@@ -1,0 +1,64 @@
+<section class="page page-narrow">
+  <a class="back-link" routerLink="/teacher-materials">← Back to Learning Materials</a>
+  <h1>Upload Learning Material</h1>
+
+  @if (errorMessage()) {
+    <p class="error-message">{{ errorMessage() }}</p>
+  }
+
+  <form [formGroup]="form" (ngSubmit)="onSubmit()">
+    <label>
+      Subject
+      <select formControlName="subjectId">
+        <option [value]="0">Select a subject</option>
+        @for (subject of subjects(); track subject.id) {
+          <option [value]="subject.id">{{ subject.name }}</option>
+        }
+      </select>
+      @if (form.controls.subjectId.invalid && form.controls.subjectId.touched) {
+        <span class="field-error">Subject is required.</span>
+      }
+    </label>
+
+    <label>
+      Grade
+      <select formControlName="gradeId">
+        <option [value]="0">Select a grade</option>
+        @for (grade of grades(); track grade.id) {
+          <option [value]="grade.id">{{ grade.name }}</option>
+        }
+      </select>
+      @if (form.controls.gradeId.invalid && form.controls.gradeId.touched) {
+        <span class="field-error">Grade is required.</span>
+      }
+    </label>
+
+    <label>
+      Title
+      <input type="text" formControlName="title" placeholder="e.g. Algebra Practice" />
+      @if (form.controls.title.invalid && form.controls.title.touched) {
+        <span class="field-error">Title is required.</span>
+      }
+    </label>
+
+    <label>
+      Description
+      <textarea formControlName="description" rows="3" placeholder="e.g. Practice questions for Algebra"></textarea>
+      @if (form.controls.description.invalid && form.controls.description.touched) {
+        <span class="field-error">Description is required.</span>
+      }
+    </label>
+
+    <label>
+      File
+      <input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg" (change)="onFileSelected($event)" />
+      @if (fileError()) {
+        <span class="field-error">{{ fileError() }}</span>
+      }
+    </label>
+
+    <button type="submit" [disabled]="submitting()">
+      {{ submitting() ? 'Uploading...' : 'Upload' }}
+    </button>
+  </form>
+</section>

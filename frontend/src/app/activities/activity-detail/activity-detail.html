@@ -1,0 +1,46 @@
+<section class="page">
+  <a class="back-link" [routerLink]="['/students', studentId, 'activities']">← Back to Activities</a>
+
+  @if (state().loading) {
+    <p class="loading">Loading activity...</p>
+  } @else if (state().error) {
+    <p class="error-message">
+      Unable to load activity. Please check whether the StudentConnect API is running.
+    </p>
+  } @else if (state().activity; as a) {
+    <h1>{{ a.title }}</h1>
+    <p class="description">{{ a.description }}</p>
+
+    <dl class="details">
+      <dt>Date</dt>
+      <dd>{{ a.date }}</dd>
+      <dt>Location</dt>
+      <dd>{{ a.location }}</dd>
+      <dt>Grade</dt>
+      <dd>{{ a.gradeName }}</dd>
+      <dt>Capacity</dt>
+      <dd>{{ a.capacity }}</dd>
+      <dt>Registered</dt>
+      <dd>{{ a.currentRegistrations }}</dd>
+      <dt>Available</dt>
+      <dd>{{ a.availableSeats }}</dd>
+    </dl>
+
+    @if (actionError()) {
+      <p class="error-message">{{ actionError() }}</p>
+    }
+
+    @if (!checkedRegistration()) {
+      <p class="loading">Checking registration status...</p>
+    } @else if (myRegistration(); as registration) {
+      <p class="status-registered">You are registered for this activity.</p>
+      <button type="button" class="cancel-button" (click)="onCancel()">Cancel Registration</button>
+    } @else if (isPast(a)) {
+      <p class="status-closed">Registration is closed because this activity has already occurred.</p>
+    } @else if (a.availableSeats === 0) {
+      <p class="status-full">This activity is full.</p>
+    } @else {
+      <button type="button" class="register-button" (click)="onRegister()">Register</button>
+    }
+  }
+</section>

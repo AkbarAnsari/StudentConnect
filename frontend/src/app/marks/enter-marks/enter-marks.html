@@ -1,0 +1,72 @@
+<section class="page page-wide">
+  <h1>Enter Marks</h1>
+
+  <div class="controls">
+    <label>
+      Subject
+      <select [ngModel]="subjectId()" (ngModelChange)="onSubjectChange($event)">
+        <option [ngValue]="null">Select a subject</option>
+        @for (subject of subjects(); track subject.id) {
+          <option [ngValue]="subject.id">{{ subject.name }}</option>
+        }
+      </select>
+    </label>
+
+    <label>
+      Assessment
+      <select [ngModel]="assessmentId()" (ngModelChange)="assessmentId.set($event)">
+        <option [ngValue]="null">Select an assessment</option>
+        @for (assessment of assessments(); track assessment.id) {
+          <option [ngValue]="assessment.id">{{ assessment.title }}</option>
+        }
+      </select>
+    </label>
+
+    @if (selectedAssessment(); as a) {
+      <label>
+        Maximum Marks
+        <input type="number" [value]="a.maximumMarks" disabled />
+      </label>
+    }
+  </div>
+
+  @if (successMessage()) {
+    <p class="success-message">{{ successMessage() }}</p>
+  }
+  @if (errorMessage()) {
+    <p class="error-message">{{ errorMessage() }}</p>
+  }
+
+  @if (selectedAssessment(); as a) {
+    <table class="roster-table">
+      <thead>
+        <tr>
+          <th>Student</th>
+          <th>Marks</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (student of students(); track student.id) {
+          <tr>
+            <td>{{ student.firstName }} {{ student.lastName }}</td>
+            <td>
+              <input
+                type="number"
+                min="0"
+                [max]="a.maximumMarks"
+                [ngModel]="markFor(student.id)"
+                (ngModelChange)="onMarkChange(student.id, $event)"
+              />
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <button type="button" [disabled]="saving()" (click)="onSave()">
+      {{ saving() ? 'Saving...' : 'Save Marks' }}
+    </button>
+  } @else {
+    <p class="empty">Select a subject and assessment to enter marks.</p>
+  }
+</section>

@@ -14,8 +14,7 @@ public class AttendanceController(
     AttendanceStore attendance,
     StudentStore students,
     ReferenceDataStore referenceData,
-    UserStore users,
-    ParentStore parents,
+    NotificationRecipientResolver recipients,
     ICurrentUserService currentUser,
     INotificationService notifications,
     ILogger<AttendanceController> logger) : ControllerBase
@@ -269,7 +268,7 @@ public class AttendanceController(
     // resolution a real email/SMS provider would use later.
     private async Task NotifyAbsence(int studentId, string subjectName, DateOnly date)
     {
-        var recipientUserIds = await GetStudentAndParentUserIds(studentId);
+        var recipientUserIds = await recipients.ForStudentAsync(studentId);
         if (recipientUserIds.Count == 0)
         {
             return;
@@ -280,19 +279,5 @@ public class AttendanceController(
             "Absence recorded",
             $"Marked absent for {subjectName} on {date:yyyy-MM-dd}.",
             NotificationType.AttendanceAbsent);
-    }
-
-    private async Task<List<int>> GetStudentAndParentUserIds(int studentId)
-    {
-        var studentUserId = await users.GetUserIdForStudentAsync(studentId);
-        var parentUserIds = await parents.GetParentUserIdsForStudentAsync(studentId);
-
-        var recipientIds = new List<int>(parentUserIds);
-        if (studentUserId is not null)
-        {
-            recipientIds.Add(studentUserId.Value);
-        }
-
-        return recipientIds.Distinct().ToList();
     }
 }

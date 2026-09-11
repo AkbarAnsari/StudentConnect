@@ -33,6 +33,7 @@ builder.Services.AddScoped<UserStore>();
 builder.Services.AddScoped<ParentStore>();
 builder.Services.AddScoped<NotificationStore>();
 builder.Services.AddScoped<AnalyticsStore>();
+builder.Services.AddScoped<NotificationRecipientResolver>();
 
 // Today files live on local disk; a future AzureBlobStorage class could implement the
 // same IFileStorage interface without any controller/service code changing.

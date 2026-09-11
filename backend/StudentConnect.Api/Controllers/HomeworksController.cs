@@ -15,8 +15,7 @@ public class HomeworksController(
     HomeworkSubmissionStore submissions,
     StudentStore students,
     ReferenceDataStore referenceData,
-    UserStore users,
-    ParentStore parents,
+    NotificationRecipientResolver recipients,
     ICurrentUserService currentUser,
     INotificationService notifications,
     ILogger<HomeworksController> logger) : ControllerBase
@@ -162,13 +161,7 @@ public class HomeworksController(
         var created = await homework.GetByIdAsync(newId);
 
         var studentIds = await homework.GetAllStudentIdsInGradeAsync(dto.GradeId);
-        var studentUserIds = await users.GetStudentUserIdsAsync(studentIds);
-        var parentUserIds = new List<int>();
-        foreach (var studentId in studentIds)
-        {
-            parentUserIds.AddRange(await parents.GetParentUserIdsForStudentAsync(studentId));
-        }
-        var recipientUserIds = studentUserIds.Concat(parentUserIds).Distinct().ToList();
+        var recipientUserIds = await recipients.ForStudentsAsync(studentIds);
         if (recipientUserIds.Count > 0)
         {
             await notifications.NotifyManyAsync(

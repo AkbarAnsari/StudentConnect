@@ -39,6 +39,21 @@ public class ParentStore(Database db)
             p => p.AddWithValue("studentId", studentId),
             reader => reader.GetInt32("ParentUserId"));
 
+    // Bulk reverse lookup — used to resolve notification recipients across many students
+    // at once (e.g. homework assigned to a whole grade) without one query per student.
+    public async Task<List<int>> GetParentUserIdsForStudentsAsync(IReadOnlyCollection<int> studentIds)
+    {
+        if (studentIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await db.QueryAsync(
+            """SELECT DISTINCT "ParentUserId" FROM "ParentStudents" WHERE "StudentId" = ANY(@studentIds)""",
+            p => p.AddWithValue("studentIds", studentIds.ToArray()),
+            reader => reader.GetInt32("ParentUserId"));
+    }
+
     public async Task<bool> LinkExistsAsync(int parentUserId, int studentId) =>
         await db.ExistsAsync(
             """SELECT 1 FROM "ParentStudents" WHERE "ParentUserId" = @parentUserId AND "StudentId" = @studentId""",

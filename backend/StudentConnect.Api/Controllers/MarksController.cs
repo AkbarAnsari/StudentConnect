@@ -14,8 +14,7 @@ public class MarksController(
     MarkStore marks,
     StudentStore students,
     AssessmentStore assessments,
-    UserStore users,
-    ParentStore parents,
+    NotificationRecipientResolver recipients,
     ICurrentUserService currentUser,
     INotificationService notifications,
     ILogger<MarksController> logger) : ControllerBase
@@ -126,7 +125,7 @@ public class MarksController(
             return StatusCode(500, new { message = "Unable to save the mark. Please try again." });
         }
 
-        var recipientUserIds = await GetStudentAndParentUserIds(dto.StudentId);
+        var recipientUserIds = await recipients.ForStudentAsync(dto.StudentId);
         if (recipientUserIds.Count > 0)
         {
             await notifications.NotifyManyAsync(
@@ -258,19 +257,5 @@ public class MarksController(
         }
 
         return NoContent();
-    }
-
-    private async Task<List<int>> GetStudentAndParentUserIds(int studentId)
-    {
-        var studentUserId = await users.GetUserIdForStudentAsync(studentId);
-        var parentUserIds = await parents.GetParentUserIdsForStudentAsync(studentId);
-
-        var recipientIds = new List<int>(parentUserIds);
-        if (studentUserId is not null)
-        {
-            recipientIds.Add(studentUserId.Value);
-        }
-
-        return recipientIds.Distinct().ToList();
     }
 }

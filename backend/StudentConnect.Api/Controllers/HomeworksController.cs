@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using StudentConnect.Api.Auth;
-using StudentConnect.Api.Data;
+using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
 using StudentConnect.Api.Notifications;
 
@@ -10,37 +10,37 @@ namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/homework")]
-public class HomeworksController(StudentConnectDbContext db, ICurrentUserService currentUser, INotificationService notifications, ILogger<HomeworksController> logger) : ControllerBase
+public class HomeworksController(
+    HomeworkStore homework,
+    HomeworkSubmissionStore submissions,
+    StudentStore students,
+    ReferenceDataStore referenceData,
+    UserStore users,
+    ParentStore parents,
+    ICurrentUserService currentUser,
+    INotificationService notifications,
+    ILogger<HomeworksController> logger) : ControllerBase
 {
     // GET /api/homework
     [HttpGet]
     public async Task<ActionResult<IEnumerable<HomeworkDto>>> GetHomework()
     {
-        var homework = await db.Homework
-            .Include(h => h.Subject).Include(h => h.Grade).Include(h => h.Teacher)
-            .AsNoTracking()
-            .OrderBy(h => h.DueDate)
-            .Select(h => HomeworkDto.FromEntity(h))
-            .ToListAsync();
-
-        return Ok(homework);
+        var all = await homework.GetAllAsync();
+        return Ok(all.Select(HomeworkDto.FromEntity));
     }
 
     // GET /api/homework/{id}
     [HttpGet("{id:int}")]
     public async Task<ActionResult<HomeworkDto>> GetHomeworkById(int id)
     {
-        var homework = await db.Homework
-            .Include(h => h.Subject).Include(h => h.Grade).Include(h => h.Teacher)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(h => h.Id == id);
+        var item = await homework.GetByIdAsync(id);
 
-        if (homework is null)
+        if (item is null)
         {
             return NotFound();
         }
 
-        return Ok(HomeworkDto.FromEntity(homework));
+        return Ok(HomeworkDto.FromEntity(item));
     }
 
     // GET /api/homework/student/{studentId} — status is derived from the presence (or absence) of a submission.
@@ -52,27 +52,18 @@ public class HomeworksController(StudentConnectDbContext db, ICurrentUserService
             return Forbid();
         }
 
-        var student = await db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == studentId);
+        var student = await students.GetByIdAsync(studentId);
         if (student is null)
         {
             return NotFound(new { message = "Student not found." });
         }
 
-        var homework = await db.Homework
-            .Include(h => h.Subject)
-            .AsNoTracking()
-            .Where(h => h.GradeId == student.GradeId)
-            .OrderBy(h => h.DueDate)
-            .ToListAsync();
+        var gradeHomework = await homework.GetByGradeAsync(student.GradeId);
+        var homeworkIds = gradeHomework.Select(h => h.Id).ToList();
+        var studentSubmissions = await submissions.GetByStudentForHomeworkIdsAsync(studentId, homeworkIds);
+        var submissionByHomeworkId = studentSubmissions.ToDictionary(s => s.HomeworkId);
 
-        var homeworkIds = homework.Select(h => h.Id).ToList();
-        var submissions = await db.HomeworkSubmissions
-            .AsNoTracking()
-            .Where(s => s.StudentId == studentId && homeworkIds.Contains(s.HomeworkId))
-            .ToListAsync();
-        var submissionByHomeworkId = submissions.ToDictionary(s => s.HomeworkId);
-
-        var result = homework.Select(h => new StudentHomeworkDto
+        var result = gradeHomework.Select(h => new StudentHomeworkDto
         {
             Id = h.Id,
             Title = h.Title,
@@ -94,40 +85,26 @@ public class HomeworksController(StudentConnectDbContext db, ICurrentUserService
             return Forbid();
         }
 
-        if (!await db.Teachers.AnyAsync(t => t.Id == teacherId))
+        if (!await referenceData.TeacherExistsAsync(teacherId))
         {
             return NotFound(new { message = "Teacher not found." });
         }
 
-        var homework = await db.Homework
-            .Include(h => h.Subject).Include(h => h.Grade).Include(h => h.Teacher)
-            .AsNoTracking()
-            .Where(h => h.TeacherId == teacherId)
-            .OrderBy(h => h.DueDate)
-            .Select(h => HomeworkDto.FromEntity(h))
-            .ToListAsync();
-
-        return Ok(homework);
+        var byTeacher = await homework.GetByTeacherAsync(teacherId);
+        return Ok(byTeacher.Select(HomeworkDto.FromEntity));
     }
 
     // GET /api/homework/subject/{subjectId}
     [HttpGet("subject/{subjectId:int}")]
     public async Task<ActionResult<IEnumerable<HomeworkDto>>> GetSubjectHomework(int subjectId)
     {
-        if (!await db.Subjects.AnyAsync(s => s.Id == subjectId))
+        if (!await referenceData.SubjectExistsAsync(subjectId))
         {
             return NotFound(new { message = "Subject not found." });
         }
 
-        var homework = await db.Homework
-            .Include(h => h.Subject).Include(h => h.Grade).Include(h => h.Teacher)
-            .AsNoTracking()
-            .Where(h => h.SubjectId == subjectId)
-            .OrderBy(h => h.DueDate)
-            .Select(h => HomeworkDto.FromEntity(h))
-            .ToListAsync();
-
-        return Ok(homework);
+        var bySubject = await homework.GetBySubjectAsync(subjectId);
+        return Ok(bySubject.Select(HomeworkDto.FromEntity));
     }
 
     // POST /api/homework
@@ -140,17 +117,17 @@ public class HomeworksController(StudentConnectDbContext db, ICurrentUserService
             return BadRequest(new { message = "Title is required." });
         }
 
-        if (!await db.Subjects.AnyAsync(s => s.Id == dto.SubjectId))
+        if (!await referenceData.SubjectExistsAsync(dto.SubjectId))
         {
             return BadRequest(new { message = "Subject does not exist." });
         }
 
-        if (!await db.Grades.AnyAsync(g => g.Id == dto.GradeId))
+        if (!await referenceData.GradeExistsAsync(dto.GradeId))
         {
             return BadRequest(new { message = "Grade does not exist." });
         }
 
-        if (!await db.Teachers.AnyAsync(t => t.Id == dto.TeacherId))
+        if (!await referenceData.TeacherExistsAsync(dto.TeacherId))
         {
             return BadRequest(new { message = "Teacher does not exist." });
         }
@@ -160,7 +137,7 @@ public class HomeworksController(StudentConnectDbContext db, ICurrentUserService
             return Forbid();
         }
 
-        var homework = new Homework
+        var newHomework = new Homework
         {
             Title = dto.Title,
             Description = dto.Description,
@@ -171,37 +148,38 @@ public class HomeworksController(StudentConnectDbContext db, ICurrentUserService
             DueDate = dto.DueDate,
         };
 
-        db.Homework.Add(homework);
-
+        int newId;
         try
         {
-            await db.SaveChangesAsync();
+            newId = await homework.CreateAsync(newHomework);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to save homework {Title}", dto.Title);
             return StatusCode(500, new { message = "Unable to save the homework. Please try again." });
         }
 
-        await db.Entry(homework).Reference(h => h.Subject).LoadAsync();
-        await db.Entry(homework).Reference(h => h.Grade).LoadAsync();
-        await db.Entry(homework).Reference(h => h.Teacher).LoadAsync();
+        var created = await homework.GetByIdAsync(newId);
 
-        var studentIds = await db.Students.Where(s => s.GradeId == homework.GradeId).Select(s => s.Id).ToListAsync();
-        var studentUserIds = await db.Users.Where(u => u.StudentId != null && studentIds.Contains(u.StudentId!.Value)).Select(u => u.Id).ToListAsync();
-        var parentUserIds = await db.ParentStudents.Where(ps => studentIds.Contains(ps.StudentId)).Select(ps => ps.ParentUserId).ToListAsync();
+        var studentIds = await homework.GetAllStudentIdsInGradeAsync(dto.GradeId);
+        var studentUserIds = await users.GetStudentUserIdsAsync(studentIds);
+        var parentUserIds = new List<int>();
+        foreach (var studentId in studentIds)
+        {
+            parentUserIds.AddRange(await parents.GetParentUserIdsForStudentAsync(studentId));
+        }
         var recipientUserIds = studentUserIds.Concat(parentUserIds).Distinct().ToList();
         if (recipientUserIds.Count > 0)
         {
             await notifications.NotifyManyAsync(
                 recipientUserIds,
                 "New homework assigned",
-                $"{homework.Subject!.Name}: {homework.Title} (due {homework.DueDate:yyyy-MM-dd})",
+                $"{created!.Subject!.Name}: {created.Title} (due {created.DueDate:yyyy-MM-dd})",
                 NotificationType.HomeworkAssigned);
         }
 
-        var result = HomeworkDto.FromEntity(homework);
-        return CreatedAtAction(nameof(GetHomeworkById), new { id = homework.Id }, result);
+        var result = HomeworkDto.FromEntity(created!);
+        return CreatedAtAction(nameof(GetHomeworkById), new { id = newId }, result);
     }
 
     // PUT /api/homework/{id} — only Title, Description, and DueDate can be corrected; Subject/Grade/Teacher stay fixed.
@@ -214,30 +192,23 @@ public class HomeworksController(StudentConnectDbContext db, ICurrentUserService
             return BadRequest(new { message = "Title is required." });
         }
 
-        var homework = await db.Homework
-            .Include(h => h.Subject).Include(h => h.Grade).Include(h => h.Teacher)
-            .FirstOrDefaultAsync(h => h.Id == id);
-
-        if (homework is null)
+        if (!await homework.ExistsAsync(id))
         {
             return NotFound();
         }
 
-        homework.Title = dto.Title;
-        homework.Description = dto.Description;
-        homework.DueDate = dto.DueDate;
-
         try
         {
-            await db.SaveChangesAsync();
+            await homework.UpdateAsync(id, dto.Title, dto.Description, dto.DueDate);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to update homework {Id}", id);
             return StatusCode(500, new { message = "Unable to update the homework. Please try again." });
         }
 
-        return Ok(HomeworkDto.FromEntity(homework));
+        var updated = await homework.GetByIdAsync(id);
+        return Ok(HomeworkDto.FromEntity(updated!));
     }
 
     // DELETE /api/homework/{id} — related submissions are removed with it (they have no meaning without the assignment).
@@ -245,19 +216,16 @@ public class HomeworksController(StudentConnectDbContext db, ICurrentUserService
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<IActionResult> DeleteHomework(int id)
     {
-        var homework = await db.Homework.FindAsync(id);
-        if (homework is null)
+        if (!await homework.ExistsAsync(id))
         {
             return NotFound();
         }
 
-        db.Homework.Remove(homework);
-
         try
         {
-            await db.SaveChangesAsync();
+            await homework.DeleteAsync(id);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to delete homework {Id}", id);
             return StatusCode(500, new { message = "Unable to delete the homework. Please try again." });

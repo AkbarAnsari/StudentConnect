@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using StudentConnect.Api.Auth;
-using StudentConnect.Api.Data;
+using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
 using StudentConnect.Api.Notifications;
 
@@ -10,7 +10,15 @@ namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class MarksController(StudentConnectDbContext db, ICurrentUserService currentUser, INotificationService notifications, ILogger<MarksController> logger) : ControllerBase
+public class MarksController(
+    MarkStore marks,
+    StudentStore students,
+    AssessmentStore assessments,
+    UserStore users,
+    ParentStore parents,
+    ICurrentUserService currentUser,
+    INotificationService notifications,
+    ILogger<MarksController> logger) : ControllerBase
 {
     // GET /api/marks/student/{studentId}
     [HttpGet("student/{studentId:int}")]
@@ -21,20 +29,13 @@ public class MarksController(StudentConnectDbContext db, ICurrentUserService cur
             return Forbid();
         }
 
-        if (!await db.Students.AnyAsync(s => s.Id == studentId))
+        if (!await students.ExistsAsync(studentId))
         {
             return NotFound(new { message = "Student not found." });
         }
 
-        var marks = await db.Marks
-            .Include(m => m.Assessment).ThenInclude(a => a!.Subject)
-            .AsNoTracking()
-            .Where(m => m.StudentId == studentId)
-            .OrderByDescending(m => m.Assessment!.Date)
-            .Select(m => MarkRecordDto.FromEntity(m))
-            .ToListAsync();
-
-        return Ok(marks);
+        var studentMarks = await marks.GetByStudentAsync(studentId);
+        return Ok(studentMarks.Select(MarkRecordDto.FromEntity));
     }
 
     // GET /api/marks/student/{studentId}/subject/{subjectId}
@@ -46,53 +47,13 @@ public class MarksController(StudentConnectDbContext db, ICurrentUserService cur
             return Forbid();
         }
 
-        if (!await db.Students.AnyAsync(s => s.Id == studentId))
+        if (!await students.ExistsAsync(studentId))
         {
             return NotFound(new { message = "Student not found." });
         }
 
-        if (!await db.Subjects.AnyAsync(s => s.Id == subjectId))
-        {
-            return NotFound(new { message = "Subject not found." });
-        }
-
-        var marks = await db.Marks
-            .Include(m => m.Assessment).ThenInclude(a => a!.Subject)
-            .AsNoTracking()
-            .Where(m => m.StudentId == studentId && m.Assessment!.SubjectId == subjectId)
-            .OrderByDescending(m => m.Assessment!.Date)
-            .Select(m => MarkRecordDto.FromEntity(m))
-            .ToListAsync();
-
-        return Ok(marks);
-    }
-
-    // GET /api/marks/assessment/{assessmentId}
-    [HttpGet("assessment/{assessmentId:int}")]
-    [Authorize(Roles = "Teacher,Admin")]
-    public async Task<ActionResult<IEnumerable<AssessmentResultDto>>> GetAssessmentResults(int assessmentId)
-    {
-        if (!await db.Assessments.AnyAsync(a => a.Id == assessmentId))
-        {
-            return NotFound(new { message = "Assessment not found." });
-        }
-
-        var results = await db.Marks
-            .Include(m => m.Student)
-            .AsNoTracking()
-            .Where(m => m.AssessmentId == assessmentId)
-            .OrderByDescending(m => m.MarksObtained)
-            .Select(m => new AssessmentResultDto
-            {
-                MarkId = m.Id,
-                StudentId = m.StudentId,
-                StudentName = m.Student!.FirstName + " " + m.Student.LastName,
-                MarksObtained = m.MarksObtained,
-                MaximumMarks = m.Assessment!.MaximumMarks,
-            })
-            .ToListAsync();
-
-        return Ok(results);
+        var studentMarks = await marks.GetByStudentAndSubjectAsync(studentId, subjectId);
+        return Ok(studentMarks.Select(MarkRecordDto.FromEntity));
     }
 
     // GET /api/marks/student/{studentId}/summary
@@ -104,39 +65,28 @@ public class MarksController(StudentConnectDbContext db, ICurrentUserService cur
             return Forbid();
         }
 
-        if (!await db.Students.AnyAsync(s => s.Id == studentId))
+        if (!await students.ExistsAsync(studentId))
         {
             return NotFound(new { message = "Student not found." });
         }
 
-        var studentMarks = await db.Marks
-            .Include(m => m.Assessment).ThenInclude(a => a!.Subject)
-            .AsNoTracking()
-            .Where(m => m.StudentId == studentId)
-            .Select(m => new { m.Assessment!.SubjectId, SubjectName = m.Assessment.Subject!.Name, m.MarksObtained, m.Assessment.MaximumMarks })
-            .ToListAsync();
-
         // Percentage and result category are calculated here, on the backend — never in Angular.
-        var summary = studentMarks
-            .GroupBy(m => new { m.SubjectId, m.SubjectName })
-            .Select(g => new MarksSummaryDto
-            {
-                SubjectId = g.Key.SubjectId,
-                SubjectName = g.Key.SubjectName,
-                Assessments = g.Count(),
-                TotalMarksObtained = g.Sum(x => x.MarksObtained),
-                TotalMaximumMarks = g.Sum(x => x.MaximumMarks),
-            })
-            .OrderBy(s => s.SubjectId)
-            .ToList();
+        var summary = await marks.GetSummaryAsync(studentId);
+        return Ok(summary);
+    }
 
-        foreach (var item in summary)
+    // GET /api/marks/assessment/{assessmentId}
+    [HttpGet("assessment/{assessmentId:int}")]
+    [Authorize(Roles = "Teacher,Admin")]
+    public async Task<ActionResult<IEnumerable<AssessmentResultDto>>> GetAssessmentResults(int assessmentId)
+    {
+        if (!await assessments.ExistsAsync(assessmentId))
         {
-            item.Percentage = item.TotalMaximumMarks == 0 ? 0 : Math.Round(item.TotalMarksObtained * 100.0 / item.TotalMaximumMarks, 0);
-            item.ResultCategory = ResultCategory.From(item.Percentage);
+            return NotFound(new { message = "Assessment not found." });
         }
 
-        return Ok(summary);
+        var results = await marks.GetAssessmentResultsAsync(assessmentId);
+        return Ok(results);
     }
 
     // POST /api/marks
@@ -144,12 +94,12 @@ public class MarksController(StudentConnectDbContext db, ICurrentUserService cur
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<MarkRecordDto>> CreateMark(MarkCreateDto dto)
     {
-        if (!await db.Students.AnyAsync(s => s.Id == dto.StudentId))
+        if (!await students.ExistsAsync(dto.StudentId))
         {
             return BadRequest(new { message = "Student does not exist." });
         }
 
-        var assessment = await db.Assessments.FirstOrDefaultAsync(a => a.Id == dto.AssessmentId);
+        var assessment = await assessments.GetByIdAsync(dto.AssessmentId);
         if (assessment is null)
         {
             return BadRequest(new { message = "Assessment does not exist." });
@@ -160,40 +110,35 @@ public class MarksController(StudentConnectDbContext db, ICurrentUserService cur
             return BadRequest(new { message = $"MarksObtained must be between 0 and {assessment.MaximumMarks}." });
         }
 
-        var duplicate = await db.Marks.AnyAsync(m => m.StudentId == dto.StudentId && m.AssessmentId == dto.AssessmentId);
-        if (duplicate)
+        if (await marks.ExistsAsync(dto.StudentId, dto.AssessmentId))
         {
             return Conflict(new { message = "This student already has a mark recorded for this assessment." });
         }
 
-        var mark = new Mark { StudentId = dto.StudentId, AssessmentId = dto.AssessmentId, MarksObtained = dto.MarksObtained };
-        db.Marks.Add(mark);
-
+        int newId;
         try
         {
-            await db.SaveChangesAsync();
+            newId = await marks.CreateAsync(dto.StudentId, dto.AssessmentId, dto.MarksObtained);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to save mark for student {StudentId}", dto.StudentId);
             return StatusCode(500, new { message = "Unable to save the mark. Please try again." });
         }
 
-        mark.Assessment = assessment;
-        await db.Entry(assessment).Reference(a => a.Subject).LoadAsync();
-
-        var recipientUserIds = await GetStudentAndParentUserIds(mark.StudentId);
+        var recipientUserIds = await GetStudentAndParentUserIds(dto.StudentId);
         if (recipientUserIds.Count > 0)
         {
             await notifications.NotifyManyAsync(
                 recipientUserIds,
                 "New mark recorded",
-                $"{assessment.Subject!.Name}: {mark.MarksObtained}/{assessment.MaximumMarks}",
+                $"{assessment.Subject!.Name}: {dto.MarksObtained}/{assessment.MaximumMarks}",
                 NotificationType.MarkRecorded);
         }
 
-        var result = MarkRecordDto.FromEntity(mark);
-        return CreatedAtAction(nameof(GetStudentMarks), new { studentId = mark.StudentId }, result);
+        var created = await marks.GetByIdAsync(newId);
+        var result = MarkRecordDto.FromEntity(created!);
+        return CreatedAtAction(nameof(GetStudentMarks), new { studentId = dto.StudentId }, result);
     }
 
     // POST /api/marks/bulk — a teacher saving marks for a whole class at once.
@@ -207,15 +152,21 @@ public class MarksController(StudentConnectDbContext db, ICurrentUserService cur
             return BadRequest(new { message = "At least one mark is required." });
         }
 
-        var assessment = await db.Assessments.FirstOrDefaultAsync(a => a.Id == dto.AssessmentId);
+        var assessment = await assessments.GetByIdAsync(dto.AssessmentId);
         if (assessment is null)
         {
             return BadRequest(new { message = "Assessment does not exist." });
         }
 
         var studentIds = dto.Marks.Select(m => m.StudentId).Distinct().ToList();
-        var existingStudentIds = await db.Students.Where(s => studentIds.Contains(s.Id)).Select(s => s.Id).ToListAsync();
-        var missingStudentIds = studentIds.Except(existingStudentIds).ToList();
+        var missingStudentIds = new List<int>();
+        foreach (var studentId in studentIds)
+        {
+            if (!await students.ExistsAsync(studentId))
+            {
+                missingStudentIds.Add(studentId);
+            }
+        }
         if (missingStudentIds.Count > 0)
         {
             return BadRequest(new { message = $"Unknown student id(s): {string.Join(", ", missingStudentIds)}" });
@@ -229,28 +180,23 @@ public class MarksController(StudentConnectDbContext db, ICurrentUserService cur
             }
         }
 
-        var existing = await db.Marks
-            .Where(m => m.AssessmentId == dto.AssessmentId && studentIds.Contains(m.StudentId))
-            .ToListAsync();
-        var existingByStudent = existing.ToDictionary(m => m.StudentId);
-
-        foreach (var item in dto.Marks)
-        {
-            if (existingByStudent.TryGetValue(item.StudentId, out var mark))
-            {
-                mark.MarksObtained = item.MarksObtained;
-            }
-            else
-            {
-                db.Marks.Add(new Mark { StudentId = item.StudentId, AssessmentId = dto.AssessmentId, MarksObtained = item.MarksObtained });
-            }
-        }
+        var existingByStudent = await marks.GetExistingIdsForAssessmentAsync(dto.AssessmentId, studentIds);
 
         try
         {
-            await db.SaveChangesAsync();
+            foreach (var item in dto.Marks)
+            {
+                if (existingByStudent.TryGetValue(item.StudentId, out var markId))
+                {
+                    await marks.UpdateMarksObtainedAsync(markId, item.MarksObtained);
+                }
+                else
+                {
+                    await marks.CreateAsync(item.StudentId, dto.AssessmentId, item.MarksObtained);
+                }
+            }
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to save bulk marks for assessment {AssessmentId}", dto.AssessmentId);
             return StatusCode(500, new { message = "Unable to save marks. Please try again." });
@@ -264,9 +210,7 @@ public class MarksController(StudentConnectDbContext db, ICurrentUserService cur
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<MarkRecordDto>> UpdateMark(int id, MarkUpdateDto dto)
     {
-        var mark = await db.Marks
-            .Include(m => m.Assessment).ThenInclude(a => a!.Subject)
-            .FirstOrDefaultAsync(m => m.Id == id);
+        var mark = await marks.GetByIdAsync(id);
 
         if (mark is null)
         {
@@ -278,18 +222,17 @@ public class MarksController(StudentConnectDbContext db, ICurrentUserService cur
             return BadRequest(new { message = $"MarksObtained must be between 0 and {mark.Assessment.MaximumMarks}." });
         }
 
-        mark.MarksObtained = dto.MarksObtained;
-
         try
         {
-            await db.SaveChangesAsync();
+            await marks.UpdateMarksObtainedAsync(id, dto.MarksObtained);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to update mark {Id}", id);
             return StatusCode(500, new { message = "Unable to update the mark. Please try again." });
         }
 
+        mark.MarksObtained = dto.MarksObtained;
         return Ok(MarkRecordDto.FromEntity(mark));
     }
 
@@ -298,19 +241,17 @@ public class MarksController(StudentConnectDbContext db, ICurrentUserService cur
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<IActionResult> DeleteMark(int id)
     {
-        var mark = await db.Marks.FindAsync(id);
+        var mark = await marks.GetByIdAsync(id);
         if (mark is null)
         {
             return NotFound();
         }
 
-        db.Marks.Remove(mark);
-
         try
         {
-            await db.SaveChangesAsync();
+            await marks.DeleteAsync(id);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to delete mark {Id}", id);
             return StatusCode(500, new { message = "Unable to delete the mark. Please try again." });
@@ -321,16 +262,15 @@ public class MarksController(StudentConnectDbContext db, ICurrentUserService cur
 
     private async Task<List<int>> GetStudentAndParentUserIds(int studentId)
     {
-        var studentUserIds = await db.Users
-            .Where(u => u.StudentId == studentId)
-            .Select(u => u.Id)
-            .ToListAsync();
+        var studentUserId = await users.GetUserIdForStudentAsync(studentId);
+        var parentUserIds = await parents.GetParentUserIdsForStudentAsync(studentId);
 
-        var parentUserIds = await db.ParentStudents
-            .Where(ps => ps.StudentId == studentId)
-            .Select(ps => ps.ParentUserId)
-            .ToListAsync();
+        var recipientIds = new List<int>(parentUserIds);
+        if (studentUserId is not null)
+        {
+            recipientIds.Add(studentUserId.Value);
+        }
 
-        return studentUserIds.Concat(parentUserIds).Distinct().ToList();
+        return recipientIds.Distinct().ToList();
     }
 }

@@ -1,37 +1,28 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using StudentConnect.Api.Data;
+using Npgsql;
+using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
 
 namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AssessmentsController(StudentConnectDbContext db, ILogger<AssessmentsController> logger) : ControllerBase
+public class AssessmentsController(AssessmentStore assessments, ReferenceDataStore referenceData, ILogger<AssessmentsController> logger) : ControllerBase
 {
     // GET /api/assessments
     [HttpGet]
     public async Task<ActionResult<IEnumerable<AssessmentDto>>> GetAssessments()
     {
-        var assessments = await db.Assessments
-            .Include(a => a.Subject)
-            .AsNoTracking()
-            .OrderBy(a => a.SubjectId).ThenBy(a => a.Date)
-            .Select(a => AssessmentDto.FromEntity(a))
-            .ToListAsync();
-
-        return Ok(assessments);
+        var all = await assessments.GetAllAsync();
+        return Ok(all.Select(AssessmentDto.FromEntity));
     }
 
     // GET /api/assessments/{id}
     [HttpGet("{id:int}")]
     public async Task<ActionResult<AssessmentDto>> GetAssessmentById(int id)
     {
-        var assessment = await db.Assessments
-            .Include(a => a.Subject)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(a => a.Id == id);
+        var assessment = await assessments.GetByIdAsync(id);
 
         if (assessment is null)
         {
@@ -45,20 +36,13 @@ public class AssessmentsController(StudentConnectDbContext db, ILogger<Assessmen
     [HttpGet("subject/{subjectId:int}")]
     public async Task<ActionResult<IEnumerable<AssessmentDto>>> GetAssessmentsBySubject(int subjectId)
     {
-        if (!await db.Subjects.AnyAsync(s => s.Id == subjectId))
+        if (!await referenceData.SubjectExistsAsync(subjectId))
         {
             return NotFound(new { message = "Subject not found." });
         }
 
-        var assessments = await db.Assessments
-            .Include(a => a.Subject)
-            .AsNoTracking()
-            .Where(a => a.SubjectId == subjectId)
-            .OrderBy(a => a.Date)
-            .Select(a => AssessmentDto.FromEntity(a))
-            .ToListAsync();
-
-        return Ok(assessments);
+        var bySubject = await assessments.GetBySubjectAsync(subjectId);
+        return Ok(bySubject.Select(AssessmentDto.FromEntity));
     }
 
     // POST /api/assessments
@@ -84,21 +68,20 @@ public class AssessmentsController(StudentConnectDbContext db, ILogger<Assessmen
             Description = dto.Description,
         };
 
-        db.Assessments.Add(assessment);
-
+        int newId;
         try
         {
-            await db.SaveChangesAsync();
+            newId = await assessments.CreateAsync(assessment);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to save assessment {Title}", dto.Title);
             return StatusCode(500, new { message = "Unable to save the assessment. Please try again." });
         }
 
-        await db.Entry(assessment).Reference(a => a.Subject).LoadAsync();
-        var result = AssessmentDto.FromEntity(assessment);
-        return CreatedAtAction(nameof(GetAssessmentById), new { id = assessment.Id }, result);
+        var created = await assessments.GetByIdAsync(newId);
+        var result = AssessmentDto.FromEntity(created!);
+        return CreatedAtAction(nameof(GetAssessmentById), new { id = newId }, result);
     }
 
     // PUT /api/assessments/{id}
@@ -112,33 +95,36 @@ public class AssessmentsController(StudentConnectDbContext db, ILogger<Assessmen
             return validation;
         }
 
-        var assessment = await db.Assessments.Include(a => a.Subject).FirstOrDefaultAsync(a => a.Id == id);
-        if (assessment is null)
+        if (!await assessments.ExistsAsync(id))
         {
             return NotFound();
         }
 
         Enum.TryParse<AssessmentType>(dto.AssessmentType, ignoreCase: true, out var type);
 
-        assessment.Title = dto.Title;
-        assessment.SubjectId = dto.SubjectId;
-        assessment.Date = dto.Date;
-        assessment.MaximumMarks = dto.MaximumMarks;
-        assessment.AssessmentType = type;
-        assessment.Description = dto.Description;
+        var assessment = new Assessment
+        {
+            Id = id,
+            Title = dto.Title,
+            SubjectId = dto.SubjectId,
+            Date = dto.Date,
+            MaximumMarks = dto.MaximumMarks,
+            AssessmentType = type,
+            Description = dto.Description,
+        };
 
         try
         {
-            await db.SaveChangesAsync();
+            await assessments.UpdateAsync(assessment);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to update assessment {Id}", id);
             return StatusCode(500, new { message = "Unable to update the assessment. Please try again." });
         }
 
-        await db.Entry(assessment).Reference(a => a.Subject).LoadAsync();
-        return Ok(AssessmentDto.FromEntity(assessment));
+        var updated = await assessments.GetByIdAsync(id);
+        return Ok(AssessmentDto.FromEntity(updated!));
     }
 
     // DELETE /api/assessments/{id}
@@ -146,21 +132,18 @@ public class AssessmentsController(StudentConnectDbContext db, ILogger<Assessmen
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<IActionResult> DeleteAssessment(int id)
     {
-        var assessment = await db.Assessments.FindAsync(id);
-        if (assessment is null)
+        if (!await assessments.ExistsAsync(id))
         {
             return NotFound();
         }
 
-        db.Assessments.Remove(assessment);
-
         try
         {
-            await db.SaveChangesAsync();
+            await assessments.DeleteAsync(id);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
-            logger.LogError(ex, "Failed to delete assessment {Id}", id);
+            logger.LogError(ex, "Failed to delete assessment {Id}: {Message}", id, ex.Message);
             return Conflict(new { message = "Cannot delete an assessment that already has marks recorded against it." });
         }
 
@@ -184,7 +167,7 @@ public class AssessmentsController(StudentConnectDbContext db, ILogger<Assessmen
             return BadRequest(new { message = $"AssessmentType '{assessmentType}' is not valid." });
         }
 
-        if (!await db.Subjects.AnyAsync(s => s.Id == subjectId))
+        if (!await referenceData.SubjectExistsAsync(subjectId))
         {
             return BadRequest(new { message = "Subject does not exist." });
         }

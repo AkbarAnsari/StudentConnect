@@ -1,19 +1,18 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using StudentConnect.Api.Data;
+using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
 
 namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class SubjectsController(StudentConnectDbContext db) : ControllerBase
+public class SubjectsController(ReferenceDataStore referenceData) : ControllerBase
 {
     // GET /api/subjects — used by the (temporary, unauthenticated) Record Attendance page.
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Subject>>> GetSubjects()
     {
-        var subjects = await db.Subjects.AsNoTracking().OrderBy(s => s.Id).ToListAsync();
+        var subjects = await referenceData.GetAllSubjectsAsync();
         return Ok(subjects);
     }
 }

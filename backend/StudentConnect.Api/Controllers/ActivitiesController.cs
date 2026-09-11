@@ -1,25 +1,25 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using StudentConnect.Api.Data;
+using Npgsql;
+using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
 
 namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/activities")]
-public class ActivitiesController(StudentConnectDbContext db, ILogger<ActivitiesController> logger) : ControllerBase
+public class ActivitiesController(ActivityStore activities, ActivityRegistrationStore registrations, ReferenceDataStore referenceData, ILogger<ActivitiesController> logger) : ControllerBase
 {
     // GET /api/activities
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ActivityDto>>> GetActivities()
     {
-        var activities = await db.Activities.Include(a => a.Grade).AsNoTracking().OrderBy(a => a.Date).ToListAsync();
+        var all = await activities.GetAllAsync();
         var result = new List<ActivityDto>();
 
-        foreach (var activity in activities)
+        foreach (var activity in all)
         {
-            var currentRegistrations = await CountActiveRegistrations(activity.Id);
+            var currentRegistrations = await registrations.CountActiveAsync(activity.Id);
             result.Add(ActivityDto.FromEntity(activity, currentRegistrations));
         }
 
@@ -30,13 +30,13 @@ public class ActivitiesController(StudentConnectDbContext db, ILogger<Activities
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ActivityDto>> GetActivityById(int id)
     {
-        var activity = await db.Activities.Include(a => a.Grade).AsNoTracking().FirstOrDefaultAsync(a => a.Id == id);
+        var activity = await activities.GetByIdAsync(id);
         if (activity is null)
         {
             return NotFound();
         }
 
-        var currentRegistrations = await CountActiveRegistrations(id);
+        var currentRegistrations = await registrations.CountActiveAsync(id);
         return Ok(ActivityDto.FromEntity(activity, currentRegistrations));
     }
 
@@ -44,22 +44,16 @@ public class ActivitiesController(StudentConnectDbContext db, ILogger<Activities
     [HttpGet("grade/{gradeId:int}")]
     public async Task<ActionResult<IEnumerable<ActivityDto>>> GetActivitiesByGrade(int gradeId)
     {
-        if (!await db.Grades.AnyAsync(g => g.Id == gradeId))
+        if (!await referenceData.GradeExistsAsync(gradeId))
         {
             return NotFound(new { message = "Grade not found." });
         }
 
-        var activities = await db.Activities
-            .Include(a => a.Grade)
-            .AsNoTracking()
-            .Where(a => a.GradeId == gradeId)
-            .OrderBy(a => a.Date)
-            .ToListAsync();
-
+        var byGrade = await activities.GetByGradeAsync(gradeId);
         var result = new List<ActivityDto>();
-        foreach (var activity in activities)
+        foreach (var activity in byGrade)
         {
-            var currentRegistrations = await CountActiveRegistrations(activity.Id);
+            var currentRegistrations = await registrations.CountActiveAsync(activity.Id);
             result.Add(ActivityDto.FromEntity(activity, currentRegistrations));
         }
 
@@ -88,20 +82,19 @@ public class ActivitiesController(StudentConnectDbContext db, ILogger<Activities
             CreatedDate = DateTime.UtcNow,
         };
 
-        db.Activities.Add(activity);
-
+        int newId;
         try
         {
-            await db.SaveChangesAsync();
+            newId = await activities.CreateAsync(activity);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to save activity {Title}", dto.Title);
             return StatusCode(500, new { message = "Unable to save the activity. Please try again." });
         }
 
-        await db.Entry(activity).Reference(a => a.Grade).LoadAsync();
-        return CreatedAtAction(nameof(GetActivityById), new { id = activity.Id }, ActivityDto.FromEntity(activity, 0));
+        var created = await activities.GetByIdAsync(newId);
+        return CreatedAtAction(nameof(GetActivityById), new { id = newId }, ActivityDto.FromEntity(created!, 0));
     }
 
     // PUT /api/activities/{id} — Grade stays fixed after creation; only these fields can be corrected.
@@ -119,16 +112,26 @@ public class ActivitiesController(StudentConnectDbContext db, ILogger<Activities
             return BadRequest(new { message = "Capacity must be greater than zero." });
         }
 
-        var activity = await db.Activities.Include(a => a.Grade).FirstOrDefaultAsync(a => a.Id == id);
+        var activity = await activities.GetByIdAsync(id);
         if (activity is null)
         {
             return NotFound();
         }
 
-        var currentRegistrations = await CountActiveRegistrations(id);
+        var currentRegistrations = await registrations.CountActiveAsync(id);
         if (dto.Capacity < currentRegistrations)
         {
             return BadRequest(new { message = $"Capacity cannot be less than the current number of active registrations ({currentRegistrations})." });
+        }
+
+        try
+        {
+            await activities.UpdateAsync(id, dto.Title, dto.Description, dto.Date, dto.Location, dto.Capacity);
+        }
+        catch (PostgresException ex)
+        {
+            logger.LogError(ex, "Failed to update activity {Id}", id);
+            return StatusCode(500, new { message = "Unable to update the activity. Please try again." });
         }
 
         activity.Title = dto.Title;
@@ -136,17 +139,6 @@ public class ActivitiesController(StudentConnectDbContext db, ILogger<Activities
         activity.Date = dto.Date;
         activity.Location = dto.Location;
         activity.Capacity = dto.Capacity;
-
-        try
-        {
-            await db.SaveChangesAsync();
-        }
-        catch (DbUpdateException ex)
-        {
-            logger.LogError(ex, "Failed to update activity {Id}", id);
-            return StatusCode(500, new { message = "Unable to update the activity. Please try again." });
-        }
-
         return Ok(ActivityDto.FromEntity(activity, currentRegistrations));
     }
 
@@ -156,24 +148,21 @@ public class ActivitiesController(StudentConnectDbContext db, ILogger<Activities
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<IActionResult> DeleteActivity(int id)
     {
-        var activity = await db.Activities.FindAsync(id);
-        if (activity is null)
+        if (await activities.GetByIdAsync(id) is null)
         {
             return NotFound();
         }
 
-        if (await db.ActivityRegistrations.AnyAsync(r => r.ActivityId == id))
+        if (await registrations.ExistsAnyForActivityAsync(id))
         {
             return Conflict(new { message = "Cannot delete an activity that already has registrations." });
         }
 
-        db.Activities.Remove(activity);
-
         try
         {
-            await db.SaveChangesAsync();
+            await activities.DeleteAsync(id);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to delete activity {Id}", id);
             return StatusCode(500, new { message = "Unable to delete the activity. Please try again." });
@@ -181,9 +170,6 @@ public class ActivitiesController(StudentConnectDbContext db, ILogger<Activities
 
         return NoContent();
     }
-
-    private async Task<int> CountActiveRegistrations(int activityId) =>
-        await db.ActivityRegistrations.CountAsync(r => r.ActivityId == activityId && r.Status == ActivityRegistrationStatus.Registered);
 
     private async Task<ActionResult?> ValidateAsync(string title, string location, int gradeId, int capacity)
     {
@@ -197,7 +183,7 @@ public class ActivitiesController(StudentConnectDbContext db, ILogger<Activities
             return BadRequest(new { message = "Capacity must be greater than zero." });
         }
 
-        if (!await db.Grades.AnyAsync(g => g.Id == gradeId))
+        if (!await referenceData.GradeExistsAsync(gradeId))
         {
             return BadRequest(new { message = "Grade does not exist." });
         }

@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using StudentConnect.Api.Auth;
-using StudentConnect.Api.Data;
+using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
 using StudentConnect.Api.Storage;
 
@@ -12,7 +12,9 @@ namespace StudentConnect.Api.Controllers;
 [ApiController]
 [Route("api/learning-materials")]
 public class LearningMaterialsController(
-    StudentConnectDbContext db,
+    LearningMaterialStore materials,
+    StudentStore students,
+    ReferenceDataStore referenceData,
     IFileStorage fileStorage,
     IOptions<FileStorageOptions> storageOptions,
     ICurrentUserService currentUser,
@@ -23,37 +25,15 @@ public class LearningMaterialsController(
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<IEnumerable<LearningMaterialDto>>> GetLearningMaterials(int? subjectId, int? gradeId)
     {
-        var query = db.LearningMaterials
-            .Include(m => m.Subject).Include(m => m.Grade).Include(m => m.Teacher)
-            .AsNoTracking()
-            .AsQueryable();
-
-        if (subjectId is not null)
-        {
-            query = query.Where(m => m.SubjectId == subjectId);
-        }
-
-        if (gradeId is not null)
-        {
-            query = query.Where(m => m.GradeId == gradeId);
-        }
-
-        var materials = await query
-            .OrderByDescending(m => m.UploadedDate)
-            .Select(m => LearningMaterialDto.FromEntity(m))
-            .ToListAsync();
-
-        return Ok(materials);
+        var all = await materials.GetAllAsync(subjectId, gradeId);
+        return Ok(all.Select(LearningMaterialDto.FromEntity));
     }
 
     // GET /api/learning-materials/{id}
     [HttpGet("{id:int}")]
     public async Task<ActionResult<LearningMaterialDto>> GetLearningMaterialById(int id)
     {
-        var material = await db.LearningMaterials
-            .Include(m => m.Subject).Include(m => m.Grade).Include(m => m.Teacher)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.Id == id);
+        var material = await materials.GetByIdAsync(id);
 
         if (material is null)
         {
@@ -68,20 +48,13 @@ public class LearningMaterialsController(
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<IEnumerable<LearningMaterialDto>>> GetByGrade(int gradeId)
     {
-        if (!await db.Grades.AnyAsync(g => g.Id == gradeId))
+        if (!await referenceData.GradeExistsAsync(gradeId))
         {
             return NotFound(new { message = "Grade not found." });
         }
 
-        var materials = await db.LearningMaterials
-            .Include(m => m.Subject).Include(m => m.Grade).Include(m => m.Teacher)
-            .AsNoTracking()
-            .Where(m => m.GradeId == gradeId)
-            .OrderByDescending(m => m.UploadedDate)
-            .Select(m => LearningMaterialDto.FromEntity(m))
-            .ToListAsync();
-
-        return Ok(materials);
+        var byGrade = await materials.GetByGradeAsync(gradeId);
+        return Ok(byGrade.Select(LearningMaterialDto.FromEntity));
     }
 
     // GET /api/learning-materials/subject/{subjectId}
@@ -89,20 +62,13 @@ public class LearningMaterialsController(
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<IEnumerable<LearningMaterialDto>>> GetBySubject(int subjectId)
     {
-        if (!await db.Subjects.AnyAsync(s => s.Id == subjectId))
+        if (!await referenceData.SubjectExistsAsync(subjectId))
         {
             return NotFound(new { message = "Subject not found." });
         }
 
-        var materials = await db.LearningMaterials
-            .Include(m => m.Subject).Include(m => m.Grade).Include(m => m.Teacher)
-            .AsNoTracking()
-            .Where(m => m.SubjectId == subjectId)
-            .OrderByDescending(m => m.UploadedDate)
-            .Select(m => LearningMaterialDto.FromEntity(m))
-            .ToListAsync();
-
-        return Ok(materials);
+        var bySubject = await materials.GetBySubjectAsync(subjectId);
+        return Ok(bySubject.Select(LearningMaterialDto.FromEntity));
     }
 
     // GET /api/learning-materials/teacher/{teacherId}
@@ -115,20 +81,13 @@ public class LearningMaterialsController(
             return Forbid();
         }
 
-        if (!await db.Teachers.AnyAsync(t => t.Id == teacherId))
+        if (!await referenceData.TeacherExistsAsync(teacherId))
         {
             return NotFound(new { message = "Teacher not found." });
         }
 
-        var materials = await db.LearningMaterials
-            .Include(m => m.Subject).Include(m => m.Grade).Include(m => m.Teacher)
-            .AsNoTracking()
-            .Where(m => m.TeacherId == teacherId)
-            .OrderByDescending(m => m.UploadedDate)
-            .Select(m => LearningMaterialDto.FromEntity(m))
-            .ToListAsync();
-
-        return Ok(materials);
+        var byTeacher = await materials.GetByTeacherAsync(teacherId);
+        return Ok(byTeacher.Select(LearningMaterialDto.FromEntity));
     }
 
     // GET /api/learning-materials/student/{studentId} — relevant materials, derived from the
@@ -141,27 +100,15 @@ public class LearningMaterialsController(
             return Forbid();
         }
 
-        var student = await db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == studentId);
+        var student = await students.GetByIdAsync(studentId);
         if (student is null)
         {
             return NotFound(new { message = "Student not found." });
         }
 
-        var subjectIds = await db.StudentSubjects
-            .AsNoTracking()
-            .Where(ss => ss.StudentId == studentId)
-            .Select(ss => ss.SubjectId)
-            .ToListAsync();
-
-        var materials = await db.LearningMaterials
-            .Include(m => m.Subject).Include(m => m.Grade).Include(m => m.Teacher)
-            .AsNoTracking()
-            .Where(m => m.GradeId == student.GradeId && subjectIds.Contains(m.SubjectId))
-            .OrderByDescending(m => m.UploadedDate)
-            .Select(m => LearningMaterialDto.FromEntity(m))
-            .ToListAsync();
-
-        return Ok(materials);
+        var subjectIds = await students.GetSubjectIdsForStudentAsync(studentId);
+        var forStudent = await materials.GetForStudentAsync(student.GradeId, subjectIds);
+        return Ok(forStudent.Select(LearningMaterialDto.FromEntity));
     }
 
     // POST /api/learning-materials — multipart/form-data upload.
@@ -175,17 +122,17 @@ public class LearningMaterialsController(
             return BadRequest(new { message = "Title is required." });
         }
 
-        if (!await db.Subjects.AnyAsync(s => s.Id == request.SubjectId))
+        if (!await referenceData.SubjectExistsAsync(request.SubjectId))
         {
             return BadRequest(new { message = "Subject does not exist." });
         }
 
-        if (!await db.Grades.AnyAsync(g => g.Id == request.GradeId))
+        if (!await referenceData.GradeExistsAsync(request.GradeId))
         {
             return BadRequest(new { message = "Grade does not exist." });
         }
 
-        if (!await db.Teachers.AnyAsync(t => t.Id == request.TeacherId))
+        if (!await referenceData.TeacherExistsAsync(request.TeacherId))
         {
             return BadRequest(new { message = "Teacher does not exist." });
         }
@@ -248,13 +195,12 @@ public class LearningMaterialsController(
             UploadedDate = DateTime.UtcNow,
         };
 
-        db.LearningMaterials.Add(material);
-
+        int newId;
         try
         {
-            await db.SaveChangesAsync();
+            newId = await materials.CreateAsync(material);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             // The file was saved but its metadata couldn't be — clean up rather than leave an orphaned file.
             logger.LogError(ex, "Failed to save learning material metadata for {Title}; removing orphaned file", request.Title);
@@ -262,18 +208,16 @@ public class LearningMaterialsController(
             return StatusCode(500, new { message = "Unable to upload learning material." });
         }
 
-        await db.Entry(material).Reference(m => m.Subject).LoadAsync();
-        await db.Entry(material).Reference(m => m.Grade).LoadAsync();
-        await db.Entry(material).Reference(m => m.Teacher).LoadAsync();
-        var result = LearningMaterialDto.FromEntity(material);
-        return CreatedAtAction(nameof(GetLearningMaterialById), new { id = material.Id }, result);
+        var created = await materials.GetByIdAsync(newId);
+        var result = LearningMaterialDto.FromEntity(created!);
+        return CreatedAtAction(nameof(GetLearningMaterialById), new { id = newId }, result);
     }
 
     // GET /api/learning-materials/{id}/download
     [HttpGet("{id:int}/download")]
     public async Task<IActionResult> DownloadLearningMaterial(int id)
     {
-        var material = await db.LearningMaterials.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id);
+        var material = await materials.GetByIdAsync(id);
         if (material is null)
         {
             return NotFound(new { message = "Learning material not found." });
@@ -293,22 +237,20 @@ public class LearningMaterialsController(
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<IActionResult> DeleteLearningMaterial(int id)
     {
-        var material = await db.LearningMaterials.FirstOrDefaultAsync(m => m.Id == id);
-        if (material is null)
+        var storedFileName = await materials.GetStoredFileNameAsync(id);
+        if (storedFileName is null)
         {
             return NotFound();
         }
 
         // Deleting a file that's already missing is not an error — the end state (no file) is what we want.
-        await fileStorage.DeleteFileAsync(material.StoredFileName);
-
-        db.LearningMaterials.Remove(material);
+        await fileStorage.DeleteFileAsync(storedFileName);
 
         try
         {
-            await db.SaveChangesAsync();
+            await materials.DeleteAsync(id);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to delete learning material {Id}", id);
             return StatusCode(500, new { message = "Unable to delete the learning material. Please try again." });

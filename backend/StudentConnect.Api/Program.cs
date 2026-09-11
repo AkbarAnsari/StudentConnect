@@ -1,10 +1,10 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using StudentConnect.Api.Auth;
 using StudentConnect.Api.Data;
+using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Notifications;
 using StudentConnect.Api.Storage;
 
@@ -16,9 +16,23 @@ builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-// EF Core needs a connection string to know which database to talk to.
-builder.Services.AddDbContext<StudentConnectDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Plain ADO.NET (Npgsql) data access — no ORM. See database/schema.sql for the hand-written
+// schema and Data/Stores/*.cs for the SQL each controller calls into.
+builder.Services.AddSingleton<Database>();
+builder.Services.AddScoped<ReferenceDataStore>();
+builder.Services.AddScoped<StudentStore>();
+builder.Services.AddScoped<AttendanceStore>();
+builder.Services.AddScoped<AssessmentStore>();
+builder.Services.AddScoped<MarkStore>();
+builder.Services.AddScoped<HomeworkStore>();
+builder.Services.AddScoped<HomeworkSubmissionStore>();
+builder.Services.AddScoped<LearningMaterialStore>();
+builder.Services.AddScoped<ActivityStore>();
+builder.Services.AddScoped<ActivityRegistrationStore>();
+builder.Services.AddScoped<UserStore>();
+builder.Services.AddScoped<ParentStore>();
+builder.Services.AddScoped<NotificationStore>();
+builder.Services.AddScoped<AnalyticsStore>();
 
 // Today files live on local disk; a future AzureBlobStorage class could implement the
 // same IFileStorage interface without any controller/service code changing.
@@ -88,13 +102,11 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Apply any pending EF Core migrations on startup so the database schema is
-// always up to date with our C# models — beginner-friendly, no manual step needed.
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<StudentConnectDbContext>();
-    db.Database.Migrate();
-}
+// Applies database/schema.sql (idempotent CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT
+// EXISTS) and database/seed.sql (ON CONFLICT DO NOTHING) on startup — the hand-written-SQL
+// equivalent of "dotnet ef database update", but as plain, reviewable .sql files instead of
+// an ORM migration history table.
+await ApplyDatabaseScriptsAsync(app.Services.GetRequiredService<Database>(), app.Environment, app.Logger);
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -112,3 +124,25 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static async Task ApplyDatabaseScriptsAsync(Database db, IWebHostEnvironment environment, ILogger logger)
+{
+    var databaseFolder = Path.Combine(environment.ContentRootPath, "..", "database");
+    var schemaPath = Path.Combine(databaseFolder, "schema.sql");
+    var seedPath = Path.Combine(databaseFolder, "seed.sql");
+
+    if (!File.Exists(schemaPath))
+    {
+        logger.LogWarning("database/schema.sql not found at {Path} — skipping schema bootstrap.", schemaPath);
+        return;
+    }
+
+    await db.ExecuteAsync(await File.ReadAllTextAsync(schemaPath), bind: null);
+    logger.LogInformation("Applied database/schema.sql.");
+
+    if (File.Exists(seedPath))
+    {
+        await db.ExecuteAsync(await File.ReadAllTextAsync(seedPath), bind: null);
+        logger.LogInformation("Applied database/seed.sql.");
+    }
+}

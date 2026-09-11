@@ -1,24 +1,26 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using StudentConnect.Api.Auth;
-using StudentConnect.Api.Data;
+using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
 
 namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/homework-submissions")]
-public class HomeworkSubmissionsController(StudentConnectDbContext db, ICurrentUserService currentUser, ILogger<HomeworkSubmissionsController> logger) : ControllerBase
+public class HomeworkSubmissionsController(
+    HomeworkSubmissionStore submissions,
+    HomeworkStore homework,
+    StudentStore students,
+    ICurrentUserService currentUser,
+    ILogger<HomeworkSubmissionsController> logger) : ControllerBase
 {
     // GET /api/homework-submissions/{id}
     [HttpGet("{id:int}")]
     public async Task<ActionResult<HomeworkSubmissionDto>> GetSubmissionById(int id)
     {
-        var submission = await db.HomeworkSubmissions
-            .Include(s => s.Homework).Include(s => s.Student)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == id);
+        var submission = await submissions.GetByIdAsync(id);
 
         if (submission is null)
         {
@@ -39,23 +41,15 @@ public class HomeworkSubmissionsController(StudentConnectDbContext db, ICurrentU
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<IEnumerable<SubmissionOverviewDto>>> GetHomeworkSubmissions(int homeworkId)
     {
-        var homework = await db.Homework.AsNoTracking().FirstOrDefaultAsync(h => h.Id == homeworkId);
-        if (homework is null)
+        var homeworkItem = await homework.GetByIdAsync(homeworkId);
+        if (homeworkItem is null)
         {
             return NotFound(new { message = "Homework not found." });
         }
 
-        var roster = await db.Students
-            .AsNoTracking()
-            .Where(s => s.GradeId == homework.GradeId)
-            .OrderBy(s => s.FirstName)
-            .ToListAsync();
-
-        var submissions = await db.HomeworkSubmissions
-            .AsNoTracking()
-            .Where(s => s.HomeworkId == homeworkId)
-            .ToListAsync();
-        var submissionByStudentId = submissions.ToDictionary(s => s.StudentId);
+        var roster = await students.GetByGradeOrderedByFirstNameAsync(homeworkItem.GradeId);
+        var homeworkSubmissions = await submissions.GetByHomeworkIdRawAsync(homeworkId);
+        var submissionByStudentId = homeworkSubmissions.ToDictionary(s => s.StudentId);
 
         var overview = roster.Select(student => submissionByStudentId.TryGetValue(student.Id, out var submission)
             ? new SubmissionOverviewDto
@@ -87,20 +81,13 @@ public class HomeworkSubmissionsController(StudentConnectDbContext db, ICurrentU
             return Forbid();
         }
 
-        if (!await db.Students.AnyAsync(s => s.Id == studentId))
+        if (!await students.ExistsAsync(studentId))
         {
             return NotFound(new { message = "Student not found." });
         }
 
-        var submissions = await db.HomeworkSubmissions
-            .Include(s => s.Homework).Include(s => s.Student)
-            .AsNoTracking()
-            .Where(s => s.StudentId == studentId)
-            .OrderByDescending(s => s.SubmittedDate)
-            .Select(s => HomeworkSubmissionDto.FromEntity(s))
-            .ToListAsync();
-
-        return Ok(submissions);
+        var studentSubmissions = await submissions.GetByStudentAsync(studentId);
+        return Ok(studentSubmissions.Select(HomeworkSubmissionDto.FromEntity));
     }
 
     // POST /api/homework-submissions — the server determines the student from the authenticated
@@ -114,48 +101,43 @@ public class HomeworkSubmissionsController(StudentConnectDbContext db, ICurrentU
             return Forbid();
         }
 
-        var homework = await db.Homework.FirstOrDefaultAsync(h => h.Id == dto.HomeworkId);
-        if (homework is null)
+        var homeworkItem = await homework.GetByIdAsync(dto.HomeworkId);
+        if (homeworkItem is null)
         {
             return BadRequest(new { message = "Homework does not exist." });
         }
 
-        var duplicate = await db.HomeworkSubmissions.AnyAsync(s => s.StudentId == studentId && s.HomeworkId == dto.HomeworkId);
-        if (duplicate)
+        if (await submissions.ExistsAsync(studentId, dto.HomeworkId))
         {
             return Conflict(new { message = "This student has already submitted this homework." });
         }
 
         var submittedDate = DateTime.UtcNow;
-        var status = DateOnly.FromDateTime(submittedDate) > homework.DueDate
+        var status = DateOnly.FromDateTime(submittedDate) > homeworkItem.DueDate
             ? HomeworkSubmissionStatus.Late
             : HomeworkSubmissionStatus.Submitted;
 
-        var submission = new HomeworkSubmission
-        {
-            HomeworkId = dto.HomeworkId,
-            StudentId = studentId,
-            SubmittedDate = submittedDate,
-            Status = status,
-            Comments = dto.Comments,
-        };
-
-        db.HomeworkSubmissions.Add(submission);
-
+        int newId;
         try
         {
-            await db.SaveChangesAsync();
+            newId = await submissions.CreateAsync(new HomeworkSubmission
+            {
+                HomeworkId = dto.HomeworkId,
+                StudentId = studentId,
+                SubmittedDate = submittedDate,
+                Status = status,
+                Comments = dto.Comments,
+            });
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to save submission for student {StudentId}", studentId);
             return StatusCode(500, new { message = "Unable to save the submission. Please try again." });
         }
 
-        submission.Homework = homework;
-        await db.Entry(submission).Reference(s => s.Student).LoadAsync();
-        var result = HomeworkSubmissionDto.FromEntity(submission);
-        return CreatedAtAction(nameof(GetSubmissionById), new { id = submission.Id }, result);
+        var created = await submissions.GetByIdAsync(newId);
+        var result = HomeworkSubmissionDto.FromEntity(created!);
+        return CreatedAtAction(nameof(GetSubmissionById), new { id = newId }, result);
     }
 
     // PUT /api/homework-submissions/{id} — the explicit "edit my submission" mechanism; re-evaluates
@@ -164,9 +146,7 @@ public class HomeworkSubmissionsController(StudentConnectDbContext db, ICurrentU
     [Authorize(Roles = "Student")]
     public async Task<ActionResult<HomeworkSubmissionDto>> UpdateSubmission(int id, HomeworkSubmissionUpdateDto dto)
     {
-        var submission = await db.HomeworkSubmissions
-            .Include(s => s.Homework).Include(s => s.Student)
-            .FirstOrDefaultAsync(s => s.Id == id);
+        var submission = await submissions.GetByIdAsync(id);
 
         if (submission is null)
         {
@@ -179,22 +159,23 @@ public class HomeworkSubmissionsController(StudentConnectDbContext db, ICurrentU
         }
 
         var submittedDate = DateTime.UtcNow;
-        submission.Comments = dto.Comments;
-        submission.SubmittedDate = submittedDate;
-        submission.Status = DateOnly.FromDateTime(submittedDate) > submission.Homework!.DueDate
+        var status = DateOnly.FromDateTime(submittedDate) > submission.Homework!.DueDate
             ? HomeworkSubmissionStatus.Late
             : HomeworkSubmissionStatus.Submitted;
 
         try
         {
-            await db.SaveChangesAsync();
+            await submissions.UpdateAsync(id, submittedDate, status, dto.Comments);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to update submission {Id}", id);
             return StatusCode(500, new { message = "Unable to update the submission. Please try again." });
         }
 
+        submission.Comments = dto.Comments;
+        submission.SubmittedDate = submittedDate;
+        submission.Status = status;
         return Ok(HomeworkSubmissionDto.FromEntity(submission));
     }
 }

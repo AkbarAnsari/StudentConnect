@@ -76,3 +76,19 @@ progressively riskier to change. Parent portal was prioritized over Notification
 because notifications are only useful once there's a parent-facing surface to notify
 into. Dashboards last because they consume data produced by the other three (parent
 engagement, notification events) rather than gating them.
+
+## Addendum — EF Core removed, replaced with plain ADO.NET (post-launch change)
+
+After the above shipped, the data-access layer itself was reworked at explicit user
+request: EF Core (`DbContext`, LINQ queries, code-first migrations) was removed
+entirely and replaced with plain `Npgsql` ADO.NET calls, organized into one "store"
+class per domain area (`backend/StudentConnect.Api/Data/Stores/*.cs`), each holding
+hand-written, parameterized SQL — the "SQL helper + query package" pattern requested,
+short of full PostgreSQL stored procedures/functions. Schema and seed data moved from
+EF Core migrations (`Migrations/*.cs`, an opaque history table) to two plain,
+reviewable files: `backend/database/schema.sql` and `backend/database/seed.sql`,
+applied idempotently on API startup. Controllers kept their existing validation and
+business-rule logic essentially unchanged — only the data-access lines changed.
+Tests that need a database now run against a real, disposable Postgres database
+(`studentconnect_test_db`) instead of EF Core's InMemory provider, since there's no
+longer an ORM abstraction to substitute.

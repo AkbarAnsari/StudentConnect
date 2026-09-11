@@ -1,58 +1,52 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using StudentConnect.Api.Controllers;
-using StudentConnect.Api.Data;
+using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
 using Xunit;
 
 namespace StudentConnect.Api.Tests.Controllers;
 
-public class ParentsControllerTests
+// Runs against a real Postgres test database (see DatabaseFixture). Usernames are randomized
+// per test run since they persist in a shared database across runs (unlike the old EF Core
+// InMemory provider, which started from a blank database every time).
+[Collection("Database")]
+public class ParentsControllerTests(DatabaseFixture fixture)
 {
-    private static StudentConnectDbContext CreateDb()
-    {
-        var options = new DbContextOptionsBuilder<StudentConnectDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
-        var db = new StudentConnectDbContext(options);
-        db.Database.EnsureCreated();
-        return db;
-    }
+    private ParentsController CreateController() =>
+        new(new UserStore(fixture.Database), new ParentStore(fixture.Database), new StudentStore(fixture.Database), NullLogger<ParentsController>.Instance);
 
-    private static ParentsController CreateController(StudentConnectDbContext db) =>
-        new(db, NullLogger<ParentsController>.Instance);
+    private static string UniqueUsername(string prefix) => $"{prefix}.{Guid.NewGuid():N}"[..30];
 
     [Fact]
     public async Task CreateParent_LinksRequestedChildren()
     {
-        await using var db = CreateDb();
-        var student = await db.Students.FirstAsync();
-        var controller = CreateController(db);
+        var controller = CreateController();
+        var username = UniqueUsername("parent-test");
 
         var result = await controller.CreateParent(new ParentCreateDto
         {
-            Username = "parent.test",
+            Username = username,
             Password = "P@ssw0rd!",
-            ChildStudentIds = [student.Id],
+            ChildStudentIds = [1],
         });
 
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         var dto = Assert.IsType<ParentResponseDto>(created.Value);
 
-        Assert.Equal("parent.test", dto.Username);
+        Assert.Equal(username, dto.Username);
         Assert.Single(dto.Children);
-        Assert.Equal(student.Id, dto.Children[0].Id);
+        Assert.Equal(1, dto.Children[0].Id);
     }
 
     [Fact]
     public async Task CreateParent_DuplicateUsername_ReturnsConflict()
     {
-        await using var db = CreateDb();
-        var controller = CreateController(db);
+        var controller = CreateController();
+        var username = UniqueUsername("dup-parent");
 
-        await controller.CreateParent(new ParentCreateDto { Username = "dup.parent", Password = "P@ssw0rd!" });
-        var second = await controller.CreateParent(new ParentCreateDto { Username = "dup.parent", Password = "AnotherP@ss1" });
+        await controller.CreateParent(new ParentCreateDto { Username = username, Password = "P@ssw0rd!" });
+        var second = await controller.CreateParent(new ParentCreateDto { Username = username, Password = "AnotherP@ss1" });
 
         Assert.IsType<ConflictObjectResult>(second.Result);
     }
@@ -60,23 +54,22 @@ public class ParentsControllerTests
     [Fact]
     public async Task LinkChild_ThenUnlinkChild_RemovesTheLink()
     {
-        await using var db = CreateDb();
-        var student = await db.Students.Skip(1).FirstAsync();
-        var controller = CreateController(db);
+        var controller = CreateController();
+        const int studentId = 2;
 
-        var createResult = await controller.CreateParent(new ParentCreateDto { Username = "link.test", Password = "P@ssw0rd!" });
+        var createResult = await controller.CreateParent(new ParentCreateDto { Username = UniqueUsername("link-test"), Password = "P@ssw0rd!" });
         var parentDto = Assert.IsType<ParentResponseDto>(Assert.IsType<CreatedAtActionResult>(createResult.Result).Value);
 
-        var linkResult = await controller.LinkChild(parentDto.Id, new LinkChildDto { StudentId = student.Id });
+        var linkResult = await controller.LinkChild(parentDto.Id, new LinkChildDto { StudentId = studentId });
         Assert.IsType<NoContentResult>(linkResult);
 
-        var duplicateLink = await controller.LinkChild(parentDto.Id, new LinkChildDto { StudentId = student.Id });
+        var duplicateLink = await controller.LinkChild(parentDto.Id, new LinkChildDto { StudentId = studentId });
         Assert.IsType<ConflictObjectResult>(duplicateLink);
 
-        var unlinkResult = await controller.UnlinkChild(parentDto.Id, student.Id);
+        var unlinkResult = await controller.UnlinkChild(parentDto.Id, studentId);
         Assert.IsType<NoContentResult>(unlinkResult);
 
-        var afterUnlink = await db.ParentStudents.CountAsync(ps => ps.ParentUserId == parentDto.Id);
-        Assert.Equal(0, afterUnlink);
+        var stillLinked = await new ParentStore(fixture.Database).LinkExistsAsync(parentDto.Id, studentId);
+        Assert.False(stillLinked);
     }
 }

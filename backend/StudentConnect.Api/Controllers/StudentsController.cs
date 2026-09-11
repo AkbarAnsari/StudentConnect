@@ -1,29 +1,23 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using StudentConnect.Api.Auth;
-using StudentConnect.Api.Data;
+using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
 
 namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class StudentsController(StudentConnectDbContext db, ICurrentUserService currentUser, ILogger<StudentsController> logger) : ControllerBase
+public class StudentsController(StudentStore students, ReferenceDataStore referenceData, ICurrentUserService currentUser, ILogger<StudentsController> logger) : ControllerBase
 {
     // GET /api/students
     [HttpGet]
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<IEnumerable<StudentResponseDto>>> GetStudents()
     {
-        var students = await db.Students
-            .Include(s => s.Grade)
-            .AsNoTracking()
-            .OrderBy(s => s.Id)
-            .Select(s => StudentResponseDto.FromEntity(s))
-            .ToListAsync();
-
-        return Ok(students);
+        var all = await students.GetAllAsync();
+        return Ok(all.Select(StudentResponseDto.FromEntity));
     }
 
     // GET /api/students/{id} — a Student may only view their own profile; Teacher/Admin may view any.
@@ -35,10 +29,7 @@ public class StudentsController(StudentConnectDbContext db, ICurrentUserService 
             return Forbid();
         }
 
-        var student = await db.Students
-            .Include(s => s.Grade)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == id);
+        var student = await students.GetByIdAsync(id);
 
         if (student is null)
         {
@@ -61,13 +52,13 @@ public class StudentsController(StudentConnectDbContext db, ICurrentUserService 
             return BadRequest(new { message = "StudentId, FirstName, LastName, and Email are required." });
         }
 
-        var gradeExists = await db.Grades.AnyAsync(g => g.Id == dto.GradeId);
+        var gradeExists = await referenceData.GradeExistsAsync(dto.GradeId);
         if (!gradeExists)
         {
             return BadRequest(new { message = "The specified GradeId does not exist." });
         }
 
-        var duplicate = await db.Students.AnyAsync(s => s.StudentId == dto.StudentId);
+        var duplicate = await students.StudentCodeExistsAsync(dto.StudentId);
         if (duplicate)
         {
             return Conflict(new { message = $"A student with StudentId '{dto.StudentId}' already exists." });
@@ -83,21 +74,20 @@ public class StudentsController(StudentConnectDbContext db, ICurrentUserService 
             Section = dto.Section,
         };
 
-        db.Students.Add(student);
-
+        int newId;
         try
         {
-            await db.SaveChangesAsync();
+            newId = await students.CreateAsync(student);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to save new student {StudentId}", dto.StudentId);
             return StatusCode(500, new { message = "Unable to save the student. Please try again." });
         }
 
-        await db.Entry(student).Reference(s => s.Grade).LoadAsync();
-        var result = StudentResponseDto.FromEntity(student);
-        return CreatedAtAction(nameof(GetStudentById), new { id = student.Id }, result);
+        var created = await students.GetByIdAsync(newId);
+        var result = StudentResponseDto.FromEntity(created!);
+        return CreatedAtAction(nameof(GetStudentById), new { id = newId }, result);
     }
 
     // PUT /api/students/{id}
@@ -112,36 +102,39 @@ public class StudentsController(StudentConnectDbContext db, ICurrentUserService 
             return BadRequest(new { message = "FirstName, LastName, and Email are required." });
         }
 
-        var student = await db.Students.FirstOrDefaultAsync(s => s.Id == id);
-        if (student is null)
+        if (!await students.ExistsAsync(id))
         {
             return NotFound();
         }
 
-        var gradeExists = await db.Grades.AnyAsync(g => g.Id == dto.GradeId);
+        var gradeExists = await referenceData.GradeExistsAsync(dto.GradeId);
         if (!gradeExists)
         {
             return BadRequest(new { message = "The specified GradeId does not exist." });
         }
 
-        student.FirstName = dto.FirstName;
-        student.LastName = dto.LastName;
-        student.Email = dto.Email;
-        student.GradeId = dto.GradeId;
-        student.Section = dto.Section;
+        var student = new Student
+        {
+            Id = id,
+            FirstName = dto.FirstName,
+            LastName = dto.LastName,
+            Email = dto.Email,
+            GradeId = dto.GradeId,
+            Section = dto.Section,
+        };
 
         try
         {
-            await db.SaveChangesAsync();
+            await students.UpdateAsync(student);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to update student {Id}", id);
             return StatusCode(500, new { message = "Unable to update the student. Please try again." });
         }
 
-        await db.Entry(student).Reference(s => s.Grade).LoadAsync();
-        return Ok(StudentResponseDto.FromEntity(student));
+        var updated = await students.GetByIdAsync(id);
+        return Ok(StudentResponseDto.FromEntity(updated!));
     }
 
     // DELETE /api/students/{id}
@@ -149,19 +142,16 @@ public class StudentsController(StudentConnectDbContext db, ICurrentUserService 
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteStudent(int id)
     {
-        var student = await db.Students.FirstOrDefaultAsync(s => s.Id == id);
-        if (student is null)
+        if (!await students.ExistsAsync(id))
         {
             return NotFound();
         }
 
-        db.Students.Remove(student);
-
         try
         {
-            await db.SaveChangesAsync();
+            await students.DeleteAsync(id);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to delete student {Id}", id);
             return StatusCode(500, new { message = "Unable to delete the student. Please try again." });

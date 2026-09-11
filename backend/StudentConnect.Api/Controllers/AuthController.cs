@@ -1,9 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using StudentConnect.Api.Auth;
-using StudentConnect.Api.Data;
+using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
 
 namespace StudentConnect.Api.Controllers;
@@ -11,7 +10,7 @@ namespace StudentConnect.Api.Controllers;
 [ApiController]
 [Route("api/auth")]
 [AllowAnonymous]
-public class AuthController(StudentConnectDbContext db, JwtTokenService tokenService, ILogger<AuthController> logger) : ControllerBase
+public class AuthController(UserStore users, ParentStore parents, JwtTokenService tokenService, ILogger<AuthController> logger) : ControllerBase
 {
     private static readonly PasswordHasher<ApplicationUser> Hasher = new();
 
@@ -28,9 +27,7 @@ public class AuthController(StudentConnectDbContext db, JwtTokenService tokenSer
             return Unauthorized(new { message = invalidCredentialsMessage });
         }
 
-        var user = await db.Users
-            .Include(u => u.Student).Include(u => u.Teacher)
-            .FirstOrDefaultAsync(u => u.Username == dto.Username);
+        var user = await users.GetByUsernameForLoginAsync(dto.Username);
 
         if (user is null)
         {
@@ -47,20 +44,7 @@ public class AuthController(StudentConnectDbContext db, JwtTokenService tokenSer
         List<int>? childStudentIds = null;
         if (user.Role == UserRole.Parent)
         {
-            children = await db.ParentStudents
-                .Where(ps => ps.ParentUserId == user.Id)
-                .Include(ps => ps.Student).ThenInclude(s => s!.Grade)
-                .AsNoTracking()
-                .Select(ps => new ParentChildDto
-                {
-                    Id = ps.Student!.Id,
-                    StudentId = ps.Student.StudentId,
-                    FirstName = ps.Student.FirstName,
-                    LastName = ps.Student.LastName,
-                    GradeName = ps.Student.Grade!.Name,
-                    Section = ps.Student.Section,
-                })
-                .ToListAsync();
+            children = await parents.GetChildrenForParentAsync(user.Id);
             childStudentIds = children.Select(c => c.Id).ToList();
         }
 
@@ -88,3 +72,4 @@ public class AuthController(StudentConnectDbContext db, JwtTokenService tokenSer
         });
     }
 }
+

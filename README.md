@@ -173,7 +173,7 @@ No Microsoft Entra ID and no Azure yet — see [docs/phase-10.md](docs/phase-10.
 
 ## Running locally
 
-Terminal 1 — API (applies pending EF Core migrations automatically on startup):
+Terminal 1 — API (applies `database/schema.sql` and `database/seed.sql` automatically on startup):
 ```bash
 cd backend/StudentConnect.Api
 dotnet run --launch-profile http
@@ -186,8 +186,10 @@ cd backend/StudentConnect.Api
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=studentconnect_db;Username=<user>;Password=<password>;SSL Mode=Disable"
 dotnet user-secrets set "Jwt:Secret" "<any long random string>"
 ```
-The database itself is created once (`CREATE DATABASE studentconnect_db;`) and its
-schema is kept up to date automatically by EF Core migrations on startup.
+The database itself is created once (`CREATE DATABASE studentconnect_db;`); the API then
+applies `backend/database/schema.sql` (idempotent `CREATE TABLE IF NOT EXISTS`) and
+`backend/database/seed.sql` (`ON CONFLICT DO NOTHING`) on every startup — no ORM, no
+migration history table, just two reviewable `.sql` files (see the "Data access" section below).
 
 Terminal 2 — Frontend:
 ```bash
@@ -207,13 +209,23 @@ $env:Storage__Provider = "AzureBlob"
 $env:AzureBlobStorage__AccountUrl = "https://<account>.blob.core.windows.net/"
 ```
 
-### Database commands (only needed after model changes)
+### Data access — plain ADO.NET, no ORM
 
-```bash
-cd backend/StudentConnect.Api
-dotnet ef migrations add <MigrationName>
-dotnet ef database update
-```
+The backend talks to PostgreSQL directly via `Npgsql` (no Entity Framework Core). See
+[docs/phase-14-roadmap.md](docs/phase-14-roadmap.md) for why, and:
+- `backend/database/schema.sql` — hand-written `CREATE TABLE`/index/constraint
+  statements (apply manually with `psql -f schema.sql` against a fresh database, or let
+  the API apply it automatically on startup).
+- `backend/database/seed.sql` — the original demo dataset as plain `INSERT` statements.
+- `backend/StudentConnect.Api/Data/Database.cs` — a small ADO.NET helper (open a
+  connection, run a query/command, map rows to objects).
+- `backend/StudentConnect.Api/Data/Stores/*.cs` — one class per domain area
+  (`StudentStore`, `AttendanceStore`, `AnalyticsStore`, ...) with hand-written,
+  parameterized SQL — this is what controllers call instead of `DbContext`.
+
+Running tests that touch the database requires a second, disposable Postgres database
+(`studentconnect_test_db` by default, or point `STUDENTCONNECT_TEST_CONNECTION_STRING`
+at one) — see `backend/StudentConnect.Api.Tests/DatabaseFixture.cs`.
 
 ## License
 

@@ -1,15 +1,22 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using StudentConnect.Api.Auth;
 using StudentConnect.Api.Data;
+using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
 
 namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/activity-registrations")]
-public class ActivityRegistrationsController(StudentConnectDbContext db, ICurrentUserService currentUser, ILogger<ActivityRegistrationsController> logger) : ControllerBase
+public class ActivityRegistrationsController(
+    ActivityRegistrationStore registrations,
+    StudentStore students,
+    ActivityStore activities,
+    Database db,
+    ICurrentUserService currentUser,
+    ILogger<ActivityRegistrationsController> logger) : ControllerBase
 {
     // GET /api/activity-registrations/student/{studentId}
     [HttpGet("student/{studentId:int}")]
@@ -20,20 +27,13 @@ public class ActivityRegistrationsController(StudentConnectDbContext db, ICurren
             return Forbid();
         }
 
-        if (!await db.Students.AnyAsync(s => s.Id == studentId))
+        if (!await students.ExistsAsync(studentId))
         {
             return NotFound(new { message = "Student not found." });
         }
 
-        var registrations = await db.ActivityRegistrations
-            .Include(r => r.Student).Include(r => r.Activity)
-            .AsNoTracking()
-            .Where(r => r.StudentId == studentId)
-            .OrderByDescending(r => r.RegistrationDate)
-            .Select(r => ActivityRegistrationDto.FromEntity(r))
-            .ToListAsync();
-
-        return Ok(registrations);
+        var byStudent = await registrations.GetByStudentAsync(studentId);
+        return Ok(byStudent.Select(ActivityRegistrationDto.FromEntity));
     }
 
     // GET /api/activity-registrations/activity/{activityId}
@@ -41,30 +41,20 @@ public class ActivityRegistrationsController(StudentConnectDbContext db, ICurren
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<IEnumerable<ActivityRegistrationDto>>> GetActivityRegistrations(int activityId)
     {
-        if (!await db.Activities.AnyAsync(a => a.Id == activityId))
+        if (await activities.GetByIdAsync(activityId) is null)
         {
             return NotFound(new { message = "Activity not found." });
         }
 
-        var registrations = await db.ActivityRegistrations
-            .Include(r => r.Student).Include(r => r.Activity)
-            .AsNoTracking()
-            .Where(r => r.ActivityId == activityId)
-            .OrderBy(r => r.RegistrationDate)
-            .Select(r => ActivityRegistrationDto.FromEntity(r))
-            .ToListAsync();
-
-        return Ok(registrations);
+        var byActivity = await registrations.GetByActivityAsync(activityId);
+        return Ok(byActivity.Select(ActivityRegistrationDto.FromEntity));
     }
 
     // GET /api/activity-registrations/{id}
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ActivityRegistrationDto>> GetRegistrationById(int id)
     {
-        var registration = await db.ActivityRegistrations
-            .Include(r => r.Student).Include(r => r.Activity)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == id);
+        var registration = await registrations.GetByIdAsync(id);
 
         if (registration is null)
         {
@@ -90,13 +80,13 @@ public class ActivityRegistrationsController(StudentConnectDbContext db, ICurren
             return Forbid();
         }
 
-        var student = await db.Students.FirstOrDefaultAsync(s => s.Id == studentId);
+        var student = await students.GetByIdAsync(studentId);
         if (student is null)
         {
             return BadRequest(new { message = "Student does not exist." });
         }
 
-        var activity = await db.Activities.FirstOrDefaultAsync(a => a.Id == dto.ActivityId);
+        var activity = await activities.GetByIdAsync(dto.ActivityId);
         if (activity is null)
         {
             return BadRequest(new { message = "Activity does not exist." });
@@ -116,60 +106,56 @@ public class ActivityRegistrationsController(StudentConnectDbContext db, ICurren
         // requests both read a capacity count that's about to become stale — a stronger guarantee
         // (e.g. serializable isolation or a concurrency token) would be needed for a highly
         // concurrent production system; that's out of scope for this learning project.
-        await using var transaction = await db.Database.BeginTransactionAsync();
-
-        var existing = await db.ActivityRegistrations
-            .FirstOrDefaultAsync(r => r.StudentId == studentId && r.ActivityId == dto.ActivityId);
-
-        if (existing is not null && existing.Status == ActivityRegistrationStatus.Registered)
-        {
-            return Conflict(new { message = "Student is already registered for this activity." });
-        }
-
-        var currentRegistrations = await db.ActivityRegistrations
-            .CountAsync(r => r.ActivityId == dto.ActivityId && r.Status == ActivityRegistrationStatus.Registered);
-
-        if (currentRegistrations >= activity.Capacity)
-        {
-            return Conflict(new { message = "This activity is already full." });
-        }
-
+        int registrationId;
         var registrationDate = DateTime.UtcNow;
-
-        if (existing is not null)
-        {
-            // Re-registering after cancellation reactivates the same row instead of inserting a duplicate.
-            existing.Status = ActivityRegistrationStatus.Registered;
-            existing.RegistrationDate = registrationDate;
-        }
-        else
-        {
-            existing = new ActivityRegistration
-            {
-                StudentId = studentId,
-                ActivityId = dto.ActivityId,
-                RegistrationDate = registrationDate,
-                Status = ActivityRegistrationStatus.Registered,
-            };
-            db.ActivityRegistrations.Add(existing);
-        }
-
         try
         {
-            await db.SaveChangesAsync();
-            await transaction.CommitAsync();
+            var (Id, IsFull, AlreadyRegistered) = await db.WithTransactionAsync(async (connection, tx) =>
+            {
+                var (existingId, existingStatus) = await registrations.GetExistingInTxAsync(connection, tx, studentId, dto.ActivityId);
+
+                if (existingId is not null && existingStatus == ActivityRegistrationStatus.Registered)
+                {
+                    return (existingId.Value, false, true);
+                }
+
+                var currentRegistrations = await registrations.CountActiveInTxAsync(connection, tx, dto.ActivityId);
+                if (currentRegistrations >= activity.Capacity)
+                {
+                    return (0, true, false);
+                }
+
+                if (existingId is not null)
+                {
+                    await registrations.ReactivateInTxAsync(connection, tx, existingId.Value, registrationDate);
+                    return (existingId.Value, false, false);
+                }
+
+                var newId = await registrations.InsertInTxAsync(connection, tx, studentId, dto.ActivityId, registrationDate);
+                return (newId, false, false);
+            });
+
+            if (AlreadyRegistered)
+            {
+                return Conflict(new { message = "Student is already registered for this activity." });
+            }
+
+            if (IsFull)
+            {
+                return Conflict(new { message = "This activity is already full." });
+            }
+
+            registrationId = Id;
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
-            await transaction.RollbackAsync();
             logger.LogError(ex, "Failed to save registration for student {StudentId} on activity {ActivityId}", studentId, dto.ActivityId);
             return StatusCode(500, new { message = "Unable to register for this activity. Please try again." });
         }
 
-        existing.Student = student;
-        existing.Activity = activity;
-        var result = ActivityRegistrationDto.FromEntity(existing);
-        return CreatedAtAction(nameof(GetRegistrationById), new { id = existing.Id }, result);
+        var created = await registrations.GetByIdAsync(registrationId);
+        var result = ActivityRegistrationDto.FromEntity(created!);
+        return CreatedAtAction(nameof(GetRegistrationById), new { id = registrationId }, result);
     }
 
     // PUT /api/activity-registrations/{id}/cancel — Status flips to Cancelled; the row is kept as history.
@@ -177,9 +163,7 @@ public class ActivityRegistrationsController(StudentConnectDbContext db, ICurren
     [HttpPut("{id:int}/cancel")]
     public async Task<ActionResult<ActivityRegistrationDto>> CancelRegistration(int id)
     {
-        var registration = await db.ActivityRegistrations
-            .Include(r => r.Student).Include(r => r.Activity)
-            .FirstOrDefaultAsync(r => r.Id == id);
+        var registration = await registrations.GetByIdAsync(id);
 
         if (registration is null)
         {
@@ -191,18 +175,17 @@ public class ActivityRegistrationsController(StudentConnectDbContext db, ICurren
             return Forbid();
         }
 
-        registration.Status = ActivityRegistrationStatus.Cancelled;
-
         try
         {
-            await db.SaveChangesAsync();
+            await registrations.UpdateStatusAsync(id, ActivityRegistrationStatus.Cancelled);
         }
-        catch (DbUpdateException ex)
+        catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to cancel registration {Id}", id);
             return StatusCode(500, new { message = "Unable to cancel the registration. Please try again." });
         }
 
+        registration.Status = ActivityRegistrationStatus.Cancelled;
         return Ok(ActivityRegistrationDto.FromEntity(registration));
     }
 }

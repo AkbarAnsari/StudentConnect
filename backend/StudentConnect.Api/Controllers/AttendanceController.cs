@@ -4,12 +4,13 @@ using Microsoft.EntityFrameworkCore;
 using StudentConnect.Api.Auth;
 using StudentConnect.Api.Data;
 using StudentConnect.Api.Models;
+using StudentConnect.Api.Notifications;
 
 namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AttendanceController(StudentConnectDbContext db, ICurrentUserService currentUser, ILogger<AttendanceController> logger) : ControllerBase
+public class AttendanceController(StudentConnectDbContext db, ICurrentUserService currentUser, INotificationService notifications, ILogger<AttendanceController> logger) : ControllerBase
 {
     // GET /api/attendance
     [HttpGet]
@@ -168,6 +169,12 @@ public class AttendanceController(StudentConnectDbContext db, ICurrentUserServic
 
         await db.Entry(attendance).Reference(a => a.Student).LoadAsync();
         await db.Entry(attendance).Reference(a => a.Subject).LoadAsync();
+
+        if (status == AttendanceStatus.Absent)
+        {
+            await NotifyAbsence(attendance.StudentId, attendance.Subject!.Name, attendance.Date);
+        }
+
         var result = AttendanceRecordDto.FromEntity(attendance);
         return CreatedAtAction(nameof(GetStudentAttendance), new { studentId = attendance.StudentId }, result);
     }
@@ -232,6 +239,12 @@ public class AttendanceController(StudentConnectDbContext db, ICurrentUserServic
         {
             logger.LogError(ex, "Failed to save bulk attendance for subject {SubjectId} on {Date}", dto.SubjectId, dto.Date);
             return StatusCode(500, new { message = "Unable to save attendance. Please try again." });
+        }
+
+        var subjectName = (await db.Subjects.AsNoTracking().FirstOrDefaultAsync(s => s.Id == dto.SubjectId))?.Name ?? "a subject";
+        foreach (var (studentId, status) in parsedRecords.Where(r => r.Status == AttendanceStatus.Absent))
+        {
+            await NotifyAbsence(studentId, subjectName, dto.Date);
         }
 
         return Ok(new { message = "Attendance saved successfully.", count = parsedRecords.Count });
@@ -300,4 +313,36 @@ public class AttendanceController(StudentConnectDbContext db, ICurrentUserServic
 
     private static bool TryParseStatus(string? status, out AttendanceStatus result) =>
         Enum.TryParse(status, ignoreCase: true, out result) && Enum.IsDefined(result);
+
+    // Notifies the student's own account plus any linked parents — same recipient
+    // resolution a real email/SMS provider would use later.
+    private async Task NotifyAbsence(int studentId, string subjectName, DateOnly date)
+    {
+        var recipientUserIds = await GetStudentAndParentUserIds(studentId);
+        if (recipientUserIds.Count == 0)
+        {
+            return;
+        }
+
+        await notifications.NotifyManyAsync(
+            recipientUserIds,
+            "Absence recorded",
+            $"Marked absent for {subjectName} on {date:yyyy-MM-dd}.",
+            NotificationType.AttendanceAbsent);
+    }
+
+    private async Task<List<int>> GetStudentAndParentUserIds(int studentId)
+    {
+        var studentUserIds = await db.Users
+            .Where(u => u.StudentId == studentId)
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        var parentUserIds = await db.ParentStudents
+            .Where(ps => ps.StudentId == studentId)
+            .Select(ps => ps.ParentUserId)
+            .ToListAsync();
+
+        return studentUserIds.Concat(parentUserIds).Distinct().ToList();
+    }
 }

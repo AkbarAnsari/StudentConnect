@@ -20,7 +20,7 @@ public class JwtOptions
 // by the standard ASP.NET Core JWT bearer middleware configured in Program.cs.
 public class JwtTokenService(IOptions<JwtOptions> options)
 {
-    public string CreateToken(ApplicationUser user)
+    public string CreateToken(ApplicationUser user, IEnumerable<int>? childStudentIds = null)
     {
         var claims = new List<Claim>
         {
@@ -37,6 +37,11 @@ public class JwtTokenService(IOptions<JwtOptions> options)
         if (user.TeacherId is not null)
         {
             claims.Add(new Claim("TeacherId", user.TeacherId.Value.ToString()));
+        }
+
+        if (childStudentIds is not null)
+        {
+            claims.AddRange(childStudentIds.Select(id => new Claim("ChildStudentId", id.ToString())));
         }
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.Value.Secret));

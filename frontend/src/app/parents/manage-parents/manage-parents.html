@@ -1,0 +1,84 @@
+<section class="page page-wide">
+  <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
+  <h1>Manage Parent Accounts</h1>
+
+  <div class="card">
+    <h2>Create Parent Account</h2>
+
+    @if (errorMessage()) {
+      <p class="error-message">{{ errorMessage() }}</p>
+    }
+
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <label>
+        Username
+        <input type="text" formControlName="username" placeholder="e.g. parent.sharma" />
+        @if (form.controls.username.invalid && form.controls.username.touched) {
+          <span class="field-error">Username is required.</span>
+        }
+      </label>
+
+      <label>
+        Password
+        <input type="password" formControlName="password" />
+        @if (form.controls.password.invalid && form.controls.password.touched) {
+          <span class="field-error">Password must be at least 6 characters.</span>
+        }
+      </label>
+
+      <fieldset class="children-picker">
+        <legend>Link children (optional, can be added later)</legend>
+        @for (student of students(); track student.id) {
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              (change)="toggleChild(student.id, $any($event.target).checked)"
+            />
+            {{ student.firstName }} {{ student.lastName }} ({{ student.studentId }})
+          </label>
+        }
+      </fieldset>
+
+      <button type="submit" [disabled]="submitting()">
+        {{ submitting() ? 'Creating...' : 'Create Parent Account' }}
+      </button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Existing Parent Accounts</h2>
+
+    @if (parents().length === 0) {
+      <p>No parent accounts yet.</p>
+    }
+
+    @for (parent of parents(); track parent.id) {
+      <div class="parent-row">
+        <h3>{{ parent.username }}</h3>
+
+        @if (parent.children.length > 0) {
+          <div class="child-chips">
+            @for (child of parent.children; track child.id) {
+              <span class="chip">
+                {{ child.firstName }} {{ child.lastName }}
+                <button type="button" (click)="unlinkChild(parent.id, child.id)" title="Unlink">✕</button>
+              </span>
+            }
+          </div>
+        } @else {
+          <p class="no-children">No children linked yet.</p>
+        }
+
+        <div class="link-child-row">
+          <select (change)="onLinkSelect(parent.id, +$any($event.target).value)">
+            <option [value]="0">Link a student...</option>
+            @for (student of students(); track student.id) {
+              <option [value]="student.id">{{ student.firstName }} {{ student.lastName }} ({{ student.studentId }})</option>
+            }
+          </select>
+          <button type="button" (click)="linkChild(parent.id)">Link</button>
+        </div>
+      </div>
+    }
+  </div>
+</section>

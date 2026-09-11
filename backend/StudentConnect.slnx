@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="StudentConnect.Api.Tests/StudentConnect.Api.Tests.csproj" />
+  <Project Path="StudentConnect.Api/StudentConnect.Api.csproj" />
+</Solution>

@@ -1,0 +1,94 @@
+<section class="page page-wide">
+  <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
+  <h1>Analytics Dashboard</h1>
+
+  @if (overview(); as stats) {
+    <div class="stat-grid">
+      <div class="card stat-card">
+        <span class="stat-value">{{ stats.totalStudents }}</span>
+        <span class="stat-label">Students</span>
+      </div>
+      <div class="card stat-card">
+        <span class="stat-value">{{ stats.totalTeachers }}</span>
+        <span class="stat-label">Teachers</span>
+      </div>
+      <div class="card stat-card">
+        <span class="stat-value">{{ stats.totalSubjects }}</span>
+        <span class="stat-label">Subjects</span>
+      </div>
+      <div class="card stat-card">
+        <span class="stat-value">{{ stats.overallAttendancePercentage }}%</span>
+        <span class="stat-label">Overall Attendance</span>
+      </div>
+      <div class="card stat-card">
+        <span class="stat-value">{{ stats.averageMarksPercentage }}%</span>
+        <span class="stat-label">Average Marks</span>
+      </div>
+    </div>
+  }
+
+  <div class="analytics-grid">
+    <div class="card">
+      <h2>Attendance by Grade</h2>
+      @if (attendanceByGrade().length === 0) {
+        <p>No attendance data yet.</p>
+      }
+      @for (row of attendanceByGrade(); track row.gradeId) {
+        <div class="bar-row">
+          <span class="bar-label">{{ row.gradeName }}</span>
+          <div class="bar-track">
+            <div class="bar-fill" [style.width.%]="row.attendancePercentage"></div>
+          </div>
+          <span class="bar-value">{{ row.attendancePercentage }}%</span>
+        </div>
+      }
+    </div>
+
+    <div class="card">
+      <h2>Average Marks by Grade</h2>
+      @if (marksByGrade().length === 0) {
+        <p>No marks data yet.</p>
+      }
+      @for (row of marksByGrade(); track row.gradeId) {
+        <div class="bar-row">
+          <span class="bar-label">{{ row.gradeName }}</span>
+          <div class="bar-track">
+            <div class="bar-fill" [style.width.%]="row.averageMarksPercentage"></div>
+          </div>
+          <span class="bar-value">{{ row.averageMarksPercentage }}%</span>
+          <span class="badge" [class]="resultBadgeClass(row.resultCategory)">{{ row.resultCategory }}</span>
+        </div>
+      }
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>At-Risk Students</h2>
+    <p class="hint">Attendance below 75% or average marks below 40%.</p>
+
+    @if (atRiskStudents().length === 0) {
+      <p>No students currently flagged as at-risk. 🎉</p>
+    } @else {
+      <table>
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Grade</th>
+            <th>Attendance</th>
+            <th>Average Marks</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (student of atRiskStudents(); track student.id) {
+            <tr>
+              <td>{{ student.fullName }} ({{ student.studentId }})</td>
+              <td>{{ student.gradeName }}</td>
+              <td>{{ student.attendancePercentage !== null ? student.attendancePercentage + '%' : '—' }}</td>
+              <td>{{ student.averageMarksPercentage !== null ? student.averageMarksPercentage + '%' : '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</section>

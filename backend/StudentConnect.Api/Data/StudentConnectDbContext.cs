@@ -20,6 +20,8 @@ public class StudentConnectDbContext(DbContextOptions<StudentConnectDbContext> o
     public DbSet<Activity> Activities => Set<Activity>();
     public DbSet<ActivityRegistration> ActivityRegistrations => Set<ActivityRegistration>();
     public DbSet<ApplicationUser> Users => Set<ApplicationUser>();
+    public DbSet<ParentStudent> ParentStudents => Set<ParentStudent>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -216,6 +218,36 @@ public class StudentConnectDbContext(DbContextOptions<StudentConnectDbContext> o
             .WithMany()
             .HasForeignKey(u => u.TeacherId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Business rule: a parent can only be linked to the same child once.
+        modelBuilder.Entity<ParentStudent>()
+            .HasIndex(ps => new { ps.ParentUserId, ps.StudentId })
+            .IsUnique();
+
+        modelBuilder.Entity<ParentStudent>()
+            .HasOne(ps => ps.ParentUser)
+            .WithMany()
+            .HasForeignKey(ps => ps.ParentUserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ParentStudent>()
+            .HasOne(ps => ps.Student)
+            .WithMany()
+            .HasForeignKey(ps => ps.StudentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Notification>()
+            .HasIndex(n => new { n.UserId, n.IsRead });
+
+        modelBuilder.Entity<Notification>()
+            .Property(n => n.Type)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Notification>()
+            .HasOne(n => n.User)
+            .WithMany()
+            .HasForeignKey(n => n.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<Grade>().HasData(
             new Grade { Id = 1, Name = "Grade 8" },

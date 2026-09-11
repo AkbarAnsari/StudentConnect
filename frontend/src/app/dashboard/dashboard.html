@@ -19,6 +19,7 @@
         <li><a routerLink="/teacher-homework">Create Homework</a></li>
         <li><a routerLink="/teacher-materials">Manage Learning Materials</a></li>
         <li><a routerLink="/activity-management">Manage Activities</a></li>
+        <li><a routerLink="/analytics">Analytics Dashboard</a></li>
       </ul>
     } @else if (user.role === 'Admin') {
       <ul class="dashboard-list">
@@ -27,7 +28,24 @@
         <li><a routerLink="/assessments">Manage Assessments</a></li>
         <li><a routerLink="/teacher-homework">Manage Homework</a></li>
         <li><a routerLink="/teacher-materials">Manage Learning Materials</a></li>
+        <li><a routerLink="/manage-parents">Manage Parent Accounts</a></li>
+        <li><a routerLink="/analytics">Analytics Dashboard</a></li>
       </ul>
+    } @else if (user.role === 'Parent') {
+      @if (user.children && user.children.length > 0) {
+        <p>Select a child to view their attendance, marks, homework, materials and activities:</p>
+        <div class="parent-children-grid">
+          @for (child of user.children; track child.id) {
+            <a class="card parent-child-card" [routerLink]="['/students', child.id]">
+              <h3>{{ child.firstName }} {{ child.lastName }}</h3>
+              <p>{{ child.gradeName }} · Section {{ child.section }}</p>
+              <p class="student-id">{{ child.studentId }}</p>
+            </a>
+          }
+        </div>
+      } @else {
+        <p>No children are linked to your account yet. Please contact the school admin.</p>
+      }
     }
   }
 </section>

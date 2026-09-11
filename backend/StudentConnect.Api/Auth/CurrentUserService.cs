@@ -19,8 +19,13 @@ public class CurrentUserService(IHttpContextAccessor httpContextAccessor) : ICur
     public int? TeacherId => TryGetInt("TeacherId");
 
     public bool IsTeacherOrAdmin => Role is "Teacher" or "Admin";
+    public bool IsParent => Role is "Parent";
 
-    public bool CanAccessStudent(int studentId) => IsTeacherOrAdmin || StudentId == studentId;
+    public IReadOnlyList<int> ChildStudentIds =>
+        User?.FindAll("ChildStudentId").Select(c => int.Parse(c.Value)).ToList() ?? [];
+
+    public bool CanAccessStudent(int studentId) =>
+        IsTeacherOrAdmin || StudentId == studentId || (IsParent && ChildStudentIds.Contains(studentId));
 
     public bool CanActAsTeacher(int teacherId) => Role == "Admin" || TeacherId == teacherId;
 

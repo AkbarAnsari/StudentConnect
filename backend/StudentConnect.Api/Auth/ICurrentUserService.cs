@@ -13,9 +13,13 @@ public interface ICurrentUserService
     int? TeacherId { get; }
 
     bool IsTeacherOrAdmin { get; }
+    bool IsParent { get; }
 
-    // True for Teacher/Admin (they can access any student's data), or for a Student
-    // whose own StudentId claim matches the requested id.
+    // Populated from "ChildStudentId" claims issued at login for Parent-role users only.
+    IReadOnlyList<int> ChildStudentIds { get; }
+
+    // True for Teacher/Admin (they can access any student's data), for a Student whose own
+    // StudentId claim matches the requested id, or for a Parent linked to that student.
     bool CanAccessStudent(int studentId);
 
     // True for Admin (can act as any teacher), or for a Teacher whose own TeacherId

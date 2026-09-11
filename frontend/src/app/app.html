@@ -37,6 +37,9 @@
             <a routerLink="/teacher-homework" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Homework</a>
             <a routerLink="/teacher-materials" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Learning Materials</a>
             <a routerLink="/activity-management" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Activities</a>
+            @if (authService.role() === 'Admin') {
+              <a routerLink="/manage-parents" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Parent Accounts</a>
+            }
           </div>
         </div>
       }
@@ -45,6 +48,7 @@
 
       <div class="nav-auth">
         @if (authService.currentUser(); as user) {
+          <app-notification-bell />
           <div class="user-chip">
             <span class="avatar">{{ initials() }}</span>
             <span class="user-meta">

@@ -4,12 +4,13 @@ using Microsoft.EntityFrameworkCore;
 using StudentConnect.Api.Auth;
 using StudentConnect.Api.Data;
 using StudentConnect.Api.Models;
+using StudentConnect.Api.Notifications;
 
 namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/homework")]
-public class HomeworksController(StudentConnectDbContext db, ICurrentUserService currentUser, ILogger<HomeworksController> logger) : ControllerBase
+public class HomeworksController(StudentConnectDbContext db, ICurrentUserService currentUser, INotificationService notifications, ILogger<HomeworksController> logger) : ControllerBase
 {
     // GET /api/homework
     [HttpGet]
@@ -185,6 +186,20 @@ public class HomeworksController(StudentConnectDbContext db, ICurrentUserService
         await db.Entry(homework).Reference(h => h.Subject).LoadAsync();
         await db.Entry(homework).Reference(h => h.Grade).LoadAsync();
         await db.Entry(homework).Reference(h => h.Teacher).LoadAsync();
+
+        var studentIds = await db.Students.Where(s => s.GradeId == homework.GradeId).Select(s => s.Id).ToListAsync();
+        var studentUserIds = await db.Users.Where(u => u.StudentId != null && studentIds.Contains(u.StudentId!.Value)).Select(u => u.Id).ToListAsync();
+        var parentUserIds = await db.ParentStudents.Where(ps => studentIds.Contains(ps.StudentId)).Select(ps => ps.ParentUserId).ToListAsync();
+        var recipientUserIds = studentUserIds.Concat(parentUserIds).Distinct().ToList();
+        if (recipientUserIds.Count > 0)
+        {
+            await notifications.NotifyManyAsync(
+                recipientUserIds,
+                "New homework assigned",
+                $"{homework.Subject!.Name}: {homework.Title} (due {homework.DueDate:yyyy-MM-dd})",
+                NotificationType.HomeworkAssigned);
+        }
+
         var result = HomeworkDto.FromEntity(homework);
         return CreatedAtAction(nameof(GetHomeworkById), new { id = homework.Id }, result);
     }

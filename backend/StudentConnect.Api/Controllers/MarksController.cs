@@ -4,12 +4,13 @@ using Microsoft.EntityFrameworkCore;
 using StudentConnect.Api.Auth;
 using StudentConnect.Api.Data;
 using StudentConnect.Api.Models;
+using StudentConnect.Api.Notifications;
 
 namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class MarksController(StudentConnectDbContext db, ICurrentUserService currentUser, ILogger<MarksController> logger) : ControllerBase
+public class MarksController(StudentConnectDbContext db, ICurrentUserService currentUser, INotificationService notifications, ILogger<MarksController> logger) : ControllerBase
 {
     // GET /api/marks/student/{studentId}
     [HttpGet("student/{studentId:int}")]
@@ -180,6 +181,17 @@ public class MarksController(StudentConnectDbContext db, ICurrentUserService cur
 
         mark.Assessment = assessment;
         await db.Entry(assessment).Reference(a => a.Subject).LoadAsync();
+
+        var recipientUserIds = await GetStudentAndParentUserIds(mark.StudentId);
+        if (recipientUserIds.Count > 0)
+        {
+            await notifications.NotifyManyAsync(
+                recipientUserIds,
+                "New mark recorded",
+                $"{assessment.Subject!.Name}: {mark.MarksObtained}/{assessment.MaximumMarks}",
+                NotificationType.MarkRecorded);
+        }
+
         var result = MarkRecordDto.FromEntity(mark);
         return CreatedAtAction(nameof(GetStudentMarks), new { studentId = mark.StudentId }, result);
     }
@@ -305,5 +317,20 @@ public class MarksController(StudentConnectDbContext db, ICurrentUserService cur
         }
 
         return NoContent();
+    }
+
+    private async Task<List<int>> GetStudentAndParentUserIds(int studentId)
+    {
+        var studentUserIds = await db.Users
+            .Where(u => u.StudentId == studentId)
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        var parentUserIds = await db.ParentStudents
+            .Where(ps => ps.StudentId == studentId)
+            .Select(ps => ps.ParentUserId)
+            .ToListAsync();
+
+        return studentUserIds.Concat(parentUserIds).Distinct().ToList();
     }
 }

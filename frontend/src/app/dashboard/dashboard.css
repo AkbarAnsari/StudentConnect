@@ -30,3 +30,33 @@ h1 {
 .dashboard-list a:hover {
   background: #f9fafb;
 }
+
+.parent-children-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.parent-child-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  padding: 1rem;
+}
+
+.parent-child-card h3 {
+  margin: 0 0 0.35rem;
+  color: #2563eb;
+}
+
+.parent-child-card p {
+  margin: 0.15rem 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.parent-child-card .student-id {
+  font-family: monospace;
+  color: #9ca3af;
+}

@@ -15,4 +15,8 @@ public class LoginResponseDto
     public string DisplayName { get; set; } = string.Empty;
     public int? StudentId { get; set; }
     public int? TeacherId { get; set; }
+
+    // Populated for Parent-role users only — lets the UI offer a "which child?" picker
+    // without a separate round-trip right after login.
+    public List<ParentChildDto>? Children { get; set; }
 }

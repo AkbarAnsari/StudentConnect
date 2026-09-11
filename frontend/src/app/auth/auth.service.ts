@@ -30,6 +30,7 @@ export class AuthService {
           displayName: response.displayName,
           studentId: response.studentId,
           teacherId: response.teacherId,
+          children: response.children,
         };
         localStorage.setItem(TOKEN_STORAGE_KEY, response.token);
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));

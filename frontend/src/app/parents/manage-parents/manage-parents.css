@@ -1,0 +1,68 @@
+.card {
+  margin-bottom: 1.5rem;
+}
+
+.children-picker {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 400;
+  padding: 0.2rem 0;
+}
+
+.parent-row {
+  border-top: 1px solid #e5e7eb;
+  padding: 1rem 0;
+}
+
+.parent-row:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.child-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.chip button {
+  border: none;
+  background: none;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0;
+}
+
+.no-children {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.link-child-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}

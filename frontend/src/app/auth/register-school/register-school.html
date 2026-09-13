@@ -1,0 +1,44 @@
+<section class="page page-narrow">
+  <h1>Register your school</h1>
+  <p class="notice">
+    Create your school's own StudentConnect workspace in one step. This creates an
+    Administrator account for your school and signs you in immediately — you can then add
+    grades, teachers, and students from the Admin dashboard.
+  </p>
+
+  @if (errorMessage()) {
+    <p class="error-message">{{ errorMessage() }}</p>
+  }
+
+  <form [formGroup]="form" (ngSubmit)="onSubmit()">
+    <label>
+      School name
+      <input type="text" formControlName="schoolName" autocomplete="organization" />
+      @if (form.controls.schoolName.invalid && form.controls.schoolName.touched) {
+        <span class="field-error">School name is required.</span>
+      }
+    </label>
+
+    <label>
+      Admin username
+      <input type="text" formControlName="adminUsername" autocomplete="username" />
+      @if (form.controls.adminUsername.invalid && form.controls.adminUsername.touched) {
+        <span class="field-error">Admin username is required.</span>
+      }
+    </label>
+
+    <label>
+      Admin password
+      <input type="password" formControlName="adminPassword" autocomplete="new-password" />
+      @if (form.controls.adminPassword.invalid && form.controls.adminPassword.touched) {
+        <span class="field-error">Password must be at least 8 characters.</span>
+      }
+    </label>
+
+    <button type="submit" [disabled]="submitting()">
+      {{ submitting() ? 'Creating your school...' : 'Create my school' }}
+    </button>
+  </form>
+
+  <p class="notice">Already have an account? <a routerLink="/login">Log in</a>.</p>
+</section>

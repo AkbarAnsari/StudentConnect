@@ -9,6 +9,7 @@ public class ApplicationUser
     public string Username { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public UserRole Role { get; set; }
+    public int SchoolId { get; set; }
 
     // Set for Student-role users only.
     public int? StudentId { get; set; }

@@ -9,6 +9,7 @@ public class Student
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
+    public int SchoolId { get; set; }
 
     public int GradeId { get; set; }
     public Grade? Grade { get; set; }

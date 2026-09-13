@@ -9,4 +9,5 @@ public class AcademicYear
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
     public bool IsCurrent { get; set; }
+    public int SchoolId { get; set; }
 }

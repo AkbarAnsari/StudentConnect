@@ -8,13 +8,17 @@ namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class SubjectsController(ReferenceDataStore referenceData, ILogger<SubjectsController> logger) : ControllerBase
+public class SubjectsController(ReferenceDataStore referenceData, ICurrentTenantService currentTenant, ILogger<SubjectsController> logger) : ControllerBase
 {
     // GET /api/subjects — used by the (temporary, unauthenticated) Record Attendance page.
+    // Tenant-scoped when the caller is authenticated; falls back to the pre-existing unscoped
+    // list for the anonymous case, unchanged from before multi-tenancy.
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Subject>>> GetSubjects()
     {
-        var subjects = await referenceData.GetAllSubjectsAsync();
+        var subjects = currentTenant.SchoolId is { } schoolId
+            ? await referenceData.GetAllSubjectsAsync(schoolId)
+            : await referenceData.GetAllSubjectsAsync();
         return Ok(subjects);
     }
 
@@ -23,18 +27,23 @@ public class SubjectsController(ReferenceDataStore referenceData, ILogger<Subjec
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<Subject>> CreateSubject(SubjectCreateDto dto)
     {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
         if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Code))
         {
             return BadRequest(new { message = "Name and Code are required." });
         }
 
-        if (await referenceData.SubjectCodeExistsAsync(dto.Code))
+        if (await referenceData.SubjectCodeExistsAsync(dto.Code, schoolId))
         {
             return Conflict(new { message = $"Subject code '{dto.Code}' already exists." });
         }
 
-        var newId = await referenceData.CreateSubjectAsync(dto.Name, dto.Code);
-        var created = await referenceData.GetSubjectByIdAsync(newId);
+        var newId = await referenceData.CreateSubjectAsync(dto.Name, dto.Code, schoolId);
+        var created = await referenceData.GetSubjectByIdAsync(newId, schoolId);
         return CreatedAtAction(nameof(GetSubjects), null, created);
     }
 
@@ -43,7 +52,12 @@ public class SubjectsController(ReferenceDataStore referenceData, ILogger<Subjec
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteSubject(int id)
     {
-        if (!await referenceData.SubjectExistsAsync(id))
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await referenceData.SubjectExistsAsync(id, schoolId))
         {
             return NotFound();
         }

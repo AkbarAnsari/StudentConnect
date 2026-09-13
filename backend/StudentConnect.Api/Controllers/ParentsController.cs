@@ -14,7 +14,7 @@ namespace StudentConnect.Api.Controllers;
 [ApiController]
 [Route("api/parents")]
 [Authorize(Roles = "Admin")]
-public class ParentsController(UserStore users, ParentStore parents, StudentStore students, IAuditService audit, ILogger<ParentsController> logger) : ControllerBase
+public class ParentsController(UserStore users, ParentStore parents, StudentStore students, ICurrentTenantService currentTenant, IAuditService audit, ILogger<ParentsController> logger) : ControllerBase
 {
     private static readonly PasswordHasher<ApplicationUser> Hasher = new();
 
@@ -46,6 +46,11 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
     [HttpPost]
     public async Task<ActionResult<ParentResponseDto>> CreateParent(ParentCreateDto dto)
     {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
         if (string.IsNullOrWhiteSpace(dto.Username) || string.IsNullOrWhiteSpace(dto.Password))
         {
             return BadRequest(new { message = "Username and password are required." });
@@ -67,7 +72,7 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
 
         var user = new ApplicationUser { Username = dto.Username, Role = UserRole.Parent };
         var passwordHash = Hasher.HashPassword(user, dto.Password);
-        var newUserId = await users.CreateAsync(dto.Username, passwordHash, UserRole.Parent, email: dto.Email);
+        var newUserId = await users.CreateAsync(dto.Username, passwordHash, UserRole.Parent, schoolId, email: dto.Email);
 
         foreach (var studentId in distinctChildIds)
         {

@@ -29,10 +29,28 @@ public class SectionStore(Database db)
     public async Task<List<Section>> GetAllAsync() =>
         await db.QueryAsync($"""{SelectWithGrade} ORDER BY g."Name", sec."Name" """, bind: null, map: Map);
 
+    // Tenant-scoped — Sections have no direct SchoolId column, so tenancy is resolved
+    // transitively through the (NOT NULL) GradeId foreign key.
+    public async Task<List<Section>> GetAllAsync(int schoolId) =>
+        await db.QueryAsync(
+            $"""{SelectWithGrade} WHERE g."SchoolId" = @schoolId ORDER BY g."Name", sec."Name" """,
+            p => p.AddWithValue("schoolId", schoolId),
+            Map);
+
     public async Task<Section?> GetByIdAsync(int id) =>
         await db.QuerySingleOrDefaultAsync(
             $"""{SelectWithGrade} WHERE sec."Id" = @id""",
             bind: p => p.AddWithValue("id", id),
+            map: Map);
+
+    public async Task<Section?> GetByIdAsync(int id, int schoolId) =>
+        await db.QuerySingleOrDefaultAsync(
+            $"""{SelectWithGrade} WHERE sec."Id" = @id AND g."SchoolId" = @schoolId""",
+            bind: p =>
+            {
+                p.AddWithValue("id", id);
+                p.AddWithValue("schoolId", schoolId);
+            },
             map: Map);
 
     public async Task<List<Section>> GetByGradeAsync(int gradeId) =>
@@ -50,6 +68,20 @@ public class SectionStore(Database db)
 
     public async Task<bool> ExistsAsync(int id) =>
         await db.ExistsAsync("""SELECT 1 FROM "Sections" WHERE "Id" = @id""", p => p.AddWithValue("id", id));
+
+    // Tenant-scoped existence check used before deleting a Section by Id.
+    public async Task<bool> ExistsAsync(int id, int schoolId) =>
+        await db.ExistsAsync(
+            """
+            SELECT 1 FROM "Sections" sec
+            JOIN "Grades" g ON g."Id" = sec."GradeId"
+            WHERE sec."Id" = @id AND g."SchoolId" = @schoolId
+            """,
+            p =>
+            {
+                p.AddWithValue("id", id);
+                p.AddWithValue("schoolId", schoolId);
+            });
 
     // Used to validate that a student's chosen SectionId actually belongs to their chosen Grade.
     public async Task<bool> BelongsToGradeAsync(int sectionId, int gradeId) =>

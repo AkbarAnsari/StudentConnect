@@ -8,21 +8,33 @@ namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/sections")]
-public class SectionsController(SectionStore sections, ReferenceDataStore referenceData, StudentStore students, ICurrentUserService currentUser, ILogger<SectionsController> logger) : ControllerBase
+public class SectionsController(SectionStore sections, ReferenceDataStore referenceData, StudentStore students, ICurrentUserService currentUser, ICurrentTenantService currentTenant, ILogger<SectionsController> logger) : ControllerBase
 {
     // GET /api/sections
     [HttpGet]
+    [Authorize]
     public async Task<ActionResult<IEnumerable<SectionDto>>> GetSections()
     {
-        var all = await sections.GetAllAsync();
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var all = await sections.GetAllAsync(schoolId);
         return Ok(all.Select(SectionDto.FromEntity));
     }
 
     // GET /api/sections/grade/{gradeId} — used by the Add/Edit Student forms' Section dropdown.
     [HttpGet("grade/{gradeId:int}")]
+    [Authorize]
     public async Task<ActionResult<IEnumerable<SectionDto>>> GetByGrade(int gradeId)
     {
-        if (!await referenceData.GradeExistsAsync(gradeId))
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await referenceData.GradeExistsAsync(gradeId, schoolId))
         {
             return NotFound(new { message = "Grade not found." });
         }
@@ -50,7 +62,12 @@ public class SectionsController(SectionStore sections, ReferenceDataStore refere
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<IEnumerable<SectionStudentDto>>> GetStudentsInSection(int id)
     {
-        var section = await sections.GetByIdAsync(id);
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var section = await sections.GetByIdAsync(id, schoolId);
         if (section is null)
         {
             return NotFound();
@@ -70,12 +87,17 @@ public class SectionsController(SectionStore sections, ReferenceDataStore refere
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<SectionDto>> CreateSection(SectionCreateDto dto)
     {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
         if (string.IsNullOrWhiteSpace(dto.Name))
         {
             return BadRequest(new { message = "Name is required." });
         }
 
-        if (!await referenceData.GradeExistsAsync(dto.GradeId))
+        if (!await referenceData.GradeExistsAsync(dto.GradeId, schoolId))
         {
             return BadRequest(new { message = "Grade does not exist." });
         }
@@ -111,7 +133,12 @@ public class SectionsController(SectionStore sections, ReferenceDataStore refere
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteSection(int id)
     {
-        if (!await sections.ExistsAsync(id))
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await sections.ExistsAsync(id, schoolId))
         {
             return NotFound();
         }

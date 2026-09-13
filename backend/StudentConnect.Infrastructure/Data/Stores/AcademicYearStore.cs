@@ -13,30 +13,57 @@ public class AcademicYearStore(Database db)
         StartDate = reader.GetDateOnly("StartDate"),
         EndDate = reader.GetDateOnly("EndDate"),
         IsCurrent = reader.GetBoolean("IsCurrent"),
+        SchoolId = reader.GetNullableInt32("SchoolId") ?? 0,
     };
 
-    private const string Select = """SELECT "Id", "Name", "StartDate", "EndDate", "IsCurrent" FROM "AcademicYears" """;
+    private const string Select = """SELECT "Id", "Name", "StartDate", "EndDate", "IsCurrent", "SchoolId" FROM "AcademicYears" """;
 
     public async Task<List<AcademicYear>> GetAllAsync() =>
         await db.QueryAsync($"""{Select} ORDER BY "StartDate" DESC""", bind: null, map: Map);
 
+    // Tenant-scoped — used by the multi-tenancy-aware AcademicYearsController.
+    public async Task<List<AcademicYear>> GetAllAsync(int schoolId) =>
+        await db.QueryAsync(
+            $"""{Select} WHERE "SchoolId" = @schoolId ORDER BY "StartDate" DESC""",
+            p => p.AddWithValue("schoolId", schoolId),
+            Map);
+
     public async Task<AcademicYear?> GetByIdAsync(int id) =>
         await db.QuerySingleOrDefaultAsync($"""{Select} WHERE "Id" = @id""", p => p.AddWithValue("id", id), Map);
 
+    public async Task<AcademicYear?> GetByIdAsync(int id, int schoolId) =>
+        await db.QuerySingleOrDefaultAsync(
+            $"""{Select} WHERE "Id" = @id AND "SchoolId" = @schoolId""",
+            p =>
+            {
+                p.AddWithValue("id", id);
+                p.AddWithValue("schoolId", schoolId);
+            },
+            Map);
+
     public async Task<bool> ExistsAsync(int id) =>
         await db.ExistsAsync("""SELECT 1 FROM "AcademicYears" WHERE "Id" = @id""", p => p.AddWithValue("id", id));
+
+    public async Task<bool> ExistsAsync(int id, int schoolId) =>
+        await db.ExistsAsync(
+            """SELECT 1 FROM "AcademicYears" WHERE "Id" = @id AND "SchoolId" = @schoolId""",
+            p =>
+            {
+                p.AddWithValue("id", id);
+                p.AddWithValue("schoolId", schoolId);
+            });
 
     public async Task<int> CreateAsync(AcademicYear year)
     {
         if (year.IsCurrent)
         {
-            await ClearCurrentFlagAsync();
+            await ClearCurrentFlagAsync(year.SchoolId);
         }
 
         return await db.ExecuteScalarAsync<int>(
             """
-            INSERT INTO "AcademicYears" ("Name", "StartDate", "EndDate", "IsCurrent")
-            VALUES (@name, @startDate, @endDate, @isCurrent)
+            INSERT INTO "AcademicYears" ("Name", "StartDate", "EndDate", "IsCurrent", "SchoolId")
+            VALUES (@name, @startDate, @endDate, @isCurrent, @schoolId)
             RETURNING "Id"
             """,
             p =>
@@ -45,12 +72,16 @@ public class AcademicYearStore(Database db)
                 p.AddWithValue("startDate", year.StartDate);
                 p.AddWithValue("endDate", year.EndDate);
                 p.AddWithValue("isCurrent", year.IsCurrent);
+                p.AddWithValue("schoolId", year.SchoolId);
             });
     }
 
-    // Only one academic year is ever "current" — setting a new one clears the flag on all others.
-    private async Task ClearCurrentFlagAsync() =>
-        await db.ExecuteAsync("""UPDATE "AcademicYears" SET "IsCurrent" = false WHERE "IsCurrent" = true""", bind: null);
+    // Only one academic year per SCHOOL is ever "current" — setting a new one clears the flag
+    // on all other years belonging to the SAME school only (never touches other tenants' data).
+    private async Task ClearCurrentFlagAsync(int schoolId) =>
+        await db.ExecuteAsync(
+            """UPDATE "AcademicYears" SET "IsCurrent" = false WHERE "IsCurrent" = true AND "SchoolId" = @schoolId""",
+            p => p.AddWithValue("schoolId", schoolId));
 
     public async Task DeleteAsync(int id) =>
         await db.ExecuteAsync("""DELETE FROM "AcademicYears" WHERE "Id" = @id""", p => p.AddWithValue("id", id));

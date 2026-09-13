@@ -9,14 +9,19 @@ namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class StudentsController(StudentStore students, ReferenceDataStore referenceData, SectionStore sections, ICurrentUserService currentUser, IAuditService audit, ILogger<StudentsController> logger) : ControllerBase
+public class StudentsController(StudentStore students, ReferenceDataStore referenceData, SectionStore sections, ICurrentUserService currentUser, ICurrentTenantService currentTenant, IAuditService audit, ILogger<StudentsController> logger) : ControllerBase
 {
     // GET /api/students
     [HttpGet]
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<IEnumerable<StudentResponseDto>>> GetStudents()
     {
-        var all = await students.GetAllAsync();
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var all = await students.GetAllAsync(schoolId);
         return Ok(all.Select(StudentResponseDto.FromEntity));
     }
 
@@ -29,7 +34,12 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
             return Forbid();
         }
 
-        var student = await students.GetByIdAsync(id);
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var student = await students.GetByIdAsync(id, schoolId);
 
         if (student is null)
         {
@@ -44,6 +54,11 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<StudentResponseDto>> CreateStudent(StudentCreateDto dto)
     {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
         if (string.IsNullOrWhiteSpace(dto.StudentId) ||
             string.IsNullOrWhiteSpace(dto.FirstName) ||
             string.IsNullOrWhiteSpace(dto.LastName) ||
@@ -52,7 +67,7 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
             return BadRequest(new { message = "StudentId, FirstName, LastName, and Email are required." });
         }
 
-        var gradeExists = await referenceData.GradeExistsAsync(dto.GradeId);
+        var gradeExists = await referenceData.GradeExistsAsync(dto.GradeId, schoolId);
         if (!gradeExists)
         {
             return BadRequest(new { message = "The specified GradeId does not exist." });
@@ -63,7 +78,7 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
             return BadRequest(new { message = "The specified SectionId does not belong to the selected grade." });
         }
 
-        var duplicate = await students.StudentCodeExistsAsync(dto.StudentId);
+        var duplicate = await students.StudentCodeExistsAsync(dto.StudentId, schoolId);
         if (duplicate)
         {
             return Conflict(new { message = $"A student with StudentId '{dto.StudentId}' already exists." });
@@ -77,6 +92,7 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
             Email = dto.Email,
             GradeId = dto.GradeId,
             SectionId = dto.SectionId,
+            SchoolId = schoolId,
         };
 
         int newId;
@@ -90,7 +106,7 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
             return StatusCode(500, new { message = "Unable to save the student. Please try again." });
         }
 
-        var created = await students.GetByIdAsync(newId);
+        var created = await students.GetByIdAsync(newId, schoolId);
         var result = StudentResponseDto.FromEntity(created!);
         await audit.LogAsync("Create", "Student", newId.ToString(), $"{dto.StudentId} {dto.FirstName} {dto.LastName}");
         return CreatedAtAction(nameof(GetStudentById), new { id = newId }, result);
@@ -101,6 +117,11 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<StudentResponseDto>> UpdateStudent(int id, StudentUpdateDto dto)
     {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
         if (string.IsNullOrWhiteSpace(dto.FirstName) ||
             string.IsNullOrWhiteSpace(dto.LastName) ||
             string.IsNullOrWhiteSpace(dto.Email))
@@ -108,12 +129,12 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
             return BadRequest(new { message = "FirstName, LastName, and Email are required." });
         }
 
-        if (!await students.ExistsAsync(id))
+        if (!await students.ExistsAsync(id, schoolId))
         {
             return NotFound();
         }
 
-        var gradeExists = await referenceData.GradeExistsAsync(dto.GradeId);
+        var gradeExists = await referenceData.GradeExistsAsync(dto.GradeId, schoolId);
         if (!gradeExists)
         {
             return BadRequest(new { message = "The specified GradeId does not exist." });
@@ -144,7 +165,7 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
             return StatusCode(500, new { message = "Unable to update the student. Please try again." });
         }
 
-        var updated = await students.GetByIdAsync(id);
+        var updated = await students.GetByIdAsync(id, schoolId);
         await audit.LogAsync("Update", "Student", id.ToString(), $"{dto.FirstName} {dto.LastName}, GradeId={dto.GradeId}, SectionId={dto.SectionId}");
         return Ok(StudentResponseDto.FromEntity(updated!));
     }
@@ -154,7 +175,12 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteStudent(int id)
     {
-        if (!await students.ExistsAsync(id))
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await students.ExistsAsync(id, schoolId))
         {
             return NotFound();
         }

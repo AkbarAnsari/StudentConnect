@@ -5,6 +5,12 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface SchoolRegistrationRequest {
+  schoolName: string;
+  adminUsername: string;
+  adminPassword: string;
+}
+
 export interface ParentChild {
   id: number;
   studentId: string;

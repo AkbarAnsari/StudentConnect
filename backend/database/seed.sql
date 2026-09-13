@@ -2,14 +2,22 @@
 -- Apply with: psql -U <user> -d studentconnect_db -f seed.sql
 -- Safe to re-run (ON CONFLICT DO NOTHING); only inserts rows that don't already exist by Id.
 
-INSERT INTO "Grades" ("Id", "Name") VALUES
-    (1, 'Grade 8'),
-    (2, 'Grade 9'),
-    (3, 'Grade 10')
+-- Multi-tenancy: every pre-existing row (and all of this file's demo data) belongs to one
+-- "Demo School" tenant. A fresh install gets this from the INSERT below; an install that was
+-- provisioned before multi-tenancy existed gets its already-NULL SchoolId columns backfilled
+-- to this same school by the UPDATE statements further down.
+INSERT INTO "Schools" ("Id", "Name", "Code", "IsActive") VALUES
+    (1, 'Demo School', 'demo', true)
 ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO "AcademicYears" ("Id", "Name", "StartDate", "EndDate", "IsCurrent") VALUES
-    (1, '2026-2027', DATE '2026-06-01', DATE '2027-04-30', true)
+INSERT INTO "Grades" ("Id", "Name", "SchoolId") VALUES
+    (1, 'Grade 8', 1),
+    (2, 'Grade 9', 1),
+    (3, 'Grade 10', 1)
+ON CONFLICT ("Id") DO NOTHING;
+
+INSERT INTO "AcademicYears" ("Id", "Name", "StartDate", "EndDate", "IsCurrent", "SchoolId") VALUES
+    (1, '2026-2027', DATE '2026-06-01', DATE '2027-04-30', true, 1)
 ON CONFLICT ("Id") DO NOTHING;
 
 INSERT INTO "Terms" ("Id", "AcademicYearId", "Name", "StartDate", "EndDate") VALUES
@@ -49,24 +57,24 @@ BEGIN
     END IF;
 END $$;
 
-INSERT INTO "Students" ("Id", "StudentId", "FirstName", "LastName", "Email", "GradeId", "SectionId") VALUES
-    (1, 'STU001', 'Ananya', 'Sharma', 'ananya@example.com', 1, 1),
-    (2, 'STU002', 'Rahul', 'Verma', 'rahul@example.com', 1, 1),
-    (3, 'STU003', 'Aisha', 'Khan', 'aisha@example.com', 1, 2),
-    (4, 'STU004', 'Arjun', 'Nair', 'arjun@example.com', 1, 2),
-    (5, 'STU005', 'Priya', 'Iyer', 'priya@example.com', 2, 3),
-    (6, 'STU006', 'Vikram', 'Rao', 'vikram@example.com', 2, 3),
-    (7, 'STU007', 'Meera', 'Pillai', 'meera@example.com', 2, 4),
-    (8, 'STU008', 'Karan', 'Singh', 'karan@example.com', 3, 5),
-    (9, 'STU009', 'Divya', 'Menon', 'divya@example.com', 3, 5),
-    (10, 'STU010', 'Rohan', 'Gupta', 'rohan@example.com', 3, 6)
+INSERT INTO "Students" ("Id", "StudentId", "FirstName", "LastName", "Email", "GradeId", "SectionId", "SchoolId") VALUES
+    (1, 'STU001', 'Ananya', 'Sharma', 'ananya@example.com', 1, 1, 1),
+    (2, 'STU002', 'Rahul', 'Verma', 'rahul@example.com', 1, 1, 1),
+    (3, 'STU003', 'Aisha', 'Khan', 'aisha@example.com', 1, 2, 1),
+    (4, 'STU004', 'Arjun', 'Nair', 'arjun@example.com', 1, 2, 1),
+    (5, 'STU005', 'Priya', 'Iyer', 'priya@example.com', 2, 3, 1),
+    (6, 'STU006', 'Vikram', 'Rao', 'vikram@example.com', 2, 3, 1),
+    (7, 'STU007', 'Meera', 'Pillai', 'meera@example.com', 2, 4, 1),
+    (8, 'STU008', 'Karan', 'Singh', 'karan@example.com', 3, 5, 1),
+    (9, 'STU009', 'Divya', 'Menon', 'divya@example.com', 3, 5, 1),
+    (10, 'STU010', 'Rohan', 'Gupta', 'rohan@example.com', 3, 6, 1)
 ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO "Subjects" ("Id", "Name", "Code") VALUES
-    (1, 'Mathematics', 'MATH'),
-    (2, 'Science', 'SCI'),
-    (3, 'English', 'ENG'),
-    (4, 'Computer Science', 'CS')
+INSERT INTO "Subjects" ("Id", "Name", "Code", "SchoolId") VALUES
+    (1, 'Mathematics', 'MATH', 1),
+    (2, 'Science', 'SCI', 1),
+    (3, 'English', 'ENG', 1),
+    (4, 'Computer Science', 'CS', 1)
 ON CONFLICT ("Id") DO NOTHING;
 
 
@@ -115,10 +123,10 @@ INSERT INTO "Marks" ("Id", "StudentId", "AssessmentId", "MarksObtained") VALUES
     (13, 1, 4, 46), (14, 2, 4, 38), (15, 3, 4, 48), (16, 4, 4, 41)
 ON CONFLICT ("Id") DO NOTHING;
 
-INSERT INTO "Teachers" ("Id", "TeacherId", "FirstName", "LastName", "Email") VALUES
-    (1, 'T001', 'Priya', 'Mehta', 'priya.mehta@example.com'),
-    (2, 'T002', 'David', 'Thomas', 'david.thomas@example.com'),
-    (3, 'T003', 'Kavita', 'Nair', 'kavita.nair@example.com')
+INSERT INTO "Teachers" ("Id", "TeacherId", "FirstName", "LastName", "Email", "SchoolId") VALUES
+    (1, 'T001', 'Priya', 'Mehta', 'priya.mehta@example.com', 1),
+    (2, 'T002', 'David', 'Thomas', 'david.thomas@example.com', 1),
+    (3, 'T003', 'Kavita', 'Nair', 'kavita.nair@example.com', 1)
 ON CONFLICT ("Id") DO NOTHING;
 
 INSERT INTO "Homework" ("Id", "Title", "Description", "SubjectId", "GradeId", "TeacherId", "CreatedDate", "DueDate") VALUES
@@ -158,15 +166,27 @@ ON CONFLICT ("Id") DO NOTHING;
 -- Development-only demo accounts (see docs/phase-10.md) — passwords are the literal strings
 -- "Student123!", "Teacher123!", "Admin123!", hashed once with ASP.NET Core's PasswordHasher<T>.
 -- Never plaintext, never real credentials, never used outside local learning/testing.
-INSERT INTO "Users" ("Id", "Username", "PasswordHash", "Role", "StudentId", "TeacherId") VALUES
-    (1, 'student1', 'AQAAAAIAAYagAAAAEM6+LRrGSrEilLctUvvHkNPBPFS6xbNkllKri/okOz1huRxYZhS5pCDOutMjWMe0Lg==', 'Student', 1, NULL),
-    (2, 'student2', 'AQAAAAIAAYagAAAAEM6+LRrGSrEilLctUvvHkNPBPFS6xbNkllKri/okOz1huRxYZhS5pCDOutMjWMe0Lg==', 'Student', 2, NULL),
-    (3, 'teacher1', 'AQAAAAIAAYagAAAAEN3zBs3zE/9wQna3A6hG+O0aoOTolBtGKV+URht1R3XF51rb2m6HOMF20KJUMsQd1w==', 'Teacher', NULL, 1),
-    (4, 'admin1', 'AQAAAAIAAYagAAAAEMW0cZzVj7vYgZmGyQH8eOYSgADtCkf3lTIBWPwRQtsGAB5ab1k7Pna/nLZokToH8A==', 'Admin', NULL, NULL)
+INSERT INTO "Users" ("Id", "Username", "PasswordHash", "Role", "StudentId", "TeacherId", "SchoolId") VALUES
+    (1, 'student1', 'AQAAAAIAAYagAAAAEM6+LRrGSrEilLctUvvHkNPBPFS6xbNkllKri/okOz1huRxYZhS5pCDOutMjWMe0Lg==', 'Student', 1, NULL, 1),
+    (2, 'student2', 'AQAAAAIAAYagAAAAEM6+LRrGSrEilLctUvvHkNPBPFS6xbNkllKri/okOz1huRxYZhS5pCDOutMjWMe0Lg==', 'Student', 2, NULL, 1),
+    (3, 'teacher1', 'AQAAAAIAAYagAAAAEN3zBs3zE/9wQna3A6hG+O0aoOTolBtGKV+URht1R3XF51rb2m6HOMF20KJUMsQd1w==', 'Teacher', NULL, 1, 1),
+    (4, 'admin1', 'AQAAAAIAAYagAAAAEMW0cZzVj7vYgZmGyQH8eOYSgADtCkf3lTIBWPwRQtsGAB5ab1k7Pna/nLZokToH8A==', 'Admin', NULL, NULL, 1)
 ON CONFLICT ("Id") DO NOTHING;
+
+-- Backfill for an installation that was provisioned BEFORE multi-tenancy existed: its rows
+-- already exist (so the INSERTs above were no-ops for them) but their SchoolId columns were
+-- added as NULL by the ALTER TABLE statements in schema.sql. Assign them all to Demo School.
+-- A fresh install has no NULL rows left to touch here, so this is a no-op there.
+UPDATE "Grades" SET "SchoolId" = 1 WHERE "SchoolId" IS NULL;
+UPDATE "AcademicYears" SET "SchoolId" = 1 WHERE "SchoolId" IS NULL;
+UPDATE "Subjects" SET "SchoolId" = 1 WHERE "SchoolId" IS NULL;
+UPDATE "Teachers" SET "SchoolId" = 1 WHERE "SchoolId" IS NULL;
+UPDATE "Students" SET "SchoolId" = 1 WHERE "SchoolId" IS NULL;
+UPDATE "Users" SET "SchoolId" = 1 WHERE "SchoolId" IS NULL;
 
 -- Advance every identity sequence past the highest explicit Id inserted above, so the next
 -- app-generated insert doesn't collide with a seeded row.
+SELECT setval(pg_get_serial_sequence('"Schools"', 'Id'), COALESCE((SELECT MAX("Id") FROM "Schools"), 1));
 SELECT setval(pg_get_serial_sequence('"Grades"', 'Id'), COALESCE((SELECT MAX("Id") FROM "Grades"), 1));
 SELECT setval(pg_get_serial_sequence('"AcademicYears"', 'Id'), COALESCE((SELECT MAX("Id") FROM "AcademicYears"), 1));
 SELECT setval(pg_get_serial_sequence('"Terms"', 'Id'), COALESCE((SELECT MAX("Id") FROM "Terms"), 1));

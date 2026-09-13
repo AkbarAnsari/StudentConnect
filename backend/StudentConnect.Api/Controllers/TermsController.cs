@@ -8,21 +8,33 @@ namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/terms")]
-public class TermsController(TermStore terms, AcademicYearStore academicYears, ILogger<TermsController> logger) : ControllerBase
+public class TermsController(TermStore terms, AcademicYearStore academicYears, ICurrentTenantService currentTenant, ILogger<TermsController> logger) : ControllerBase
 {
     // GET /api/terms
     [HttpGet]
+    [Authorize]
     public async Task<ActionResult<IEnumerable<TermDto>>> GetTerms()
     {
-        var all = await terms.GetAllAsync();
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var all = await terms.GetAllAsync(schoolId);
         return Ok(all.Select(TermDto.FromEntity));
     }
 
     // GET /api/terms/academic-year/{academicYearId}
     [HttpGet("academic-year/{academicYearId:int}")]
+    [Authorize]
     public async Task<ActionResult<IEnumerable<TermDto>>> GetByAcademicYear(int academicYearId)
     {
-        if (!await academicYears.ExistsAsync(academicYearId))
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await academicYears.ExistsAsync(academicYearId, schoolId))
         {
             return NotFound(new { message = "Academic year not found." });
         }
@@ -36,6 +48,11 @@ public class TermsController(TermStore terms, AcademicYearStore academicYears, I
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<TermDto>> CreateTerm(TermCreateDto dto)
     {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
         if (string.IsNullOrWhiteSpace(dto.Name))
         {
             return BadRequest(new { message = "Name is required." });
@@ -46,7 +63,7 @@ public class TermsController(TermStore terms, AcademicYearStore academicYears, I
             return BadRequest(new { message = "EndDate must be after StartDate." });
         }
 
-        if (!await academicYears.ExistsAsync(dto.AcademicYearId))
+        if (!await academicYears.ExistsAsync(dto.AcademicYearId, schoolId))
         {
             return BadRequest(new { message = "Academic year does not exist." });
         }
@@ -68,7 +85,7 @@ public class TermsController(TermStore terms, AcademicYearStore academicYears, I
             return StatusCode(500, new { message = "Unable to save the term. Please try again." });
         }
 
-        var all = await terms.GetAllAsync();
+        var all = await terms.GetAllAsync(schoolId);
         var created = all.First(t => t.Id == newId);
         return CreatedAtAction(nameof(GetTerms), null, TermDto.FromEntity(created));
     }
@@ -78,6 +95,16 @@ public class TermsController(TermStore terms, AcademicYearStore academicYears, I
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteTerm(int id)
     {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await terms.ExistsAsync(id, schoolId))
+        {
+            return NotFound();
+        }
+
         try
         {
             await terms.DeleteAsync(id);

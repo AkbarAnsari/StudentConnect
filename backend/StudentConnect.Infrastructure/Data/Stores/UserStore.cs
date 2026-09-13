@@ -11,7 +11,7 @@ public class UserStore(Database db)
     public async Task<ApplicationUser?> GetByUsernameForLoginAsync(string username) =>
         await db.QuerySingleOrDefaultAsync(
             """
-            SELECT u."Id", u."Username", u."PasswordHash", u."Role", u."StudentId", u."TeacherId",
+            SELECT u."Id", u."Username", u."PasswordHash", u."Role", u."StudentId", u."TeacherId", u."SchoolId",
                    st."FirstName" AS "StudentFirstName", st."LastName" AS "StudentLastName",
                    t."FirstName" AS "TeacherFirstName", t."LastName" AS "TeacherLastName"
             FROM "Users" u
@@ -30,6 +30,7 @@ public class UserStore(Database db)
                     Role = reader.GetEnum<UserRole>("Role"),
                     StudentId = reader.GetNullableInt32("StudentId"),
                     TeacherId = reader.GetNullableInt32("TeacherId"),
+                    SchoolId = reader.GetNullableInt32("SchoolId") ?? 0,
                 };
                 if (user.StudentId is not null)
                 {
@@ -45,11 +46,11 @@ public class UserStore(Database db)
     public async Task<bool> UsernameExistsAsync(string username) =>
         await db.ExistsAsync("""SELECT 1 FROM "Users" WHERE "Username" = @username""", p => p.AddWithValue("username", username));
 
-    public async Task<int> CreateAsync(string username, string passwordHash, UserRole role, int? studentId = null, int? teacherId = null, string? email = null) =>
+    public async Task<int> CreateAsync(string username, string passwordHash, UserRole role, int schoolId, int? studentId = null, int? teacherId = null, string? email = null) =>
         await db.ExecuteScalarAsync<int>(
             """
-            INSERT INTO "Users" ("Username", "PasswordHash", "Role", "StudentId", "TeacherId", "Email")
-            VALUES (@username, @passwordHash, @role, @studentId, @teacherId, @email)
+            INSERT INTO "Users" ("Username", "PasswordHash", "Role", "StudentId", "TeacherId", "Email", "SchoolId")
+            VALUES (@username, @passwordHash, @role, @studentId, @teacherId, @email, @schoolId)
             RETURNING "Id"
             """,
             p =>
@@ -60,6 +61,7 @@ public class UserStore(Database db)
                 p.AddWithValue("studentId", (object?)studentId ?? DBNull.Value);
                 p.AddWithValue("teacherId", (object?)teacherId ?? DBNull.Value);
                 p.AddWithValue("email", (object?)email ?? DBNull.Value);
+                p.AddWithValue("schoolId", schoolId);
             });
 
     // Resolves the best email address for a user: their own Email column (Parent accounts),

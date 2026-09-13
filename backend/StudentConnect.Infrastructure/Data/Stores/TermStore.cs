@@ -25,11 +25,33 @@ public class TermStore(Database db)
     public async Task<List<Term>> GetAllAsync() =>
         await db.QueryAsync($"""{SelectWithYear} ORDER BY t."StartDate" DESC""", bind: null, map: Map);
 
+    // Tenant-scoped — Terms have no direct SchoolId column, so tenancy is resolved
+    // transitively through the (NOT NULL) AcademicYearId foreign key.
+    public async Task<List<Term>> GetAllAsync(int schoolId) =>
+        await db.QueryAsync(
+            $"""{SelectWithYear} WHERE ay."SchoolId" = @schoolId ORDER BY t."StartDate" DESC""",
+            p => p.AddWithValue("schoolId", schoolId),
+            Map);
+
     public async Task<List<Term>> GetByAcademicYearAsync(int academicYearId) =>
         await db.QueryAsync(
             $"""{SelectWithYear} WHERE t."AcademicYearId" = @academicYearId ORDER BY t."StartDate" """,
             p => p.AddWithValue("academicYearId", academicYearId),
             Map);
+
+    // Tenant-scoped existence check used before deleting a Term by Id.
+    public async Task<bool> ExistsAsync(int id, int schoolId) =>
+        await db.ExistsAsync(
+            """
+            SELECT 1 FROM "Terms" t
+            JOIN "AcademicYears" ay ON ay."Id" = t."AcademicYearId"
+            WHERE t."Id" = @id AND ay."SchoolId" = @schoolId
+            """,
+            p =>
+            {
+                p.AddWithValue("id", id);
+                p.AddWithValue("schoolId", schoolId);
+            });
 
     public async Task<int> CreateAsync(Term term) =>
         await db.ExecuteScalarAsync<int>(

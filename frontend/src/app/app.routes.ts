@@ -39,6 +39,7 @@ import { EmailOutboxViewer } from './email-outbox/email-outbox-viewer/email-outb
 import { OpsPage } from './ops/ops-page/ops-page';
 import { Contact } from './contact/contact';
 import { Login } from './auth/login/login';
+import { RegisterSchool } from './auth/register-school/register-school';
 import { Dashboard } from './dashboard/dashboard';
 import { authGuard, roleGuard } from './auth/auth.guard';
 
@@ -51,6 +52,7 @@ export const routes: Routes = [
   { path: 'about', component: About },
   { path: 'contact', component: Contact },
   { path: 'login', component: Login },
+  { path: 'register-school', component: RegisterSchool },
   { path: 'dashboard', component: Dashboard, canActivate: [authGuard] },
 
   { path: 'students', component: Students, canActivate: [authGuard, teacherOrAdmin] },

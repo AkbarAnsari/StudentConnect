@@ -24,6 +24,7 @@ builder.Services.AddOpenApi();
 // schema and Data/Stores/*.cs for the SQL each controller calls into.
 builder.Services.AddSingleton<Database>();
 builder.Services.AddScoped<ReferenceDataStore>();
+builder.Services.AddScoped<SchoolStore>();
 builder.Services.AddScoped<AcademicYearStore>();
 builder.Services.AddScoped<TermStore>();
 builder.Services.AddScoped<SectionStore>();
@@ -71,6 +72,7 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<ICurrentTenantService, CurrentTenantService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<INotificationService, EmailNotificationService>();
 builder.Services.AddScoped<IAuditService, AuditService>();

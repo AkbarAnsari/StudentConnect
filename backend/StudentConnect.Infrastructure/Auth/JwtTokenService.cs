@@ -27,6 +27,7 @@ public class JwtTokenService(IOptions<JwtOptions> options)
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
             new(ClaimTypes.Role, user.Role.ToString()),
+            new("SchoolId", user.SchoolId.ToString()),
         };
 
         if (user.StudentId is not null)

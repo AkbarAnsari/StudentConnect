@@ -12,7 +12,7 @@ namespace StudentConnect.Api.Controllers;
 [ApiController]
 [Route("api/teachers")]
 [Authorize(Roles = "Admin")]
-public class TeachersController(TeacherStore teachers, UserStore users, IAuditService audit, ILogger<TeachersController> logger) : ControllerBase
+public class TeachersController(TeacherStore teachers, UserStore users, ICurrentTenantService currentTenant, IAuditService audit, ILogger<TeachersController> logger) : ControllerBase
 {
     private static readonly PasswordHasher<ApplicationUser> Hasher = new();
 
@@ -20,7 +20,12 @@ public class TeachersController(TeacherStore teachers, UserStore users, IAuditSe
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TeacherResponseDto>>> GetTeachers()
     {
-        var all = await teachers.GetAllAsync();
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var all = await teachers.GetAllAsync(schoolId);
         return Ok(all);
     }
 
@@ -28,6 +33,11 @@ public class TeachersController(TeacherStore teachers, UserStore users, IAuditSe
     [HttpPost]
     public async Task<ActionResult<TeacherResponseDto>> CreateTeacher(TeacherCreateDto dto)
     {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
         if (string.IsNullOrWhiteSpace(dto.TeacherId) ||
             string.IsNullOrWhiteSpace(dto.FirstName) ||
             string.IsNullOrWhiteSpace(dto.LastName) ||
@@ -42,7 +52,7 @@ public class TeachersController(TeacherStore teachers, UserStore users, IAuditSe
             return BadRequest(new { message = "Username and password must both be provided to create a login." });
         }
 
-        if (await teachers.TeacherCodeExistsAsync(dto.TeacherId))
+        if (await teachers.TeacherCodeExistsAsync(dto.TeacherId, schoolId))
         {
             return Conflict(new { message = $"A teacher with TeacherId '{dto.TeacherId}' already exists." });
         }
@@ -61,6 +71,7 @@ public class TeachersController(TeacherStore teachers, UserStore users, IAuditSe
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
                 Email = dto.Email,
+                SchoolId = schoolId,
             });
         }
         catch (PostgresException ex)
@@ -73,14 +84,14 @@ public class TeachersController(TeacherStore teachers, UserStore users, IAuditSe
         {
             var user = new ApplicationUser { Username = dto.Username!, Role = UserRole.Teacher };
             var passwordHash = Hasher.HashPassword(user, dto.Password!);
-            await users.CreateAsync(dto.Username!, passwordHash, UserRole.Teacher, teacherId: newId);
+            await users.CreateAsync(dto.Username!, passwordHash, UserRole.Teacher, schoolId, teacherId: newId);
         }
 
         logger.LogInformation("Admin created teacher {TeacherId} (login: {HasLogin})", dto.TeacherId, wantsLogin);
         await audit.LogAsync("Create", "Teacher", newId.ToString(), $"{dto.TeacherId} {dto.FirstName} {dto.LastName} (login: {wantsLogin})");
 
         return CreatedAtAction(nameof(GetTeachers), null, TeacherResponseDto.FromEntity(
-            new Teacher { Id = newId, TeacherId = dto.TeacherId, FirstName = dto.FirstName, LastName = dto.LastName, Email = dto.Email },
+            new Teacher { Id = newId, TeacherId = dto.TeacherId, FirstName = dto.FirstName, LastName = dto.LastName, Email = dto.Email, SchoolId = schoolId },
             wantsLogin ? dto.Username : null));
     }
 
@@ -88,7 +99,12 @@ public class TeachersController(TeacherStore teachers, UserStore users, IAuditSe
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteTeacher(int id)
     {
-        if (!await teachers.ExistsAsync(id))
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await teachers.ExistsAsync(id, schoolId))
         {
             return NotFound();
         }

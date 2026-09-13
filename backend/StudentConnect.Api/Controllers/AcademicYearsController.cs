@@ -8,13 +8,19 @@ namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/academic-years")]
-public class AcademicYearsController(AcademicYearStore academicYears, ILogger<AcademicYearsController> logger) : ControllerBase
+public class AcademicYearsController(AcademicYearStore academicYears, ICurrentTenantService currentTenant, ILogger<AcademicYearsController> logger) : ControllerBase
 {
     // GET /api/academic-years
     [HttpGet]
+    [Authorize]
     public async Task<ActionResult<IEnumerable<AcademicYearDto>>> GetAcademicYears()
     {
-        var all = await academicYears.GetAllAsync();
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var all = await academicYears.GetAllAsync(schoolId);
         return Ok(all.Select(AcademicYearDto.FromEntity));
     }
 
@@ -23,6 +29,11 @@ public class AcademicYearsController(AcademicYearStore academicYears, ILogger<Ac
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<AcademicYearDto>> CreateAcademicYear(AcademicYearCreateDto dto)
     {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
         if (string.IsNullOrWhiteSpace(dto.Name))
         {
             return BadRequest(new { message = "Name is required." });
@@ -42,6 +53,7 @@ public class AcademicYearsController(AcademicYearStore academicYears, ILogger<Ac
                 StartDate = dto.StartDate,
                 EndDate = dto.EndDate,
                 IsCurrent = dto.IsCurrent,
+                SchoolId = schoolId,
             });
         }
         catch (Npgsql.PostgresException ex)
@@ -50,7 +62,7 @@ public class AcademicYearsController(AcademicYearStore academicYears, ILogger<Ac
             return StatusCode(500, new { message = "Unable to save the academic year. Please try again." });
         }
 
-        var created = await academicYears.GetByIdAsync(newId);
+        var created = await academicYears.GetByIdAsync(newId, schoolId);
         return CreatedAtAction(nameof(GetAcademicYears), null, AcademicYearDto.FromEntity(created!));
     }
 
@@ -59,7 +71,12 @@ public class AcademicYearsController(AcademicYearStore academicYears, ILogger<Ac
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteAcademicYear(int id)
     {
-        if (!await academicYears.ExistsAsync(id))
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await academicYears.ExistsAsync(id, schoolId))
         {
             return NotFound();
         }

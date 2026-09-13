@@ -13,6 +13,7 @@ public class StudentStore(Database db)
         FirstName = reader.GetString("FirstName"),
         LastName = reader.GetString("LastName"),
         Email = reader.GetString("Email"),
+        SchoolId = reader.GetNullableInt32("SchoolId") ?? 0,
         GradeId = reader.GetInt32("GradeId"),
         Grade = new Grade { Id = reader.GetInt32("GradeId"), Name = reader.GetString("GradeName") },
         SectionId = reader.GetNullableInt32("SectionId"),
@@ -22,7 +23,7 @@ public class StudentStore(Database db)
     };
 
     private const string SelectWithGrade = """
-        SELECT s."Id", s."StudentId", s."FirstName", s."LastName", s."Email", s."GradeId", g."Name" AS "GradeName",
+        SELECT s."Id", s."StudentId", s."FirstName", s."LastName", s."Email", s."SchoolId", s."GradeId", g."Name" AS "GradeName",
                s."SectionId", sec."Name" AS "SectionName"
         FROM "Students" s
         JOIN "Grades" g ON g."Id" = s."GradeId"
@@ -32,24 +33,59 @@ public class StudentStore(Database db)
     public async Task<List<Student>> GetAllAsync() =>
         await db.QueryAsync($"""{SelectWithGrade} ORDER BY s."Id" """, bind: null, map: MapWithGrade);
 
+    // Tenant-scoped — used by the multi-tenancy-aware StudentsController.
+    public async Task<List<Student>> GetAllAsync(int schoolId) =>
+        await db.QueryAsync(
+            $"""{SelectWithGrade} WHERE s."SchoolId" = @schoolId ORDER BY s."Id" """,
+            p => p.AddWithValue("schoolId", schoolId),
+            map: MapWithGrade);
+
     public async Task<Student?> GetByIdAsync(int id) =>
         await db.QuerySingleOrDefaultAsync(
             $"""{SelectWithGrade} WHERE s."Id" = @id""",
             bind: p => p.AddWithValue("id", id),
             map: MapWithGrade);
 
+    public async Task<Student?> GetByIdAsync(int id, int schoolId) =>
+        await db.QuerySingleOrDefaultAsync(
+            $"""{SelectWithGrade} WHERE s."Id" = @id AND s."SchoolId" = @schoolId""",
+            bind: p =>
+            {
+                p.AddWithValue("id", id);
+                p.AddWithValue("schoolId", schoolId);
+            },
+            map: MapWithGrade);
+
     public async Task<bool> ExistsAsync(int id) =>
         await db.ExistsAsync("""SELECT 1 FROM "Students" WHERE "Id" = @id""", p => p.AddWithValue("id", id));
 
+    public async Task<bool> ExistsAsync(int id, int schoolId) =>
+        await db.ExistsAsync(
+            """SELECT 1 FROM "Students" WHERE "Id" = @id AND "SchoolId" = @schoolId""",
+            p =>
+            {
+                p.AddWithValue("id", id);
+                p.AddWithValue("schoolId", schoolId);
+            });
+
     public async Task<bool> StudentCodeExistsAsync(string studentCode) =>
         await db.ExistsAsync("""SELECT 1 FROM "Students" WHERE "StudentId" = @code""", p => p.AddWithValue("code", studentCode));
+
+    public async Task<bool> StudentCodeExistsAsync(string studentCode, int schoolId) =>
+        await db.ExistsAsync(
+            """SELECT 1 FROM "Students" WHERE "StudentId" = @code AND "SchoolId" = @schoolId""",
+            p =>
+            {
+                p.AddWithValue("code", studentCode);
+                p.AddWithValue("schoolId", schoolId);
+            });
 
     public async Task<int> CreateAsync(Student student)
     {
         var id = await db.ExecuteScalarAsync<int>(
             """
-            INSERT INTO "Students" ("StudentId", "FirstName", "LastName", "Email", "GradeId", "SectionId")
-            VALUES (@studentId, @firstName, @lastName, @email, @gradeId, @sectionId)
+            INSERT INTO "Students" ("StudentId", "FirstName", "LastName", "Email", "GradeId", "SectionId", "SchoolId")
+            VALUES (@studentId, @firstName, @lastName, @email, @gradeId, @sectionId, @schoolId)
             RETURNING "Id"
             """,
             p =>
@@ -60,6 +96,7 @@ public class StudentStore(Database db)
                 p.AddWithValue("email", student.Email);
                 p.AddWithValue("gradeId", student.GradeId);
                 p.AddWithValue("sectionId", (object?)student.SectionId ?? DBNull.Value);
+                p.AddWithValue("schoolId", student.SchoolId);
             });
         return id;
     }

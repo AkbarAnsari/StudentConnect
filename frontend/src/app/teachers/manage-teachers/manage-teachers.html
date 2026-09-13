@@ -1,0 +1,65 @@
+<section class="page page-wide">
+  <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
+  <h1>Manage Teachers</h1>
+
+  <div class="card">
+    <h2>Add Teacher</h2>
+
+    @if (errorMessage()) {
+      <p class="error-message">{{ errorMessage() }}</p>
+    }
+
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <label>
+        Teacher ID
+        <input type="text" formControlName="teacherId" placeholder="e.g. T004" />
+      </label>
+      <label>
+        First Name
+        <input type="text" formControlName="firstName" />
+      </label>
+      <label>
+        Last Name
+        <input type="text" formControlName="lastName" />
+      </label>
+      <label>
+        Email
+        <input type="email" formControlName="email" />
+      </label>
+      <label>
+        Username (optional — creates a login)
+        <input type="text" formControlName="username" placeholder="e.g. teacher4" />
+      </label>
+      <label>
+        Password (required if creating a login)
+        <input type="password" formControlName="password" />
+      </label>
+
+      <button type="submit" [disabled]="submitting()">
+        {{ submitting() ? 'Saving...' : 'Add Teacher' }}
+      </button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Existing Teachers</h2>
+
+    @if (teachers().length === 0) {
+      <p>No teachers yet.</p>
+    }
+
+    <ul class="entity-list">
+      @for (teacher of teachers(); track teacher.id) {
+        <li>
+          <span>
+            {{ teacher.firstName }} {{ teacher.lastName }} ({{ teacher.teacherId }}) — {{ teacher.email }}
+            @if (teacher.username) {
+              <span class="badge badge-success">Login: {{ teacher.username }}</span>
+            }
+          </span>
+          <button type="button" class="link-button" (click)="deleteTeacher(teacher.id)">Delete</button>
+        </li>
+      }
+    </ul>
+  </div>
+</section>

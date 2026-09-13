@@ -100,4 +100,18 @@ public class StudentStore(Database db)
                 FirstName = reader.GetString("FirstName"),
                 LastName = reader.GetString("LastName"),
             });
+
+    // Used to build a teacher's "My Classes" roster for a section they are homeroom teacher of.
+    public async Task<List<Student>> GetBySectionAsync(int sectionId) =>
+        await db.QueryAsync(
+            """SELECT "Id", "StudentId", "FirstName", "LastName", "Email" FROM "Students" WHERE "SectionId" = @sectionId ORDER BY "FirstName" """,
+            p => p.AddWithValue("sectionId", sectionId),
+            reader => new Student
+            {
+                Id = reader.GetInt32("Id"),
+                StudentId = reader.GetString("StudentId"),
+                FirstName = reader.GetString("FirstName"),
+                LastName = reader.GetString("LastName"),
+                Email = reader.GetString("Email"),
+            });
 }

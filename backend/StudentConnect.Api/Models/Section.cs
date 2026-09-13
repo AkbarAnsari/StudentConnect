@@ -10,4 +10,7 @@ public class Section
     public Grade? Grade { get; set; }
 
     public string Name { get; set; } = string.Empty;
+
+    public int? HomeroomTeacherId { get; set; }
+    public Teacher? HomeroomTeacher { get; set; }
 }

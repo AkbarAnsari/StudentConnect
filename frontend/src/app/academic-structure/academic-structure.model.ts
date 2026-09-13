@@ -32,4 +32,22 @@ export interface TermInput {
 export interface SectionInput {
   gradeId: number;
   name: string;
+  homeroomTeacherId?: number;
+}
+
+export interface GradeInput {
+  name: string;
+}
+
+export interface SubjectInput {
+  name: string;
+  code: string;
+}
+
+export interface SectionStudent {
+  id: number;
+  studentId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
 }

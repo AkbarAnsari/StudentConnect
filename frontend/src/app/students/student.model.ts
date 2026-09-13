@@ -20,6 +20,8 @@ export interface Section {
   gradeId: number;
   gradeName: string;
   name: string;
+  homeroomTeacherId: number | null;
+  homeroomTeacherName: string | null;
 }
 
 export interface StudentInput {

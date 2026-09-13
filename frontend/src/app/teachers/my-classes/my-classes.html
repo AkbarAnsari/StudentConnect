@@ -1,0 +1,46 @@
+<section class="page page-wide">
+  <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
+  <h1>My Classes</h1>
+
+  @if (sections().length === 0) {
+    <p>You are not assigned as homeroom teacher for any section yet.</p>
+  }
+
+  @for (section of sections(); track section.id) {
+    <div class="card">
+      <button type="button" class="section-header" (click)="toggleSection(section.id)">
+        <h2>{{ section.gradeName }} - Section {{ section.name }}</h2>
+        <span>{{ expandedSectionId() === section.id ? '▲' : '▼' }}</span>
+      </button>
+
+      @if (expandedSectionId() === section.id) {
+        @if (rosters()[section.id]; as roster) {
+          @if (roster.length === 0) {
+            <p>No students are assigned to this section yet.</p>
+          } @else {
+            <table class="roster-table">
+              <thead>
+                <tr>
+                  <th>Student ID</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (student of roster; track student.id) {
+                  <tr>
+                    <td>{{ student.studentId }}</td>
+                    <td>{{ student.firstName }} {{ student.lastName }}</td>
+                    <td>{{ student.email }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        } @else {
+          <p>Loading roster...</p>
+        }
+      }
+    </div>
+  }
+</section>

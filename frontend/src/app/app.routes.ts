@@ -30,12 +30,15 @@ import { ActivityRegistrationsView } from './activities/activity-registrations-v
 import { ManageParents } from './parents/manage-parents/manage-parents';
 import { AnalyticsDashboard } from './analytics/analytics-dashboard/analytics-dashboard';
 import { ManageAcademicStructure } from './academic-structure/manage-academic-structure/manage-academic-structure';
+import { ManageTeachers } from './teachers/manage-teachers/manage-teachers';
+import { MyClasses } from './teachers/my-classes/my-classes';
 import { Contact } from './contact/contact';
 import { Login } from './auth/login/login';
 import { Dashboard } from './dashboard/dashboard';
 import { authGuard, roleGuard } from './auth/auth.guard';
 
 const teacherOrAdmin = roleGuard(['Teacher', 'Admin']);
+const teacherOnly = roleGuard(['Teacher']);
 const adminOnly = roleGuard(['Admin']);
 
 export const routes: Routes = [
@@ -75,6 +78,8 @@ export const routes: Routes = [
   { path: 'manage-parents', component: ManageParents, canActivate: [authGuard, adminOnly] },
   { path: 'analytics', component: AnalyticsDashboard, canActivate: [authGuard, teacherOrAdmin] },
   { path: 'manage-academic-structure', component: ManageAcademicStructure, canActivate: [authGuard, adminOnly] },
+  { path: 'manage-teachers', component: ManageTeachers, canActivate: [authGuard, adminOnly] },
+  { path: 'my-classes', component: MyClasses, canActivate: [authGuard, teacherOnly] },
 
   { path: '**', redirectTo: '' },
 ];

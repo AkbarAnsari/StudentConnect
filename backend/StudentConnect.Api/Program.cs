@@ -24,6 +24,7 @@ builder.Services.AddScoped<AcademicYearStore>();
 builder.Services.AddScoped<TermStore>();
 builder.Services.AddScoped<SectionStore>();
 builder.Services.AddScoped<StudentStore>();
+builder.Services.AddScoped<TeacherStore>();
 builder.Services.AddScoped<AttendanceStore>();
 builder.Services.AddScoped<AssessmentStore>();
 builder.Services.AddScoped<MarkStore>();

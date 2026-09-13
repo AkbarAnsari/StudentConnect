@@ -8,6 +8,52 @@
 
   <div class="structure-grid">
     <div class="card">
+      <h2>Grades</h2>
+
+      <form [formGroup]="gradeForm" (ngSubmit)="createGrade()">
+        <label>
+          Name
+          <input type="text" formControlName="name" placeholder="e.g. Grade 11" />
+        </label>
+        <button type="submit">Add Grade</button>
+      </form>
+
+      <ul class="entity-list">
+        @for (grade of grades(); track grade.id) {
+          <li>
+            <span>{{ grade.name }}</span>
+            <button type="button" class="link-button" (click)="deleteGrade(grade.id)">Delete</button>
+          </li>
+        }
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Subjects</h2>
+
+      <form [formGroup]="subjectForm" (ngSubmit)="createSubject()">
+        <label>
+          Name
+          <input type="text" formControlName="name" placeholder="e.g. Computer Science" />
+        </label>
+        <label>
+          Code
+          <input type="text" formControlName="code" placeholder="e.g. CS" />
+        </label>
+        <button type="submit">Add Subject</button>
+      </form>
+
+      <ul class="entity-list">
+        @for (subject of subjects(); track subject.id) {
+          <li>
+            <span>{{ subject.name }} ({{ subject.code }})</span>
+            <button type="button" class="link-button" (click)="deleteSubject(subject.id)">Delete</button>
+          </li>
+        }
+      </ul>
+    </div>
+
+    <div class="card">
       <h2>Academic Years</h2>
 
       <form [formGroup]="yearForm" (ngSubmit)="createAcademicYear()">
@@ -98,13 +144,27 @@
           Section Name
           <input type="text" formControlName="name" placeholder="e.g. C" />
         </label>
+        <label>
+          Homeroom Teacher (optional)
+          <select formControlName="homeroomTeacherId">
+            <option [value]="0">None</option>
+            @for (teacher of teachers(); track teacher.id) {
+              <option [value]="teacher.id">{{ teacher.firstName }} {{ teacher.lastName }}</option>
+            }
+          </select>
+        </label>
         <button type="submit">Add Section</button>
       </form>
 
       <ul class="entity-list">
         @for (section of sections(); track section.id) {
           <li>
-            <span>{{ section.gradeName }} - Section {{ section.name }}</span>
+            <span>
+              {{ section.gradeName }} - Section {{ section.name }}
+              @if (section.homeroomTeacherName) {
+                <span class="badge badge-success">{{ section.homeroomTeacherName }}</span>
+              }
+            </span>
             <button type="button" class="link-button" (click)="deleteSection(section.id)">Delete</button>
           </li>
         }

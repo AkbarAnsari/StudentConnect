@@ -1,10 +1,11 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { Section } from '../../students/student.model';
-import { StudentService } from '../../students/student.service';
+import { Subject } from '../../attendance/attendance.model';
+import { Grade, Section } from '../../students/student.model';
+import { Teacher } from '../../teachers/teacher.model';
+import { TeacherService } from '../../teachers/teacher.service';
 import { AcademicStructureService } from '../academic-structure.service';
 import { AcademicYear, Term } from '../academic-structure.model';
 
@@ -17,13 +18,24 @@ import { AcademicYear, Term } from '../academic-structure.model';
 export class ManageAcademicStructure {
   private readonly fb = inject(FormBuilder);
   private readonly academicStructure = inject(AcademicStructureService);
-  private readonly studentService = inject(StudentService);
+  private readonly teacherService = inject(TeacherService);
 
-  protected readonly grades = toSignal(this.studentService.getGrades(), { initialValue: [] });
+  protected readonly grades = signal<Grade[]>([]);
+  protected readonly subjects = signal<Subject[]>([]);
+  protected readonly teachers = signal<Teacher[]>([]);
   protected readonly academicYears = signal<AcademicYear[]>([]);
   protected readonly terms = signal<Term[]>([]);
   protected readonly sections = signal<Section[]>([]);
   protected readonly errorMessage = signal('');
+
+  protected readonly gradeForm = this.fb.nonNullable.group({
+    name: ['', Validators.required],
+  });
+
+  protected readonly subjectForm = this.fb.nonNullable.group({
+    name: ['', Validators.required],
+    code: ['', Validators.required],
+  });
 
   protected readonly yearForm = this.fb.nonNullable.group({
     name: ['', Validators.required],
@@ -42,6 +54,7 @@ export class ManageAcademicStructure {
   protected readonly sectionForm = this.fb.nonNullable.group({
     gradeId: [0, [Validators.required, Validators.min(1)]],
     name: ['', Validators.required],
+    homeroomTeacherId: [0],
   });
 
   constructor() {
@@ -49,9 +62,58 @@ export class ManageAcademicStructure {
   }
 
   private reloadAll(): void {
+    this.academicStructure.getGrades().subscribe((grades) => this.grades.set(grades));
+    this.academicStructure.getSubjects().subscribe((subjects) => this.subjects.set(subjects));
+    this.teacherService.getTeachers().subscribe((teachers) => this.teachers.set(teachers));
     this.academicStructure.getAcademicYears().subscribe((years) => this.academicYears.set(years));
     this.academicStructure.getTerms().subscribe((terms) => this.terms.set(terms));
     this.academicStructure.getSections().subscribe((sections) => this.sections.set(sections));
+  }
+
+  protected createGrade(): void {
+    if (this.gradeForm.invalid) {
+      this.gradeForm.markAllAsTouched();
+      return;
+    }
+
+    this.errorMessage.set('');
+    this.academicStructure.createGrade(this.gradeForm.getRawValue()).subscribe({
+      next: () => {
+        this.gradeForm.reset({ name: '' });
+        this.reloadAll();
+      },
+      error: (err: HttpErrorResponse) => this.errorMessage.set(err.error?.message ?? 'Unable to save the grade.'),
+    });
+  }
+
+  protected deleteGrade(id: number): void {
+    this.academicStructure.deleteGrade(id).subscribe({
+      next: () => this.reloadAll(),
+      error: (err: HttpErrorResponse) => this.errorMessage.set(err.error?.message ?? 'Unable to delete the grade.'),
+    });
+  }
+
+  protected createSubject(): void {
+    if (this.subjectForm.invalid) {
+      this.subjectForm.markAllAsTouched();
+      return;
+    }
+
+    this.errorMessage.set('');
+    this.academicStructure.createSubject(this.subjectForm.getRawValue()).subscribe({
+      next: () => {
+        this.subjectForm.reset({ name: '', code: '' });
+        this.reloadAll();
+      },
+      error: (err: HttpErrorResponse) => this.errorMessage.set(err.error?.message ?? 'Unable to save the subject.'),
+    });
+  }
+
+  protected deleteSubject(id: number): void {
+    this.academicStructure.deleteSubject(id).subscribe({
+      next: () => this.reloadAll(),
+      error: (err: HttpErrorResponse) => this.errorMessage.set(err.error?.message ?? 'Unable to delete the subject.'),
+    });
   }
 
   protected createAcademicYear(): void {
@@ -107,13 +169,16 @@ export class ManageAcademicStructure {
     }
 
     this.errorMessage.set('');
-    this.academicStructure.createSection(this.sectionForm.getRawValue()).subscribe({
-      next: () => {
-        this.sectionForm.reset({ gradeId: 0, name: '' });
-        this.reloadAll();
-      },
-      error: (err: HttpErrorResponse) => this.errorMessage.set(err.error?.message ?? 'Unable to save the section.'),
-    });
+    const { gradeId, name, homeroomTeacherId } = this.sectionForm.getRawValue();
+    this.academicStructure
+      .createSection({ gradeId, name, homeroomTeacherId: homeroomTeacherId > 0 ? homeroomTeacherId : undefined })
+      .subscribe({
+        next: () => {
+          this.sectionForm.reset({ gradeId: 0, name: '', homeroomTeacherId: 0 });
+          this.reloadAll();
+        },
+        error: (err: HttpErrorResponse) => this.errorMessage.set(err.error?.message ?? 'Unable to save the section.'),
+      });
   }
 
   protected deleteSection(id: number): void {

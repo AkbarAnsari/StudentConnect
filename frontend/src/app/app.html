@@ -31,6 +31,9 @@
             </svg>
           </button>
           <div class="nav-dropdown-menu">
+            @if (authService.role() === 'Teacher') {
+              <a routerLink="/my-classes" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">My Classes</a>
+            }
             <a routerLink="/record-attendance" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Record Attendance</a>
             <a routerLink="/assessments" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Assessments</a>
             <a routerLink="/enter-marks" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Enter Marks</a>
@@ -39,6 +42,7 @@
             <a routerLink="/activity-management" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Activities</a>
             @if (authService.role() === 'Admin') {
               <a routerLink="/manage-parents" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Parent Accounts</a>
+              <a routerLink="/manage-teachers" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Teachers</a>
               <a routerLink="/manage-academic-structure" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Academic Structure</a>
             }
           </div>

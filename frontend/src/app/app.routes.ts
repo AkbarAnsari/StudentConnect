@@ -35,6 +35,7 @@ import { MyClasses } from './teachers/my-classes/my-classes';
 import { AuditLogViewer } from './audit-log/audit-log-viewer/audit-log-viewer';
 import { SearchPage } from './search/search-page/search-page';
 import { StudentReportCardPage } from './reports/student-report-card/student-report-card';
+import { EmailOutboxViewer } from './email-outbox/email-outbox-viewer/email-outbox-viewer';
 import { Contact } from './contact/contact';
 import { Login } from './auth/login/login';
 import { Dashboard } from './dashboard/dashboard';
@@ -85,6 +86,7 @@ export const routes: Routes = [
   { path: 'manage-teachers', component: ManageTeachers, canActivate: [authGuard, adminOnly] },
   { path: 'my-classes', component: MyClasses, canActivate: [authGuard, teacherOnly] },
   { path: 'audit-log', component: AuditLogViewer, canActivate: [authGuard, adminOnly] },
+  { path: 'email-outbox', component: EmailOutboxViewer, canActivate: [authGuard, adminOnly] },
   { path: 'search', component: SearchPage, canActivate: [authGuard, teacherOrAdmin] },
 
   { path: '**', redirectTo: '' },

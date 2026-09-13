@@ -28,6 +28,7 @@ export class ManageParents {
   protected readonly form = this.fb.nonNullable.group({
     username: ['', Validators.required],
     password: ['', [Validators.required, Validators.minLength(6)]],
+    email: ['', Validators.email],
   });
 
   constructor() {
@@ -51,8 +52,8 @@ export class ManageParents {
     this.submitting.set(true);
     this.errorMessage.set('');
 
-    const { username, password } = this.form.getRawValue();
-    this.parentService.createParent({ username, password, childStudentIds: this.selectedChildIds() }).subscribe({
+    const { username, password, email } = this.form.getRawValue();
+    this.parentService.createParent({ username, password, email: email || undefined, childStudentIds: this.selectedChildIds() }).subscribe({
       next: () => {
         this.submitting.set(false);
         this.form.reset();

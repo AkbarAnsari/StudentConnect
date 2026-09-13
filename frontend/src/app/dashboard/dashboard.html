@@ -34,6 +34,7 @@
         <li><a routerLink="/analytics">Analytics Dashboard</a></li>
         <li><a routerLink="/manage-academic-structure">Academic Structure</a></li>
         <li><a routerLink="/audit-log">Audit Log</a></li>
+        <li><a routerLink="/email-outbox">Email Outbox</a></li>
       </ul>
     } @else if (user.role === 'Parent') {
       @if (user.children && user.children.length > 0) {

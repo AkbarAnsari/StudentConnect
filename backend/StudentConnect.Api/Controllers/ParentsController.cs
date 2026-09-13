@@ -67,7 +67,7 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
 
         var user = new ApplicationUser { Username = dto.Username, Role = UserRole.Parent };
         var passwordHash = Hasher.HashPassword(user, dto.Password);
-        var newUserId = await users.CreateAsync(dto.Username, passwordHash, UserRole.Parent);
+        var newUserId = await users.CreateAsync(dto.Username, passwordHash, UserRole.Parent, email: dto.Email);
 
         foreach (var studentId in distinctChildIds)
         {
@@ -79,6 +79,7 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
 
         var children = await parents.GetChildrenForParentAsync(newUserId);
         user.Id = newUserId;
+        user.Email = dto.Email;
         return CreatedAtAction(nameof(GetParents), null, ParentResponseDto.FromEntity(user, children));
     }
 

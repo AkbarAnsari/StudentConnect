@@ -1,0 +1,38 @@
+<section class="page page-wide">
+  <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
+  <h1>Email Outbox</h1>
+  <p class="hint">Emails triggered by notifications are enqueued here and delivered asynchronously by a background processor.</p>
+
+  @if (entries().length === 0) {
+    <p>No emails have been enqueued yet.</p>
+  } @else {
+    <table class="outbox-table">
+      <thead>
+        <tr>
+          <th>To</th>
+          <th>Subject</th>
+          <th>Created (UTC)</th>
+          <th>Status</th>
+          <th>Attempts</th>
+          <th>Last Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (entry of entries(); track entry.id) {
+          <tr>
+            <td>{{ entry.toEmail }}</td>
+            <td>{{ entry.subject }}</td>
+            <td>{{ entry.createdAtUtc | date: 'yyyy-MM-dd HH:mm:ss' }}</td>
+            <td>
+              <span class="badge" [class.badge-success]="status(entry) === 'sent'" [class.badge-danger]="status(entry) === 'failed'">
+                {{ status(entry) }}
+              </span>
+            </td>
+            <td>{{ entry.attempts }}</td>
+            <td>{{ entry.lastError }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>

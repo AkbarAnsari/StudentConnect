@@ -6,6 +6,7 @@ using StudentConnect.Api.Auth;
 using StudentConnect.Api.Auditing;
 using StudentConnect.Api.Data;
 using StudentConnect.Api.Data.Stores;
+using StudentConnect.Api.Email;
 using StudentConnect.Api.Notifications;
 using StudentConnect.Api.Storage;
 
@@ -42,6 +43,7 @@ builder.Services.AddScoped<NotificationRecipientResolver>();
 builder.Services.AddScoped<AuditLogStore>();
 builder.Services.AddScoped<SearchStore>();
 builder.Services.AddScoped<ReportStore>();
+builder.Services.AddScoped<EmailOutboxStore>();
 
 // Today files live on local disk; a future AzureBlobStorage class could implement the
 // same IFileStorage interface without any controller/service code changing.
@@ -67,8 +69,25 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
-builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<INotificationService, EmailNotificationService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
+
+// Email:Smtp:Host selects the real SmtpEmailSender; left blank (the default) uses
+// LoggingEmailSender so local dev works without a mail server. Either way, email is
+// enqueued to EmailOutbox and delivered by the EmailOutboxProcessor background service —
+// never sent inline on the request that triggered a notification.
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Smtp"));
+var smtpHost = builder.Configuration["Smtp:Host"];
+if (!string.IsNullOrWhiteSpace(smtpHost))
+{
+    builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+}
+else
+{
+    builder.Services.AddSingleton<IEmailSender, LoggingEmailSender>();
+}
+builder.Services.AddHostedService<EmailOutboxProcessor>();
 
 var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

@@ -17,4 +17,8 @@ public class ApplicationUser
     // Set for Teacher-role users only. Admins have both StudentId and TeacherId null.
     public int? TeacherId { get; set; }
     public Teacher? Teacher { get; set; }
+
+    // Only set directly for Parent-role users (Student/Teacher accounts resolve their
+    // email through the linked Student/Teacher row instead — see UserStore.GetEmailForUserAsync).
+    public string? Email { get; set; }
 }

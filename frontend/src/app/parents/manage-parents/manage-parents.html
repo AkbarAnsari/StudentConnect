@@ -26,6 +26,14 @@
         }
       </label>
 
+      <label>
+        Email (optional — required to receive email notifications)
+        <input type="email" formControlName="email" placeholder="e.g. parent.sharma@example.com" />
+        @if (form.controls.email.invalid && form.controls.email.touched) {
+          <span class="field-error">Enter a valid email address.</span>
+        }
+      </label>
+
       <fieldset class="children-picker">
         <legend>Link children (optional, can be added later)</legend>
         @for (student of students(); track student.id) {

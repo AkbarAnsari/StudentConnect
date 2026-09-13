@@ -1,0 +1,41 @@
+<section class="page page-wide">
+  <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
+  <h1>Operations</h1>
+
+  @if (errorMessage()) {
+    <p class="error-message">{{ errorMessage() }}</p>
+  }
+
+  @if (info(); as info) {
+    <div class="summary-grid">
+      <div class="summary-card">
+        <span class="summary-label">Environment</span>
+        <span class="summary-value">{{ info.environmentName }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Version</span>
+        <span class="summary-value">{{ info.version }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Uptime</span>
+        <span class="summary-value">{{ formatUptime(info.uptimeSeconds) }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Database</span>
+        <span class="badge" [class.badge-success]="info.databaseHealthy" [class.badge-danger]="!info.databaseHealthy">
+          {{ info.databaseHealthy ? 'Healthy' : 'Unreachable' }}
+        </span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Pending Emails</span>
+        <span class="summary-value">{{ info.pendingEmailCount }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Failed Emails</span>
+        <span class="summary-value" [class.text-danger]="info.failedEmailCount > 0">{{ info.failedEmailCount }}</span>
+      </div>
+    </div>
+
+    <button type="button" class="btn" (click)="reload()">Refresh</button>
+  }
+</section>

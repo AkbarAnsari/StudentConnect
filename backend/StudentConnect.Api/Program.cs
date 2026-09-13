@@ -7,6 +7,7 @@ using StudentConnect.Api.Auditing;
 using StudentConnect.Api.Data;
 using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Email;
+using StudentConnect.Api.Health;
 using StudentConnect.Api.Notifications;
 using StudentConnect.Api.Storage;
 
@@ -89,6 +90,10 @@ else
 }
 builder.Services.AddHostedService<EmailOutboxProcessor>();
 
+// Unauthenticated /health endpoint (see below) — the kind of thing a load balancer or
+// container orchestrator polls, so it deliberately bypasses the FallbackPolicy below.
+builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
+
 var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -151,6 +156,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health").AllowAnonymous();
 
 app.Run();
 

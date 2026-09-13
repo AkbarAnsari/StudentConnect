@@ -75,4 +75,22 @@ public class EmailOutboxStore(Database db)
             """,
             p => p.AddWithValue("take", take),
             Map);
+
+    // Used by the admin Operations page's dependency status summary.
+    public async Task<(long Pending, long Failed)> GetStatsAsync()
+    {
+        const string sql = """
+            SELECT
+                COUNT(*) FILTER (WHERE "SentAtUtc" IS NULL AND "LastError" IS NULL) AS "Pending",
+                COUNT(*) FILTER (WHERE "SentAtUtc" IS NULL AND "LastError" IS NOT NULL) AS "Failed"
+            FROM "EmailOutbox"
+            """;
+
+        var row = await db.QuerySingleOrDefaultAsync(
+            sql,
+            bind: null,
+            map: reader => new { Pending = reader.GetInt64("Pending"), Failed = reader.GetInt64("Failed") });
+
+        return row is null ? (0, 0) : (row.Pending, row.Failed);
+    }
 }

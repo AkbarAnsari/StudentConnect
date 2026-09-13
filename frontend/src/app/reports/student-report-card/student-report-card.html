@@ -1,0 +1,69 @@
+<section class="page report-card-page">
+  <a class="back-link no-print" [routerLink]="['/students', studentId]">← Back to Profile</a>
+
+  @if (state().loading) {
+    <p class="loading">Loading report card...</p>
+  } @else if (state().error) {
+    <p class="error-message">Unable to load the report card. Please check whether the StudentConnect API is running.</p>
+  } @else if (state().reportCard; as card) {
+    <div class="report-card">
+      <div class="report-header">
+        <h1>Report Card</h1>
+        <button type="button" class="btn no-print" (click)="print()">Print / Save as PDF</button>
+      </div>
+
+      <dl class="profile-details">
+        <dt>Name</dt>
+        <dd>{{ card.fullName }}</dd>
+        <dt>Student ID</dt>
+        <dd>{{ card.studentCode }}</dd>
+        <dt>Grade</dt>
+        <dd>{{ card.gradeName }}</dd>
+        <dt>Section</dt>
+        <dd>{{ card.sectionName }}</dd>
+      </dl>
+
+      <div class="summary-grid">
+        <div class="summary-card">
+          <span class="summary-label">Overall Attendance</span>
+          <span class="summary-value">{{ card.overallAttendancePercentage }}%</span>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">Overall Marks</span>
+          <span class="summary-value">{{ card.overallMarksPercentage }}%</span>
+          <span class="badge">{{ card.overallResultCategory }}</span>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">Rank in Grade</span>
+          <span class="summary-value">{{ card.rankInGrade }} / {{ card.totalStudentsInGrade }}</span>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">Homework Completion</span>
+          <span class="summary-value">{{ card.homeworkCompletionRate }}%</span>
+        </div>
+      </div>
+
+      <h2>Subject Breakdown</h2>
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th>Subject</th>
+            <th>Attendance</th>
+            <th>Marks</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (subject of card.subjects; track subject.subjectId) {
+            <tr>
+              <td>{{ subject.subjectName }}</td>
+              <td>{{ subject.attendancePercentage }}%</td>
+              <td>{{ subject.marksPercentage }}%</td>
+              <td>{{ subject.resultCategory }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

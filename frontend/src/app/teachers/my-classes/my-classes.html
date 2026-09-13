@@ -13,6 +13,17 @@
         <span>{{ expandedSectionId() === section.id ? '▲' : '▼' }}</span>
       </button>
 
+      @if (classReports()[section.id]; as report) {
+        <div class="class-report-stats">
+          <span class="stat"><strong>{{ report.studentCount }}</strong> students</span>
+          <span class="stat"><strong>{{ report.averageAttendancePercentage }}%</strong> avg attendance</span>
+          <span class="stat"><strong>{{ report.averageMarksPercentage }}%</strong> avg marks</span>
+          @if (report.atRiskCount > 0) {
+            <span class="stat badge badge-danger">{{ report.atRiskCount }} at risk</span>
+          }
+        </div>
+      }
+
       @if (expandedSectionId() === section.id) {
         @if (rosters()[section.id]; as roster) {
           @if (roster.length === 0) {

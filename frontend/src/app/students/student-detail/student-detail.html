@@ -16,6 +16,7 @@
 
     <div class="profile-actions">
       <a class="btn" [routerLink]="['/students', s.id, 'edit']">Edit</a>
+      <a class="btn" [routerLink]="['/students', s.id, 'report-card']">Report Card</a>
       <button type="button" class="btn btn-danger" (click)="onDelete(s.id)">Delete</button>
     </div>
 

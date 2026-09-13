@@ -34,6 +34,7 @@ import { ManageTeachers } from './teachers/manage-teachers/manage-teachers';
 import { MyClasses } from './teachers/my-classes/my-classes';
 import { AuditLogViewer } from './audit-log/audit-log-viewer/audit-log-viewer';
 import { SearchPage } from './search/search-page/search-page';
+import { StudentReportCardPage } from './reports/student-report-card/student-report-card';
 import { Contact } from './contact/contact';
 import { Login } from './auth/login/login';
 import { Dashboard } from './dashboard/dashboard';
@@ -62,6 +63,7 @@ export const routes: Routes = [
   { path: 'students/:id/materials', component: StudentMaterials, canActivate: [authGuard] },
   { path: 'students/:id/activities', component: StudentActivities, canActivate: [authGuard] },
   { path: 'students/:id/activities/:activityId', component: ActivityDetail, canActivate: [authGuard] },
+  { path: 'students/:id/report-card', component: StudentReportCardPage, canActivate: [authGuard] },
   { path: 'students/:id', component: StudentDetail, canActivate: [authGuard] },
 
   { path: 'record-attendance', component: RecordAttendance, canActivate: [authGuard, teacherOrAdmin] },

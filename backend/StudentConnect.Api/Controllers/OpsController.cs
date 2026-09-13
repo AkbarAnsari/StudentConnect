@@ -1,9 +1,10 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using StudentConnect.Api.Data;
-using StudentConnect.Api.Data.Stores;
-using StudentConnect.Api.Models;
+using StudentConnect.Application;
+using StudentConnect.Domain;
+using StudentConnect.Infrastructure.Data;
+using StudentConnect.Infrastructure.Data.Stores;
 
 namespace StudentConnect.Api.Controllers;
 

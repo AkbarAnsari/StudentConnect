@@ -1,4 +1,4 @@
-using StudentConnect.Api.Models;
+using StudentConnect.Domain;
 using Xunit;
 
 namespace StudentConnect.Api.Tests.Models;

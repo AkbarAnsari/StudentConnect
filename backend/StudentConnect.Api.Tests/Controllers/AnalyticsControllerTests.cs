@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using StudentConnect.Api.Controllers;
-using StudentConnect.Api.Data.Stores;
-using StudentConnect.Api.Models;
+using StudentConnect.Application;
+using StudentConnect.Domain;
+using StudentConnect.Infrastructure.Data.Stores;
 using Xunit;
 
 namespace StudentConnect.Api.Tests.Controllers;

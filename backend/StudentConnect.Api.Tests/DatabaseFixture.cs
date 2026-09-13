@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Configuration;
-using StudentConnect.Api.Data;
+using StudentConnect.Infrastructure.Data;
 using Xunit;
 
 namespace StudentConnect.Api.Tests;

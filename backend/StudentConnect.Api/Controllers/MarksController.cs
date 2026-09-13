@@ -1,11 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
-using StudentConnect.Api.Auditing;
-using StudentConnect.Api.Auth;
-using StudentConnect.Api.Data.Stores;
-using StudentConnect.Api.Models;
-using StudentConnect.Api.Notifications;
+using StudentConnect.Application;
+using StudentConnect.Domain;
+using StudentConnect.Infrastructure.Data.Stores;
+using StudentConnect.Infrastructure.Notifications;
 
 namespace StudentConnect.Api.Controllers;
 

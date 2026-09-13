@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using StudentConnect.Api.Auth;
-using StudentConnect.Api.Data.Stores;
-using StudentConnect.Api.Models;
+using StudentConnect.Application;
+using StudentConnect.Domain;
+using StudentConnect.Infrastructure.Auth;
+using StudentConnect.Infrastructure.Data.Stores;
 
 namespace StudentConnect.Api.Controllers;
 

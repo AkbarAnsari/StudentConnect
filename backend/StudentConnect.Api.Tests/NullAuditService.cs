@@ -1,4 +1,4 @@
-using StudentConnect.Api.Auditing;
+using StudentConnect.Application;
 
 namespace StudentConnect.Api.Tests;
 

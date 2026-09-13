@@ -86,8 +86,8 @@ of which hosting option was chosen.
 If Docker Desktop is running on your machine:
 
 ```bash
-cd backend/StudentConnect.Api
-docker build -t studentconnect-api:local .
+cd backend
+docker build -f StudentConnect.Api/Dockerfile -t studentconnect-api:local .
 docker run -p 8080:8080 studentconnect-api:local
 ```
 

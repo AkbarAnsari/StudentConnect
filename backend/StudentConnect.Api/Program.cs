@@ -2,14 +2,15 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
-using StudentConnect.Api.Auth;
-using StudentConnect.Api.Auditing;
-using StudentConnect.Api.Data;
-using StudentConnect.Api.Data.Stores;
-using StudentConnect.Api.Email;
-using StudentConnect.Api.Health;
-using StudentConnect.Api.Notifications;
-using StudentConnect.Api.Storage;
+using StudentConnect.Application;
+using StudentConnect.Infrastructure.Auditing;
+using StudentConnect.Infrastructure.Auth;
+using StudentConnect.Infrastructure.Data;
+using StudentConnect.Infrastructure.Data.Stores;
+using StudentConnect.Infrastructure.Email;
+using StudentConnect.Infrastructure.Health;
+using StudentConnect.Infrastructure.Notifications;
+using StudentConnect.Infrastructure.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
 

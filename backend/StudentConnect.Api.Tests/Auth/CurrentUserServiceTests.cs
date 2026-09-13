@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
-using StudentConnect.Api.Auth;
+using StudentConnect.Application;
+using StudentConnect.Infrastructure.Auth;
 using Xunit;
 
 namespace StudentConnect.Api.Tests.Auth;

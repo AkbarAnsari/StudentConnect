@@ -1,0 +1,105 @@
+using Npgsql;
+using StudentConnect.Application;
+using StudentConnect.Domain;
+
+namespace StudentConnect.Infrastructure.Data.Stores;
+
+public class HomeworkStore(Database db)
+{
+    private const string SelectFull = """
+        SELECT h."Id", h."Title", h."Description", h."SubjectId", h."GradeId", h."TeacherId", h."CreatedDate", h."DueDate",
+               sub."Name" AS "SubjectName", g."Name" AS "GradeName", t."FirstName" AS "TeacherFirstName", t."LastName" AS "TeacherLastName"
+        FROM "Homework" h
+        JOIN "Subjects" sub ON sub."Id" = h."SubjectId"
+        JOIN "Grades" g ON g."Id" = h."GradeId"
+        JOIN "Teachers" t ON t."Id" = h."TeacherId"
+        """;
+
+    private static Homework MapFull(NpgsqlDataReader reader) => new()
+    {
+        Id = reader.GetInt32("Id"),
+        Title = reader.GetString("Title"),
+        Description = reader.GetString("Description"),
+        SubjectId = reader.GetInt32("SubjectId"),
+        Subject = new Subject { Name = reader.GetString("SubjectName") },
+        GradeId = reader.GetInt32("GradeId"),
+        Grade = new Grade { Name = reader.GetString("GradeName") },
+        TeacherId = reader.GetInt32("TeacherId"),
+        Teacher = new Teacher { FirstName = reader.GetString("TeacherFirstName"), LastName = reader.GetString("TeacherLastName") },
+        CreatedDate = reader.GetDateOnly("CreatedDate"),
+        DueDate = reader.GetDateOnly("DueDate"),
+    };
+
+    public async Task<List<Homework>> GetAllAsync() =>
+        await db.QueryAsync($"""{SelectFull} ORDER BY h."DueDate" """, bind: null, map: MapFull);
+
+    public async Task<Homework?> GetByIdAsync(int id) =>
+        await db.QuerySingleOrDefaultAsync($"""{SelectFull} WHERE h."Id" = @id""", p => p.AddWithValue("id", id), MapFull);
+
+    public async Task<List<Homework>> GetByTeacherAsync(int teacherId) =>
+        await db.QueryAsync($"""{SelectFull} WHERE h."TeacherId" = @teacherId ORDER BY h."DueDate" """, p => p.AddWithValue("teacherId", teacherId), MapFull);
+
+    public async Task<List<Homework>> GetBySubjectAsync(int subjectId) =>
+        await db.QueryAsync($"""{SelectFull} WHERE h."SubjectId" = @subjectId ORDER BY h."DueDate" """, p => p.AddWithValue("subjectId", subjectId), MapFull);
+
+    // Used by the student homework list — Subject only, no Grade/Teacher needed.
+    public async Task<List<Homework>> GetByGradeAsync(int gradeId) =>
+        await db.QueryAsync(
+            """
+            SELECT h."Id", h."Title", h."DueDate", sub."Name" AS "SubjectName"
+            FROM "Homework" h
+            JOIN "Subjects" sub ON sub."Id" = h."SubjectId"
+            WHERE h."GradeId" = @gradeId
+            ORDER BY h."DueDate"
+            """,
+            p => p.AddWithValue("gradeId", gradeId),
+            reader => new Homework
+            {
+                Id = reader.GetInt32("Id"),
+                Title = reader.GetString("Title"),
+                DueDate = reader.GetDateOnly("DueDate"),
+                Subject = new Subject { Name = reader.GetString("SubjectName") },
+            });
+
+    public async Task<bool> ExistsAsync(int id) =>
+        await db.ExistsAsync("""SELECT 1 FROM "Homework" WHERE "Id" = @id""", p => p.AddWithValue("id", id));
+
+    public async Task<int> CreateAsync(Homework homework) =>
+        await db.ExecuteScalarAsync<int>(
+            """
+            INSERT INTO "Homework" ("Title", "Description", "SubjectId", "GradeId", "TeacherId", "CreatedDate", "DueDate")
+            VALUES (@title, @description, @subjectId, @gradeId, @teacherId, @createdDate, @dueDate)
+            RETURNING "Id"
+            """,
+            p =>
+            {
+                p.AddWithValue("title", homework.Title);
+                p.AddWithValue("description", homework.Description);
+                p.AddWithValue("subjectId", homework.SubjectId);
+                p.AddWithValue("gradeId", homework.GradeId);
+                p.AddWithValue("teacherId", homework.TeacherId);
+                p.AddWithValue("createdDate", homework.CreatedDate);
+                p.AddWithValue("dueDate", homework.DueDate);
+            });
+
+    public async Task UpdateAsync(int id, string title, string description, DateOnly dueDate) =>
+        await db.ExecuteAsync(
+            """UPDATE "Homework" SET "Title" = @title, "Description" = @description, "DueDate" = @dueDate WHERE "Id" = @id""",
+            p =>
+            {
+                p.AddWithValue("id", id);
+                p.AddWithValue("title", title);
+                p.AddWithValue("description", description);
+                p.AddWithValue("dueDate", dueDate);
+            });
+
+    // Submissions cascade-delete at the DB level (see database/schema.sql) — no app-side cleanup needed.
+    public async Task DeleteAsync(int id) =>
+        await db.ExecuteAsync("""DELETE FROM "Homework" WHERE "Id" = @id""", p => p.AddWithValue("id", id));
+
+    public async Task<List<int>> GetAllStudentIdsInGradeAsync(int gradeId) =>
+        await db.QueryAsync(
+            """SELECT "Id" FROM "Students" WHERE "GradeId" = @gradeId""",
+            p => p.AddWithValue("gradeId", gradeId),
+            reader => reader.GetInt32("Id"));
+}

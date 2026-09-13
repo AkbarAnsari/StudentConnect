@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
-using StudentConnect.Api.Auth;
-using StudentConnect.Api.Data.Stores;
-using StudentConnect.Api.Models;
+using StudentConnect.Application;
+using StudentConnect.Domain;
+using StudentConnect.Infrastructure.Data.Stores;
 
 namespace StudentConnect.Api.Controllers;
 

@@ -2,8 +2,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
 using Microsoft.Extensions.Options;
-using StudentConnect.Api.Auth;
-using StudentConnect.Api.Models;
+using StudentConnect.Domain;
+using StudentConnect.Infrastructure.Auth;
 using Xunit;
 
 namespace StudentConnect.Api.Tests.Auth;

@@ -1,5 +1,20 @@
 # Phase 15 — Platform Vision & Gap Analysis (Planning Only)
 
+## Status update (post-Phase 24)
+
+Phases 15–21 and 23 have all been implemented and verified (academic domain model,
+admin completeness, audit log, search, reporting, communication/outbox, operations &
+health, and the Domain/Application/Infrastructure/Api layering). Two explicit decisions
+were made on the remaining items:
+
+- **Phase 22 (Entra ID)**: declined — StudentConnect keeps its existing local JWT/
+  database-driven login and authorization. No Entra ID migration was performed or is
+  currently planned.
+- **Phase 24 (Azure production topology)**: infrastructure-as-code only, not deployed.
+  See `infra/main.bicep`, `infra/main.bicepparam`, and `infra/README.md` — compiled
+  clean locally (`az bicep build` / `az bicep build-params`) but no resources have been
+  provisioned against a real Azure subscription.
+
 ## Purpose
 
 A comprehensive architectural vision document (reproduced in full at the end of this

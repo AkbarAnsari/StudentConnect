@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { Grade, Student, StudentInput } from './student.model';
+import { Grade, Section, Student, StudentInput } from './student.model';
 
 // Phase 4: the API now persists data via EF Core + SQL Server, but from
 // Angular's perspective nothing changes — it still just talks HTTP to the API.
@@ -11,6 +11,7 @@ export class StudentService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiBaseUrl}/students`;
   private readonly gradesUrl = `${environment.apiBaseUrl}/grades`;
+  private readonly sectionsUrl = `${environment.apiBaseUrl}/sections`;
 
   getStudents(): Observable<Student[]> {
     return this.http.get<Student[]>(this.baseUrl);
@@ -34,5 +35,9 @@ export class StudentService {
 
   getGrades(): Observable<Grade[]> {
     return this.http.get<Grade[]>(this.gradesUrl);
+  }
+
+  getSectionsByGrade(gradeId: number): Observable<Section[]> {
+    return this.http.get<Section[]>(`${this.sectionsUrl}/grade/${gradeId}`);
   }
 }

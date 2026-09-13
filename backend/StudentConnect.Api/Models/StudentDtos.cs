@@ -1,7 +1,7 @@
 namespace StudentConnect.Api.Models;
 
-// What Angular actually receives — flattens the Grade relationship into gradeName
-// so the frontend never needs to know how the database models the relationship.
+// What Angular actually receives — flattens the Grade/Section relationships into
+// gradeName/sectionName so the frontend never needs to know how the database models them.
 public class StudentResponseDto
 {
     public int Id { get; set; }
@@ -9,9 +9,10 @@ public class StudentResponseDto
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    public string Section { get; set; } = string.Empty;
     public int GradeId { get; set; }
     public string GradeName { get; set; } = string.Empty;
+    public int? SectionId { get; set; }
+    public string SectionName { get; set; } = string.Empty;
 
     public static StudentResponseDto FromEntity(Student student) => new()
     {
@@ -20,9 +21,10 @@ public class StudentResponseDto
         FirstName = student.FirstName,
         LastName = student.LastName,
         Email = student.Email,
-        Section = student.Section,
         GradeId = student.GradeId,
         GradeName = student.Grade?.Name ?? string.Empty,
+        SectionId = student.SectionId,
+        SectionName = student.Section?.Name ?? string.Empty,
     };
 }
 
@@ -34,7 +36,7 @@ public class StudentCreateDto
     public string LastName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public int GradeId { get; set; }
-    public string Section { get; set; } = string.Empty;
+    public int SectionId { get; set; }
 }
 
 // What Angular sends when editing a student.
@@ -44,5 +46,5 @@ public class StudentUpdateDto
     public string LastName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public int GradeId { get; set; }
-    public string Section { get; set; } = string.Empty;
+    public int SectionId { get; set; }
 }

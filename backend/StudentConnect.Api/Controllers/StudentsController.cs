@@ -9,7 +9,7 @@ namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class StudentsController(StudentStore students, ReferenceDataStore referenceData, ICurrentUserService currentUser, ILogger<StudentsController> logger) : ControllerBase
+public class StudentsController(StudentStore students, ReferenceDataStore referenceData, SectionStore sections, ICurrentUserService currentUser, ILogger<StudentsController> logger) : ControllerBase
 {
     // GET /api/students
     [HttpGet]
@@ -58,6 +58,11 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
             return BadRequest(new { message = "The specified GradeId does not exist." });
         }
 
+        if (!await sections.BelongsToGradeAsync(dto.SectionId, dto.GradeId))
+        {
+            return BadRequest(new { message = "The specified SectionId does not belong to the selected grade." });
+        }
+
         var duplicate = await students.StudentCodeExistsAsync(dto.StudentId);
         if (duplicate)
         {
@@ -71,7 +76,7 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
             LastName = dto.LastName,
             Email = dto.Email,
             GradeId = dto.GradeId,
-            Section = dto.Section,
+            SectionId = dto.SectionId,
         };
 
         int newId;
@@ -113,6 +118,11 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
             return BadRequest(new { message = "The specified GradeId does not exist." });
         }
 
+        if (!await sections.BelongsToGradeAsync(dto.SectionId, dto.GradeId))
+        {
+            return BadRequest(new { message = "The specified SectionId does not belong to the selected grade." });
+        }
+
         var student = new Student
         {
             Id = id,
@@ -120,7 +130,7 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
             LastName = dto.LastName,
             Email = dto.Email,
             GradeId = dto.GradeId,
-            Section = dto.Section,
+            SectionId = dto.SectionId,
         };
 
         try

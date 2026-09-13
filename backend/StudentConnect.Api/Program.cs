@@ -20,6 +20,9 @@ builder.Services.AddOpenApi();
 // schema and Data/Stores/*.cs for the SQL each controller calls into.
 builder.Services.AddSingleton<Database>();
 builder.Services.AddScoped<ReferenceDataStore>();
+builder.Services.AddScoped<AcademicYearStore>();
+builder.Services.AddScoped<TermStore>();
+builder.Services.AddScoped<SectionStore>();
 builder.Services.AddScoped<StudentStore>();
 builder.Services.AddScoped<AttendanceStore>();
 builder.Services.AddScoped<AssessmentStore>();

@@ -54,8 +54,13 @@
 
     <label>
       Section
-      <input type="text" formControlName="section" placeholder="e.g. A" />
-      @if (form.controls.section.invalid && form.controls.section.touched) {
+      <select formControlName="sectionId">
+        <option [value]="0">Select a section</option>
+        @for (section of sections(); track section.id) {
+          <option [value]="section.id">{{ section.name }}</option>
+        }
+      </select>
+      @if (form.controls.sectionId.invalid && form.controls.sectionId.touched) {
         <span class="field-error">Section is required.</span>
       }
     </label>

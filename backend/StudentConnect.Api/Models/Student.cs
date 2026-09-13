@@ -1,7 +1,7 @@
 namespace StudentConnect.Api.Models;
 
-// Mirrors the Angular Student concept, now with a GradeId foreign key
-// instead of a plain Grade number — the "many" side of the relationship.
+// Mirrors the Angular Student concept, now with GradeId and SectionId foreign keys
+// instead of plain Grade/Section strings — the "many" side of both relationships.
 public class Student
 {
     public int Id { get; set; }
@@ -9,8 +9,10 @@ public class Student
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    public string Section { get; set; } = string.Empty;
 
     public int GradeId { get; set; }
     public Grade? Grade { get; set; }
+
+    public int? SectionId { get; set; }
+    public Section? Section { get; set; }
 }

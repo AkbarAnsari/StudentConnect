@@ -29,6 +29,7 @@ import { EditActivity } from './activities/edit-activity/edit-activity';
 import { ActivityRegistrationsView } from './activities/activity-registrations-view/activity-registrations-view';
 import { ManageParents } from './parents/manage-parents/manage-parents';
 import { AnalyticsDashboard } from './analytics/analytics-dashboard/analytics-dashboard';
+import { ManageAcademicStructure } from './academic-structure/manage-academic-structure/manage-academic-structure';
 import { Contact } from './contact/contact';
 import { Login } from './auth/login/login';
 import { Dashboard } from './dashboard/dashboard';
@@ -73,6 +74,7 @@ export const routes: Routes = [
   { path: 'activity-management/:id/registrations', component: ActivityRegistrationsView, canActivate: [authGuard, teacherOrAdmin] },
   { path: 'manage-parents', component: ManageParents, canActivate: [authGuard, adminOnly] },
   { path: 'analytics', component: AnalyticsDashboard, canActivate: [authGuard, teacherOrAdmin] },
+  { path: 'manage-academic-structure', component: ManageAcademicStructure, canActivate: [authGuard, adminOnly] },
 
   { path: '**', redirectTo: '' },
 ];

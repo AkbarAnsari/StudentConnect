@@ -12,15 +12,20 @@ public class StudentStore(Database db)
         FirstName = reader.GetString("FirstName"),
         LastName = reader.GetString("LastName"),
         Email = reader.GetString("Email"),
-        Section = reader.GetString("Section"),
         GradeId = reader.GetInt32("GradeId"),
         Grade = new Grade { Id = reader.GetInt32("GradeId"), Name = reader.GetString("GradeName") },
+        SectionId = reader.GetNullableInt32("SectionId"),
+        Section = reader.GetNullableInt32("SectionId") is { } sectionId
+            ? new Section { Id = sectionId, Name = reader.GetNullableString("SectionName") ?? string.Empty }
+            : null,
     };
 
     private const string SelectWithGrade = """
-        SELECT s."Id", s."StudentId", s."FirstName", s."LastName", s."Email", s."Section", s."GradeId", g."Name" AS "GradeName"
+        SELECT s."Id", s."StudentId", s."FirstName", s."LastName", s."Email", s."GradeId", g."Name" AS "GradeName",
+               s."SectionId", sec."Name" AS "SectionName"
         FROM "Students" s
         JOIN "Grades" g ON g."Id" = s."GradeId"
+        LEFT JOIN "Sections" sec ON sec."Id" = s."SectionId"
         """;
 
     public async Task<List<Student>> GetAllAsync() =>
@@ -42,8 +47,8 @@ public class StudentStore(Database db)
     {
         var id = await db.ExecuteScalarAsync<int>(
             """
-            INSERT INTO "Students" ("StudentId", "FirstName", "LastName", "Email", "Section", "GradeId")
-            VALUES (@studentId, @firstName, @lastName, @email, @section, @gradeId)
+            INSERT INTO "Students" ("StudentId", "FirstName", "LastName", "Email", "GradeId", "SectionId")
+            VALUES (@studentId, @firstName, @lastName, @email, @gradeId, @sectionId)
             RETURNING "Id"
             """,
             p =>
@@ -52,8 +57,8 @@ public class StudentStore(Database db)
                 p.AddWithValue("firstName", student.FirstName);
                 p.AddWithValue("lastName", student.LastName);
                 p.AddWithValue("email", student.Email);
-                p.AddWithValue("section", student.Section);
                 p.AddWithValue("gradeId", student.GradeId);
+                p.AddWithValue("sectionId", (object?)student.SectionId ?? DBNull.Value);
             });
         return id;
     }
@@ -62,7 +67,7 @@ public class StudentStore(Database db)
         await db.ExecuteAsync(
             """
             UPDATE "Students"
-            SET "FirstName" = @firstName, "LastName" = @lastName, "Email" = @email, "Section" = @section, "GradeId" = @gradeId
+            SET "FirstName" = @firstName, "LastName" = @lastName, "Email" = @email, "GradeId" = @gradeId, "SectionId" = @sectionId
             WHERE "Id" = @id
             """,
             p =>
@@ -71,8 +76,8 @@ public class StudentStore(Database db)
                 p.AddWithValue("firstName", student.FirstName);
                 p.AddWithValue("lastName", student.LastName);
                 p.AddWithValue("email", student.Email);
-                p.AddWithValue("section", student.Section);
                 p.AddWithValue("gradeId", student.GradeId);
+                p.AddWithValue("sectionId", (object?)student.SectionId ?? DBNull.Value);
             });
 
     public async Task DeleteAsync(int id) =>

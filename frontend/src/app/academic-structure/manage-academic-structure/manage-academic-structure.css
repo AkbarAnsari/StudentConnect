@@ -1,0 +1,52 @@
+.structure-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.card form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 400;
+}
+
+.entity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.entity-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid #e5e7eb;
+  font-size: 0.9rem;
+}
+
+.entity-list li:first-child {
+  border-top: none;
+}
+
+.entity-list li span:first-of-type {
+  flex: 1;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: #dc2626;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+}

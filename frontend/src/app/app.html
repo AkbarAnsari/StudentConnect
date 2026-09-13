@@ -39,6 +39,7 @@
             <a routerLink="/activity-management" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Activities</a>
             @if (authService.role() === 'Admin') {
               <a routerLink="/manage-parents" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Parent Accounts</a>
+              <a routerLink="/manage-academic-structure" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Academic Structure</a>
             }
           </div>
         </div>

@@ -35,7 +35,7 @@
           <div class="student-info">
             <span class="student-id">{{ student.studentId }}</span>
             <span class="student-name">{{ student.firstName }} {{ student.lastName }}</span>
-            <span class="student-meta">{{ student.gradeName }} - Section {{ student.section }}</span>
+            <span class="student-meta">{{ student.gradeName }} - Section {{ student.sectionName }}</span>
           </div>
           <a class="view-link" [routerLink]="['/students', student.id]">View Profile</a>
         </li>

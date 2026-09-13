@@ -1,0 +1,12 @@
+namespace StudentConnect.Api.Models;
+
+// A single school year (e.g. "2026-2027"). Exactly one should be IsCurrent at a time —
+// enforced by application logic, not a DB constraint, to keep the schema simple.
+public class AcademicYear
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public DateOnly StartDate { get; set; }
+    public DateOnly EndDate { get; set; }
+    public bool IsCurrent { get; set; }
+}

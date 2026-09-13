@@ -3,6 +3,7 @@ import { Component, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { of, switchMap, tap } from 'rxjs';
 import { StudentService } from '../student.service';
 
 @Component({
@@ -19,6 +20,11 @@ export class EditStudent {
 
   private readonly studentId = Number(this.route.snapshot.paramMap.get('id'));
 
+  // The section to apply once the sections-for-this-grade list has loaded — set from the
+  // student's existing value on first load, then cleared (further grade changes reset to
+  // "no section selected" instead, since a different grade's sections don't apply).
+  private pendingSectionId: number | null = null;
+
   protected readonly grades = toSignal(this.studentService.getGrades(), { initialValue: [] });
   protected readonly student = toSignal(this.studentService.getStudentById(this.studentId), { initialValue: null });
   protected readonly loadError = signal(false);
@@ -30,19 +36,30 @@ export class EditStudent {
     lastName: ['', Validators.required],
     email: ['', [Validators.required, Validators.email]],
     gradeId: [0, [Validators.required, Validators.min(1)]],
-    section: ['', Validators.required],
+    sectionId: [0, [Validators.required, Validators.min(1)]],
   });
+
+  protected readonly sections = toSignal(
+    this.form.controls.gradeId.valueChanges.pipe(
+      switchMap((gradeId) => (gradeId > 0 ? this.studentService.getSectionsByGrade(gradeId) : of([]))),
+      tap(() => {
+        this.form.controls.sectionId.setValue(this.pendingSectionId ?? 0);
+        this.pendingSectionId = null;
+      }),
+    ),
+    { initialValue: [] },
+  );
 
   constructor() {
     effect(() => {
       const s = this.student();
       if (s) {
-        this.form.setValue({
+        this.pendingSectionId = s.sectionId;
+        this.form.patchValue({
           firstName: s.firstName,
           lastName: s.lastName,
           email: s.email,
           gradeId: s.gradeId,
-          section: s.section,
         });
       }
     });

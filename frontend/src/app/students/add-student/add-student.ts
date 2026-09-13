@@ -3,6 +3,7 @@ import { Component, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { of, switchMap } from 'rxjs';
 import { StudentService } from '../student.service';
 
 @Component({
@@ -26,8 +27,22 @@ export class AddStudent {
     lastName: ['', Validators.required],
     email: ['', [Validators.required, Validators.email]],
     gradeId: [0, [Validators.required, Validators.min(1)]],
-    section: ['', Validators.required],
+    sectionId: [0, [Validators.required, Validators.min(1)]],
   });
+
+  // Refetched every time the selected grade changes — a Section only makes sense
+  // scoped to a Grade, so the dropdown options must follow the Grade selection.
+  protected readonly sections = toSignal(
+    this.form.controls.gradeId.valueChanges.pipe(
+      switchMap((gradeId) => (gradeId > 0 ? this.studentService.getSectionsByGrade(gradeId) : of([]))),
+    ),
+    { initialValue: [] },
+  );
+
+  constructor() {
+    // A section from the previous grade would no longer be valid once the grade changes.
+    this.form.controls.gradeId.valueChanges.subscribe(() => this.form.controls.sectionId.setValue(0));
+  }
 
   protected onSubmit(): void {
     if (this.form.invalid) {

@@ -7,10 +7,11 @@ public class ParentStore(Database db)
     public async Task<List<ParentChildDto>> GetChildrenForParentAsync(int parentUserId) =>
         await db.QueryAsync(
             """
-            SELECT s."Id", s."StudentId", s."FirstName", s."LastName", s."Section", g."Name" AS "GradeName"
+            SELECT s."Id", s."StudentId", s."FirstName", s."LastName", g."Name" AS "GradeName", COALESCE(sec."Name", '') AS "SectionName"
             FROM "ParentStudents" ps
             JOIN "Students" s ON s."Id" = ps."StudentId"
             JOIN "Grades" g ON g."Id" = s."GradeId"
+            LEFT JOIN "Sections" sec ON sec."Id" = s."SectionId"
             WHERE ps."ParentUserId" = @parentUserId
             ORDER BY s."Id"
             """,
@@ -22,7 +23,7 @@ public class ParentStore(Database db)
                 FirstName = reader.GetString("FirstName"),
                 LastName = reader.GetString("LastName"),
                 GradeName = reader.GetString("GradeName"),
-                Section = reader.GetString("Section"),
+                Section = reader.GetString("SectionName"),
             });
 
     public async Task<List<int>> GetChildStudentIdsAsync(int parentUserId) =>
@@ -85,10 +86,11 @@ public class ParentStore(Database db)
     public async Task<List<(int ParentUserId, int StudentId, string StudentCode, string FirstName, string LastName, string GradeName, string Section)>> GetAllLinksAsync() =>
         await db.QueryAsync(
             """
-            SELECT ps."ParentUserId", s."Id" AS "StudentId", s."StudentId" AS "StudentCode", s."FirstName", s."LastName", g."Name" AS "GradeName", s."Section"
+            SELECT ps."ParentUserId", s."Id" AS "StudentId", s."StudentId" AS "StudentCode", s."FirstName", s."LastName", g."Name" AS "GradeName", COALESCE(sec."Name", '') AS "SectionName"
             FROM "ParentStudents" ps
             JOIN "Students" s ON s."Id" = ps."StudentId"
             JOIN "Grades" g ON g."Id" = s."GradeId"
+            LEFT JOIN "Sections" sec ON sec."Id" = s."SectionId"
             """,
             bind: null,
             reader => (
@@ -98,5 +100,5 @@ public class ParentStore(Database db)
                 FirstName: reader.GetString("FirstName"),
                 LastName: reader.GetString("LastName"),
                 GradeName: reader.GetString("GradeName"),
-                Section: reader.GetString("Section")));
+                Section: reader.GetString("SectionName")));
 }

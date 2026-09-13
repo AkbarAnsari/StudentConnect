@@ -1,0 +1,114 @@
+<section class="page page-wide">
+  <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
+  <h1>Manage Academic Structure</h1>
+
+  @if (errorMessage()) {
+    <p class="error-message">{{ errorMessage() }}</p>
+  }
+
+  <div class="structure-grid">
+    <div class="card">
+      <h2>Academic Years</h2>
+
+      <form [formGroup]="yearForm" (ngSubmit)="createAcademicYear()">
+        <label>
+          Name
+          <input type="text" formControlName="name" placeholder="e.g. 2027-2028" />
+        </label>
+        <label>
+          Start Date
+          <input type="date" formControlName="startDate" />
+        </label>
+        <label>
+          End Date
+          <input type="date" formControlName="endDate" />
+        </label>
+        <label class="checkbox-row">
+          <input type="checkbox" formControlName="isCurrent" />
+          Mark as current year
+        </label>
+        <button type="submit">Add Academic Year</button>
+      </form>
+
+      <ul class="entity-list">
+        @for (year of academicYears(); track year.id) {
+          <li>
+            <span>{{ year.name }} ({{ year.startDate }} – {{ year.endDate }})</span>
+            @if (year.isCurrent) {
+              <span class="badge badge-success">Current</span>
+            }
+            <button type="button" class="link-button" (click)="deleteAcademicYear(year.id)">Delete</button>
+          </li>
+        }
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Terms</h2>
+
+      <form [formGroup]="termForm" (ngSubmit)="createTerm()">
+        <label>
+          Academic Year
+          <select formControlName="academicYearId">
+            <option [value]="0">Select a year</option>
+            @for (year of academicYears(); track year.id) {
+              <option [value]="year.id">{{ year.name }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          Name
+          <input type="text" formControlName="name" placeholder="e.g. Term 3" />
+        </label>
+        <label>
+          Start Date
+          <input type="date" formControlName="startDate" />
+        </label>
+        <label>
+          End Date
+          <input type="date" formControlName="endDate" />
+        </label>
+        <button type="submit">Add Term</button>
+      </form>
+
+      <ul class="entity-list">
+        @for (term of terms(); track term.id) {
+          <li>
+            <span>{{ term.academicYearName }} · {{ term.name }} ({{ term.startDate }} – {{ term.endDate }})</span>
+            <button type="button" class="link-button" (click)="deleteTerm(term.id)">Delete</button>
+          </li>
+        }
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Sections</h2>
+
+      <form [formGroup]="sectionForm" (ngSubmit)="createSection()">
+        <label>
+          Grade
+          <select formControlName="gradeId">
+            <option [value]="0">Select a grade</option>
+            @for (grade of grades(); track grade.id) {
+              <option [value]="grade.id">{{ grade.name }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          Section Name
+          <input type="text" formControlName="name" placeholder="e.g. C" />
+        </label>
+        <button type="submit">Add Section</button>
+      </form>
+
+      <ul class="entity-list">
+        @for (section of sections(); track section.id) {
+          <li>
+            <span>{{ section.gradeName }} - Section {{ section.name }}</span>
+            <button type="button" class="link-button" (click)="deleteSection(section.id)">Delete</button>
+          </li>
+        }
+      </ul>
+    </div>
+  </div>
+</section>

@@ -57,8 +57,8 @@ public class AnalyticsControllerTests(DatabaseFixture fixture)
         var uniqueCode = $"ATRISK{Guid.NewGuid():N}"[..15];
         var studentId = await db.ExecuteScalarAsync<int>(
             """
-            INSERT INTO "Students" ("StudentId", "FirstName", "LastName", "Email", "Section", "GradeId")
-            VALUES (@code, 'AtRisk', 'Tester', @email, 'Z', @gradeId)
+            INSERT INTO "Students" ("StudentId", "FirstName", "LastName", "Email", "GradeId")
+            VALUES (@code, 'AtRisk', 'Tester', @email, @gradeId)
             RETURNING "Id"
             """,
             p =>

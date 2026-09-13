@@ -6,11 +6,19 @@ export interface Student {
   email: string;
   gradeId: number;
   gradeName: string;
-  section: string;
+  sectionId: number | null;
+  sectionName: string;
 }
 
 export interface Grade {
   id: number;
+  name: string;
+}
+
+export interface Section {
+  id: number;
+  gradeId: number;
+  gradeName: string;
   name: string;
 }
 
@@ -20,5 +28,5 @@ export interface StudentInput {
   lastName: string;
   email: string;
   gradeId: number;
-  section: string;
+  sectionId: number;
 }

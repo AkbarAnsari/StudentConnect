@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 using StudentConnect.Api.Auth;
+using StudentConnect.Api.Auditing;
 using StudentConnect.Api.Data;
 using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Notifications;
@@ -38,6 +39,7 @@ builder.Services.AddScoped<ParentStore>();
 builder.Services.AddScoped<NotificationStore>();
 builder.Services.AddScoped<AnalyticsStore>();
 builder.Services.AddScoped<NotificationRecipientResolver>();
+builder.Services.AddScoped<AuditLogStore>();
 
 // Today files live on local disk; a future AzureBlobStorage class could implement the
 // same IFileStorage interface without any controller/service code changing.
@@ -64,6 +66,7 @@ builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IAuditService, AuditService>();
 
 var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
+using StudentConnect.Api.Auditing;
 using StudentConnect.Api.Auth;
 using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
@@ -9,7 +10,7 @@ namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class StudentsController(StudentStore students, ReferenceDataStore referenceData, SectionStore sections, ICurrentUserService currentUser, ILogger<StudentsController> logger) : ControllerBase
+public class StudentsController(StudentStore students, ReferenceDataStore referenceData, SectionStore sections, ICurrentUserService currentUser, IAuditService audit, ILogger<StudentsController> logger) : ControllerBase
 {
     // GET /api/students
     [HttpGet]
@@ -92,6 +93,7 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
 
         var created = await students.GetByIdAsync(newId);
         var result = StudentResponseDto.FromEntity(created!);
+        await audit.LogAsync("Create", "Student", newId.ToString(), $"{dto.StudentId} {dto.FirstName} {dto.LastName}");
         return CreatedAtAction(nameof(GetStudentById), new { id = newId }, result);
     }
 
@@ -144,6 +146,7 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
         }
 
         var updated = await students.GetByIdAsync(id);
+        await audit.LogAsync("Update", "Student", id.ToString(), $"{dto.FirstName} {dto.LastName}, GradeId={dto.GradeId}, SectionId={dto.SectionId}");
         return Ok(StudentResponseDto.FromEntity(updated!));
     }
 
@@ -167,6 +170,7 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
             return StatusCode(500, new { message = "Unable to delete the student. Please try again." });
         }
 
+        await audit.LogAsync("Delete", "Student", id.ToString());
         return NoContent();
     }
 }

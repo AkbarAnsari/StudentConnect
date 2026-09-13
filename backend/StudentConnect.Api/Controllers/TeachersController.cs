@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
+using StudentConnect.Api.Auditing;
 using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
 
@@ -11,7 +12,7 @@ namespace StudentConnect.Api.Controllers;
 [ApiController]
 [Route("api/teachers")]
 [Authorize(Roles = "Admin")]
-public class TeachersController(TeacherStore teachers, UserStore users, ILogger<TeachersController> logger) : ControllerBase
+public class TeachersController(TeacherStore teachers, UserStore users, IAuditService audit, ILogger<TeachersController> logger) : ControllerBase
 {
     private static readonly PasswordHasher<ApplicationUser> Hasher = new();
 
@@ -76,6 +77,7 @@ public class TeachersController(TeacherStore teachers, UserStore users, ILogger<
         }
 
         logger.LogInformation("Admin created teacher {TeacherId} (login: {HasLogin})", dto.TeacherId, wantsLogin);
+        await audit.LogAsync("Create", "Teacher", newId.ToString(), $"{dto.TeacherId} {dto.FirstName} {dto.LastName} (login: {wantsLogin})");
 
         return CreatedAtAction(nameof(GetTeachers), null, TeacherResponseDto.FromEntity(
             new Teacher { Id = newId, TeacherId = dto.TeacherId, FirstName = dto.FirstName, LastName = dto.LastName, Email = dto.Email },
@@ -101,6 +103,7 @@ public class TeachersController(TeacherStore teachers, UserStore users, ILogger<
             return Conflict(new { message = "Cannot delete a teacher who has homework, materials, attendance records, or a login account associated with them." });
         }
 
+        await audit.LogAsync("Delete", "Teacher", id.ToString());
         return NoContent();
     }
 }

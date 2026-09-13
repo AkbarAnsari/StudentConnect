@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
+using StudentConnect.Api.Auditing;
 using StudentConnect.Api.Auth;
 using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
@@ -17,6 +18,7 @@ public class AttendanceController(
     NotificationRecipientResolver recipients,
     ICurrentUserService currentUser,
     INotificationService notifications,
+    IAuditService audit,
     ILogger<AttendanceController> logger) : ControllerBase
 {
     // GET /api/attendance
@@ -131,6 +133,7 @@ public class AttendanceController(
             await NotifyAbsence(dto.StudentId, created!.Subject!.Name, dto.Date);
         }
 
+        await audit.LogAsync("Create", "Attendance", newId.ToString(), $"StudentId={dto.StudentId}, SubjectId={dto.SubjectId}, Date={dto.Date}, Status={status}");
         var result = AttendanceRecordDto.FromEntity(created!);
         return CreatedAtAction(nameof(GetStudentAttendance), new { studentId = dto.StudentId }, result);
     }
@@ -204,6 +207,7 @@ public class AttendanceController(
             await NotifyAbsence(studentId, subject.Name, dto.Date);
         }
 
+        await audit.LogAsync("Update", "Attendance", $"subject:{dto.SubjectId}:date:{dto.Date}", $"Bulk save for {parsedRecords.Count} student(s)");
         return Ok(new { message = "Attendance saved successfully.", count = parsedRecords.Count });
     }
 
@@ -233,6 +237,7 @@ public class AttendanceController(
             return StatusCode(500, new { message = "Unable to update the attendance record. Please try again." });
         }
 
+        await audit.LogAsync("Update", "Attendance", id.ToString(), $"Status: {record.Status} -> {status}");
         record.Status = status;
         return Ok(AttendanceRecordDto.FromEntity(record));
     }

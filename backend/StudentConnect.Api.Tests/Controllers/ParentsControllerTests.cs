@@ -14,7 +14,7 @@ namespace StudentConnect.Api.Tests.Controllers;
 public class ParentsControllerTests(DatabaseFixture fixture)
 {
     private ParentsController CreateController() =>
-        new(new UserStore(fixture.Database), new ParentStore(fixture.Database), new StudentStore(fixture.Database), NullLogger<ParentsController>.Instance);
+        new(new UserStore(fixture.Database), new ParentStore(fixture.Database), new StudentStore(fixture.Database), NullAuditService.Instance, NullLogger<ParentsController>.Instance);
 
     private static string UniqueUsername(string prefix) => $"{prefix}.{Guid.NewGuid():N}"[..30];
 

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
+using StudentConnect.Api.Auditing;
 using StudentConnect.Api.Auth;
 using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
@@ -17,6 +18,7 @@ public class MarksController(
     NotificationRecipientResolver recipients,
     ICurrentUserService currentUser,
     INotificationService notifications,
+    IAuditService audit,
     ILogger<MarksController> logger) : ControllerBase
 {
     // GET /api/marks/student/{studentId}
@@ -137,6 +139,7 @@ public class MarksController(
 
         var created = await marks.GetByIdAsync(newId);
         var result = MarkRecordDto.FromEntity(created!);
+        await audit.LogAsync("Create", "Mark", newId.ToString(), $"StudentId={dto.StudentId}, AssessmentId={dto.AssessmentId}, MarksObtained={dto.MarksObtained}");
         return CreatedAtAction(nameof(GetStudentMarks), new { studentId = dto.StudentId }, result);
     }
 
@@ -201,6 +204,7 @@ public class MarksController(
             return StatusCode(500, new { message = "Unable to save marks. Please try again." });
         }
 
+        await audit.LogAsync("Update", "Mark", $"assessment:{dto.AssessmentId}", $"Bulk save for {dto.Marks.Count} student(s)");
         return Ok(new { message = "Marks saved successfully.", count = dto.Marks.Count });
     }
 
@@ -231,6 +235,7 @@ public class MarksController(
             return StatusCode(500, new { message = "Unable to update the mark. Please try again." });
         }
 
+        await audit.LogAsync("Update", "Mark", id.ToString(), $"MarksObtained: {mark.MarksObtained} -> {dto.MarksObtained}");
         mark.MarksObtained = dto.MarksObtained;
         return Ok(MarkRecordDto.FromEntity(mark));
     }

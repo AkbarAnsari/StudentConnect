@@ -1,0 +1,45 @@
+<section class="page page-wide">
+  <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
+  <h1>Audit Log</h1>
+
+  <div class="card">
+    <label>
+      Entity Type
+      <select (change)="onFilterChange($any($event.target).value)">
+        <option value="">All</option>
+        @for (type of entityTypes; track type) {
+          <option [value]="type">{{ type }}</option>
+        }
+      </select>
+    </label>
+
+    @if (logs().length === 0) {
+      <p>No audit log entries yet.</p>
+    } @else {
+      <table class="audit-table">
+        <thead>
+          <tr>
+            <th>Time (UTC)</th>
+            <th>User</th>
+            <th>Role</th>
+            <th>Action</th>
+            <th>Entity</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (log of logs(); track log.id) {
+            <tr>
+              <td>{{ log.timestampUtc | date: 'yyyy-MM-dd HH:mm:ss' }}</td>
+              <td>{{ log.username }}</td>
+              <td>{{ log.role }}</td>
+              <td>{{ log.action }}</td>
+              <td>{{ log.entityType }} #{{ log.entityId }}</td>
+              <td>{{ log.details }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</section>

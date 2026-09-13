@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using StudentConnect.Api.Auditing;
 using StudentConnect.Api.Data.Stores;
 using StudentConnect.Api.Models;
 
@@ -13,7 +14,7 @@ namespace StudentConnect.Api.Controllers;
 [ApiController]
 [Route("api/parents")]
 [Authorize(Roles = "Admin")]
-public class ParentsController(UserStore users, ParentStore parents, StudentStore students, ILogger<ParentsController> logger) : ControllerBase
+public class ParentsController(UserStore users, ParentStore parents, StudentStore students, IAuditService audit, ILogger<ParentsController> logger) : ControllerBase
 {
     private static readonly PasswordHasher<ApplicationUser> Hasher = new();
 
@@ -74,6 +75,7 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
         }
 
         logger.LogInformation("Admin created parent account {Username} linked to {Count} child(ren)", dto.Username, distinctChildIds.Count);
+        await audit.LogAsync("Create", "Parent", newUserId.ToString(), $"{dto.Username}, linked to {distinctChildIds.Count} child(ren)");
 
         var children = await parents.GetChildrenForParentAsync(newUserId);
         user.Id = newUserId;
@@ -102,6 +104,7 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
         await parents.LinkChildAsync(parentId, dto.StudentId);
 
         logger.LogInformation("Linked parent {ParentId} to student {StudentId}", parentId, dto.StudentId);
+        await audit.LogAsync("Update", "Parent", parentId.ToString(), $"Linked to student {dto.StudentId}");
         return NoContent();
     }
 
@@ -116,6 +119,7 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
         }
 
         logger.LogInformation("Unlinked parent {ParentId} from student {StudentId}", parentId, studentId);
+        await audit.LogAsync("Update", "Parent", parentId.ToString(), $"Unlinked from student {studentId}");
         return NoContent();
     }
 }

@@ -33,6 +33,7 @@ import { ManageAcademicStructure } from './academic-structure/manage-academic-st
 import { ManageTeachers } from './teachers/manage-teachers/manage-teachers';
 import { MyClasses } from './teachers/my-classes/my-classes';
 import { AuditLogViewer } from './audit-log/audit-log-viewer/audit-log-viewer';
+import { SearchPage } from './search/search-page/search-page';
 import { Contact } from './contact/contact';
 import { Login } from './auth/login/login';
 import { Dashboard } from './dashboard/dashboard';
@@ -82,6 +83,7 @@ export const routes: Routes = [
   { path: 'manage-teachers', component: ManageTeachers, canActivate: [authGuard, adminOnly] },
   { path: 'my-classes', component: MyClasses, canActivate: [authGuard, teacherOnly] },
   { path: 'audit-log', component: AuditLogViewer, canActivate: [authGuard, adminOnly] },
+  { path: 'search', component: SearchPage, canActivate: [authGuard, teacherOrAdmin] },
 
   { path: '**', redirectTo: '' },
 ];

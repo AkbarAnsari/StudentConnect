@@ -22,6 +22,7 @@
       }
       @if (authService.role() === 'Teacher' || authService.role() === 'Admin') {
         <a routerLink="/students" routerLinkActive="active" (click)="closeMobileMenu()">Students</a>
+        <a routerLink="/search" routerLinkActive="active" (click)="closeMobileMenu()">Search</a>
 
         <div class="nav-dropdown" [class.open]="manageMenuOpen()">
           <button type="button" class="nav-dropdown-toggle" (click)="toggleManageMenu()">

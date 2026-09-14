@@ -4,6 +4,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, map, of, startWith } from 'rxjs';
+import { triggerBlobDownload } from '../../shared/download.util';
 import { Homework, HomeworkSubmission } from '../homework.model';
 import { HomeworkService, HomeworkSubmissionService } from '../homework.service';
 
@@ -44,6 +45,8 @@ export class HomeworkDetail {
   protected readonly submitting = signal(false);
   protected readonly successMessage = signal('');
   protected readonly errorMessage = signal('');
+  protected readonly selectedFile = signal<File | null>(null);
+  protected readonly editing = signal(false);
 
   protected readonly form = this.fb.nonNullable.group({
     comments: ['', Validators.required],
@@ -59,6 +62,30 @@ export class HomeworkDetail {
     });
   }
 
+  protected onFileChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.selectedFile.set(input.files?.[0] ?? null);
+  }
+
+  protected startEdit(): void {
+    const s = this.existingSubmission();
+    if (s) {
+      this.form.patchValue({ comments: s.comments });
+    }
+    this.selectedFile.set(null);
+    this.successMessage.set('');
+    this.errorMessage.set('');
+    this.editing.set(true);
+  }
+
+  protected download(): void {
+    const s = this.existingSubmission();
+    if (!s?.fileName) {
+      return;
+    }
+    this.submissionService.downloadFile(s.id).subscribe((blob) => triggerBlobDownload(blob, s.fileName!));
+  }
+
   protected onSubmit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -68,22 +95,27 @@ export class HomeworkDetail {
     this.submitting.set(true);
     this.errorMessage.set('');
 
-    this.submissionService
-      .createSubmission({ homeworkId: this.homeworkId, comments: this.form.getRawValue().comments })
-      .subscribe({
-        next: (submission) => {
-          this.submitting.set(false);
-          this.existingSubmission.set(submission);
-          this.successMessage.set('Homework submitted successfully.');
-        },
-        error: (err: HttpErrorResponse) => {
-          this.submitting.set(false);
-          this.errorMessage.set(
-            err.status === 409
-              ? 'You have already submitted this homework.'
-              : 'Unable to submit homework. Please check whether the StudentConnect API is running.',
-          );
-        },
-      });
+    const comments = this.form.getRawValue().comments;
+    const existing = this.existingSubmission();
+    const request = existing
+      ? this.submissionService.updateSubmission(existing.id, comments, this.selectedFile())
+      : this.submissionService.createSubmission(this.homeworkId, comments, this.selectedFile());
+
+    request.subscribe({
+      next: (submission) => {
+        this.submitting.set(false);
+        this.existingSubmission.set(submission);
+        this.editing.set(false);
+        this.successMessage.set(existing ? 'Submission updated successfully.' : 'Homework submitted successfully.');
+      },
+      error: (err: HttpErrorResponse) => {
+        this.submitting.set(false);
+        this.errorMessage.set(
+          err.status === 409
+            ? 'You have already submitted this homework.'
+            : (err.error?.message ?? 'Unable to submit homework. Please check whether the StudentConnect API is running.'),
+        );
+      },
+    });
   }
 }

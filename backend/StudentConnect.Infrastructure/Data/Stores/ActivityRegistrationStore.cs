@@ -51,6 +51,14 @@ public class ActivityRegistrationStore(Database db)
         return (int)count;
     }
 
+    public async Task<int> CountWaitlistedAsync(int activityId)
+    {
+        var count = await db.ExecuteScalarAsync<long>(
+            """SELECT COUNT(*) FROM "ActivityRegistrations" WHERE "ActivityId" = @activityId AND "Status" = 'Waitlisted'""",
+            p => p.AddWithValue("activityId", activityId));
+        return (int)count;
+    }
+
     public async Task UpdateStatusAsync(int id, ActivityRegistrationStatus status) =>
         await db.ExecuteAsync(
             """UPDATE "ActivityRegistrations" SET "Status" = @status WHERE "Id" = @id""",
@@ -88,28 +96,64 @@ public class ActivityRegistrationStore(Database db)
         return (int)(long)(await command.ExecuteScalarAsync())!;
     }
 
-    public async Task<int> InsertInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int studentId, int activityId, DateTime registrationDate)
+    public async Task<int> InsertInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int studentId, int activityId, DateTime registrationDate, ActivityRegistrationStatus status)
     {
         await using var command = new NpgsqlCommand(
             """
             INSERT INTO "ActivityRegistrations" ("StudentId", "ActivityId", "RegistrationDate", "Status")
-            VALUES (@studentId, @activityId, @registrationDate, 'Registered')
+            VALUES (@studentId, @activityId, @registrationDate, @status)
             RETURNING "Id"
             """,
             connection, tx);
         command.Parameters.AddWithValue("studentId", studentId);
         command.Parameters.AddWithValue("activityId", activityId);
         command.Parameters.AddWithValue("registrationDate", registrationDate);
+        command.Parameters.AddWithValue("status", status.ToString());
         return (int)(await command.ExecuteScalarAsync())!;
     }
 
-    public async Task ReactivateInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int id, DateTime registrationDate)
+    public async Task ReactivateInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int id, DateTime registrationDate, ActivityRegistrationStatus status)
     {
         await using var command = new NpgsqlCommand(
-            """UPDATE "ActivityRegistrations" SET "Status" = 'Registered', "RegistrationDate" = @registrationDate WHERE "Id" = @id""",
+            """UPDATE "ActivityRegistrations" SET "Status" = @status, "RegistrationDate" = @registrationDate WHERE "Id" = @id""",
             connection, tx);
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("registrationDate", registrationDate);
+        command.Parameters.AddWithValue("status", status.ToString());
+        await command.ExecuteNonQueryAsync();
+    }
+
+    public async Task UpdateStatusInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int id, ActivityRegistrationStatus status)
+    {
+        await using var command = new NpgsqlCommand(
+            """UPDATE "ActivityRegistrations" SET "Status" = @status WHERE "Id" = @id""",
+            connection, tx);
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("status", status.ToString());
+        await command.ExecuteNonQueryAsync();
+    }
+
+    // Earliest-waitlisted-first — the next student in line when a Registered seat frees up.
+    public async Task<int?> GetEarliestWaitlistedInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int activityId)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT "Id" FROM "ActivityRegistrations"
+            WHERE "ActivityId" = @activityId AND "Status" = 'Waitlisted'
+            ORDER BY "RegistrationDate" LIMIT 1
+            """,
+            connection, tx);
+        command.Parameters.AddWithValue("activityId", activityId);
+        var result = await command.ExecuteScalarAsync();
+        return result is null ? null : (int)result;
+    }
+
+    public async Task PromoteInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int id)
+    {
+        await using var command = new NpgsqlCommand(
+            """UPDATE "ActivityRegistrations" SET "Status" = 'Registered' WHERE "Id" = @id""",
+            connection, tx);
+        command.Parameters.AddWithValue("id", id);
         await command.ExecuteNonQueryAsync();
     }
 }

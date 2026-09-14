@@ -13,6 +13,8 @@ public class AssessmentDto
     public int MaximumMarks { get; set; }
     public string AssessmentType { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public int? TermId { get; set; }
+    public string? TermName { get; set; }
 
     public static AssessmentDto FromEntity(Assessment assessment) => new()
     {
@@ -24,6 +26,8 @@ public class AssessmentDto
         MaximumMarks = assessment.MaximumMarks,
         AssessmentType = assessment.AssessmentType.ToString(),
         Description = assessment.Description,
+        TermId = assessment.TermId,
+        TermName = assessment.Term?.Name,
     };
 }
 
@@ -35,6 +39,7 @@ public class AssessmentCreateDto
     public int MaximumMarks { get; set; }
     public string AssessmentType { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public int? TermId { get; set; }
 }
 
 public class AssessmentUpdateDto
@@ -45,4 +50,5 @@ public class AssessmentUpdateDto
     public int MaximumMarks { get; set; }
     public string AssessmentType { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public int? TermId { get; set; }
 }

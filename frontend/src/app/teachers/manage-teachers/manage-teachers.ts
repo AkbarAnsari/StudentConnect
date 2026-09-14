@@ -19,6 +19,10 @@ export class ManageTeachers {
   protected readonly submitting = signal(false);
   protected readonly errorMessage = signal('');
 
+  protected readonly editingId = signal<number | null>(null);
+  protected readonly editSubmitting = signal(false);
+  protected readonly editError = signal('');
+
   protected readonly form = this.fb.nonNullable.group({
     teacherId: ['', Validators.required],
     firstName: ['', Validators.required],
@@ -28,12 +32,51 @@ export class ManageTeachers {
     password: [''],
   });
 
+  protected readonly editForm = this.fb.nonNullable.group({
+    firstName: ['', Validators.required],
+    lastName: ['', Validators.required],
+    email: ['', [Validators.required, Validators.email]],
+  });
+
   constructor() {
     this.loadTeachers();
   }
 
   private loadTeachers(): void {
-    this.teacherService.getTeachers().subscribe((teachers) => this.teachers.set(teachers));
+    this.teacherService.getTeachers().subscribe((result) => this.teachers.set(result.items));
+  }
+
+  protected startEdit(teacher: Teacher): void {
+    this.editingId.set(teacher.id);
+    this.editError.set('');
+    this.editForm.setValue({ firstName: teacher.firstName, lastName: teacher.lastName, email: teacher.email });
+  }
+
+  protected cancelEdit(): void {
+    this.editingId.set(null);
+    this.editError.set('');
+  }
+
+  protected saveEdit(id: number): void {
+    if (this.editForm.invalid) {
+      this.editForm.markAllAsTouched();
+      return;
+    }
+
+    this.editSubmitting.set(true);
+    this.editError.set('');
+
+    this.teacherService.updateTeacher(id, this.editForm.getRawValue()).subscribe({
+      next: () => {
+        this.editSubmitting.set(false);
+        this.editingId.set(null);
+        this.loadTeachers();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.editSubmitting.set(false);
+        this.editError.set(err.error?.message ?? 'Unable to update the teacher.');
+      },
+    });
   }
 
   protected onSubmit(): void {

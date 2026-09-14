@@ -35,6 +35,14 @@
       }
     </label>
 
+    <label>
+      Admin email
+      <input type="email" formControlName="adminEmail" autocomplete="email" />
+      @if (form.controls.adminEmail.invalid && form.controls.adminEmail.touched) {
+        <span class="field-error">A valid email address is required.</span>
+      }
+    </label>
+
     <button type="submit" [disabled]="submitting()">
       {{ submitting() ? 'Creating your school...' : 'Create my school' }}
     </button>

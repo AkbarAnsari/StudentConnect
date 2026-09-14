@@ -12,6 +12,7 @@ public class AttendanceRecordDto
     public string SubjectName { get; set; } = string.Empty;
     public DateOnly Date { get; set; }
     public string Status { get; set; } = string.Empty;
+    public string? CorrectionReason { get; set; }
 
     public static AttendanceRecordDto FromEntity(Attendance attendance) => new()
     {
@@ -22,6 +23,7 @@ public class AttendanceRecordDto
         SubjectName = attendance.Subject?.Name ?? string.Empty,
         Date = attendance.Date,
         Status = attendance.Status.ToString(),
+        CorrectionReason = attendance.CorrectionReason,
     };
 }
 
@@ -38,6 +40,7 @@ public class AttendanceCreateDto
 public class AttendanceUpdateDto
 {
     public string Status { get; set; } = string.Empty;
+    public string? Reason { get; set; }
 }
 
 // Per-subject attendance percentage — calculated on the backend, never in Angular.
@@ -63,4 +66,5 @@ public class BulkAttendanceItemDto
 {
     public int StudentId { get; set; }
     public string Status { get; set; } = string.Empty;
+    public string? Reason { get; set; }
 }

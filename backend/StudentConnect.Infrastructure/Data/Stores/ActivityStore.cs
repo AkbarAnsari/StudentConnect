@@ -31,6 +31,17 @@ public class ActivityStore(Database db)
     public async Task<Activity?> GetByIdAsync(int id) =>
         await db.QuerySingleOrDefaultAsync($"""{SelectWithGrade} WHERE a."Id" = @id""", p => p.AddWithValue("id", id), Map);
 
+    // Tenant-scoped transitively through Grade (Activities have no direct SchoolId column).
+    public async Task<Activity?> GetByIdAsync(int id, int schoolId) =>
+        await db.QuerySingleOrDefaultAsync(
+            $"""{SelectWithGrade} WHERE a."Id" = @id AND g."SchoolId" = @schoolId""",
+            p =>
+            {
+                p.AddWithValue("id", id);
+                p.AddWithValue("schoolId", schoolId);
+            },
+            Map);
+
     public async Task<List<Activity>> GetByGradeAsync(int gradeId) =>
         await db.QueryAsync($"""{SelectWithGrade} WHERE a."GradeId" = @gradeId ORDER BY a."Date" """, p => p.AddWithValue("gradeId", gradeId), Map);
 

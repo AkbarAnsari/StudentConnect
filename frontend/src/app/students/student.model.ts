@@ -1,3 +1,5 @@
+export type StudentLifecycleStatus = 'Active' | 'Withdrawn' | 'Graduated' | 'Transferred';
+
 export interface Student {
   id: number;
   studentId: string;
@@ -8,6 +10,11 @@ export interface Student {
   gradeName: string;
   sectionId: number | null;
   sectionName: string;
+  status: StudentLifecycleStatus;
+  statusReason: string | null;
+  dateOfBirth: string | null;
+  phone: string | null;
+  address: string | null;
 }
 
 export interface Grade {
@@ -22,6 +29,7 @@ export interface Section {
   name: string;
   homeroomTeacherId: number | null;
   homeroomTeacherName: string | null;
+  isArchived: boolean;
 }
 
 export interface StudentInput {
@@ -31,4 +39,25 @@ export interface StudentInput {
   email: string;
   gradeId: number;
   sectionId: number;
+  dateOfBirth?: string | null;
+  phone?: string | null;
+  address?: string | null;
+}
+
+export interface StudentStatusUpdate {
+  status: StudentLifecycleStatus;
+  reason?: string;
+}
+
+export interface StudentImportRowResult {
+  row: number;
+  success: boolean;
+  message: string | null;
+  studentId: string | null;
+}
+
+export interface StudentImportResult {
+  totalRows: number;
+  successCount: number;
+  errors: StudentImportRowResult[];
 }

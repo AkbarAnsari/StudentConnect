@@ -13,7 +13,7 @@ namespace StudentConnect.Api.Controllers;
 [ApiController]
 [Route("api/ops")]
 [Authorize(Roles = "Admin")]
-public class OpsController(Database db, EmailOutboxStore emailOutbox, IWebHostEnvironment environment) : ControllerBase
+public class OpsController(Database db, EmailOutboxStore emailOutbox, ICurrentTenantService currentTenant, IWebHostEnvironment environment) : ControllerBase
 {
     private static readonly DateTime ProcessStartUtc = Process.GetCurrentProcess().StartTime.ToUniversalTime();
 
@@ -21,6 +21,11 @@ public class OpsController(Database db, EmailOutboxStore emailOutbox, IWebHostEn
     [HttpGet("info")]
     public async Task<ActionResult<OpsInfoDto>> GetInfo()
     {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
         var databaseHealthy = true;
         try
         {
@@ -31,7 +36,7 @@ public class OpsController(Database db, EmailOutboxStore emailOutbox, IWebHostEn
             databaseHealthy = false;
         }
 
-        var (pending, failed) = await emailOutbox.GetStatsAsync();
+        var (pending, failed) = await emailOutbox.GetStatsAsync(schoolId);
 
         return Ok(new OpsInfoDto
         {

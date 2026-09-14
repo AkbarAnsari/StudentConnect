@@ -9,6 +9,20 @@ export interface SchoolRegistrationRequest {
   schoolName: string;
   adminUsername: string;
   adminPassword: string;
+  adminEmail: string;
+}
+
+export interface ForgotPasswordRequest {
+  username: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  newPassword: string;
+}
+
+export interface VerifyEmailRequest {
+  token: string;
 }
 
 export interface ParentChild {
@@ -22,11 +36,13 @@ export interface ParentChild {
 
 export interface LoginResponse {
   token: string;
+  refreshToken: string;
   username: string;
   role: UserRole;
   displayName: string;
   studentId: number | null;
   teacherId: number | null;
+  emailVerified: boolean;
   children: ParentChild[] | null;
 }
 
@@ -36,5 +52,6 @@ export interface CurrentUser {
   displayName: string;
   studentId: number | null;
   teacherId: number | null;
+  emailVerified: boolean;
   children: ParentChild[] | null;
 }

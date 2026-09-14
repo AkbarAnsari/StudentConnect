@@ -36,6 +36,9 @@
   @if (errorMessage()) {
     <p class="error-message">{{ errorMessage() }}</p>
   }
+  @if (loadingExisting()) {
+    <p class="notice">Loading any marks already recorded for this assessment...</p>
+  }
 
   @if (selectedAssessment(); as a) {
     <table class="roster-table">

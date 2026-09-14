@@ -7,7 +7,7 @@ namespace StudentConnect.Infrastructure.Data.Stores;
 public class TermStore(Database db)
 {
     private const string SelectWithYear = """
-        SELECT t."Id", t."AcademicYearId", t."Name", t."StartDate", t."EndDate", ay."Name" AS "AcademicYearName"
+        SELECT t."Id", t."AcademicYearId", t."Name", t."StartDate", t."EndDate", t."IsLocked", ay."Name" AS "AcademicYearName"
         FROM "Terms" t
         JOIN "AcademicYears" ay ON ay."Id" = t."AcademicYearId"
         """;
@@ -20,6 +20,7 @@ public class TermStore(Database db)
         Name = reader.GetString("Name"),
         StartDate = reader.GetDateOnly("StartDate"),
         EndDate = reader.GetDateOnly("EndDate"),
+        IsLocked = reader.GetBoolean("IsLocked"),
     };
 
     public async Task<List<Term>> GetAllAsync() =>
@@ -70,4 +71,13 @@ public class TermStore(Database db)
 
     public async Task DeleteAsync(int id) =>
         await db.ExecuteAsync("""DELETE FROM "Terms" WHERE "Id" = @id""", p => p.AddWithValue("id", id));
+
+    public async Task<bool> IsLockedAsync(int id) =>
+        await db.ExecuteScalarAsync<bool>("""SELECT "IsLocked" FROM "Terms" WHERE "Id" = @id""", p => p.AddWithValue("id", id));
+
+    public async Task LockAsync(int id) =>
+        await db.ExecuteAsync("""UPDATE "Terms" SET "IsLocked" = true WHERE "Id" = @id""", p => p.AddWithValue("id", id));
+
+    public async Task UnlockAsync(int id) =>
+        await db.ExecuteAsync("""UPDATE "Terms" SET "IsLocked" = false WHERE "Id" = @id""", p => p.AddWithValue("id", id));
 }

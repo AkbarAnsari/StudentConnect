@@ -16,4 +16,14 @@ public class HomeworkSubmission
     public DateTime SubmittedDate { get; set; }
     public HomeworkSubmissionStatus Status { get; set; }
     public string Comments { get; set; } = string.Empty;
+
+    // Optional student-attached file, mirroring LearningMaterial's storage columns.
+    public string? FileName { get; set; }
+    public string? StoredFileName { get; set; }
+    public string? ContentType { get; set; }
+    public long? FileSize { get; set; }
+
+    // Optional teacher feedback, distinct from any separately-recorded Mark.
+    public string? TeacherFeedback { get; set; }
+    public DateTime? FeedbackAtUtc { get; set; }
 }

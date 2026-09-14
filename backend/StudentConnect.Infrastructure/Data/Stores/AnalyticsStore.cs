@@ -8,23 +8,24 @@ namespace StudentConnect.Infrastructure.Data.Stores;
 // than pulled into memory and aggregated in C#, since that's what a database is for.
 public class AnalyticsStore(Database db)
 {
-    public async Task<AnalyticsOverviewDto> GetOverviewAsync()
+    public async Task<AnalyticsOverviewDto> GetOverviewAsync(int schoolId)
     {
         const string sql = """
             SELECT
-                (SELECT COUNT(*) FROM "Students") AS "TotalStudents",
-                (SELECT COUNT(*) FROM "Teachers") AS "TotalTeachers",
-                (SELECT COUNT(*) FROM "Subjects") AS "TotalSubjects",
-                (SELECT COUNT(*) FROM "Attendance") AS "AttendanceTotal",
-                (SELECT COUNT(*) FROM "Attendance" WHERE "Status" = 'Present') AS "AttendancePresent",
-                (SELECT COUNT(*) FROM "Marks") AS "MarksCount",
+                (SELECT COUNT(*) FROM "Students" WHERE "SchoolId" = @schoolId) AS "TotalStudents",
+                (SELECT COUNT(*) FROM "Teachers" WHERE "SchoolId" = @schoolId) AS "TotalTeachers",
+                (SELECT COUNT(*) FROM "Subjects" WHERE "SchoolId" = @schoolId) AS "TotalSubjects",
+                (SELECT COUNT(*) FROM "Attendance" a JOIN "Students" s ON s."Id" = a."StudentId" WHERE s."SchoolId" = @schoolId) AS "AttendanceTotal",
+                (SELECT COUNT(*) FROM "Attendance" a JOIN "Students" s ON s."Id" = a."StudentId" WHERE s."SchoolId" = @schoolId AND a."Status" = 'Present') AS "AttendancePresent",
+                (SELECT COUNT(*) FROM "Marks" m JOIN "Students" s ON s."Id" = m."StudentId" WHERE s."SchoolId" = @schoolId) AS "MarksCount",
                 (SELECT COALESCE(SUM(m."MarksObtained" * 100.0 / a."MaximumMarks"), 0)::double precision
-                   FROM "Marks" m JOIN "Assessments" a ON a."Id" = m."AssessmentId") AS "MarksPercentageSum"
+                   FROM "Marks" m JOIN "Assessments" a ON a."Id" = m."AssessmentId" JOIN "Students" s ON s."Id" = m."StudentId"
+                   WHERE s."SchoolId" = @schoolId) AS "MarksPercentageSum"
             """;
 
         var row = await db.QuerySingleOrDefaultAsync(
             sql,
-            bind: null,
+            bind: p => p.AddWithValue("schoolId", schoolId),
             map: reader => new
             {
                 TotalStudents = reader.GetInt32("TotalStudents"),
@@ -46,17 +47,18 @@ public class AnalyticsStore(Database db)
         };
     }
 
-    public async Task<List<GradeAttendanceDto>> GetAttendanceByGradeAsync() =>
+    public async Task<List<GradeAttendanceDto>> GetAttendanceByGradeAsync(int schoolId) =>
         await db.QueryAsync(
             """
             SELECT s."GradeId", g."Name" AS "GradeName", COUNT(*) AS "Total", COUNT(*) FILTER (WHERE a."Status" = 'Present') AS "Present"
             FROM "Attendance" a
             JOIN "Students" s ON s."Id" = a."StudentId"
             JOIN "Grades" g ON g."Id" = s."GradeId"
+            WHERE s."SchoolId" = @schoolId
             GROUP BY s."GradeId", g."Name"
             ORDER BY g."Name"
             """,
-            bind: null,
+            bind: p => p.AddWithValue("schoolId", schoolId),
             map: reader =>
             {
                 var total = reader.GetInt64("Total");
@@ -70,7 +72,7 @@ public class AnalyticsStore(Database db)
                 };
             });
 
-    public async Task<List<GradeMarksDto>> GetMarksByGradeAsync()
+    public async Task<List<GradeMarksDto>> GetMarksByGradeAsync(int schoolId)
     {
         var rows = await db.QueryAsync(
             """
@@ -79,10 +81,11 @@ public class AnalyticsStore(Database db)
             JOIN "Students" s ON s."Id" = m."StudentId"
             JOIN "Assessments" a ON a."Id" = m."AssessmentId"
             JOIN "Grades" g ON g."Id" = s."GradeId"
+            WHERE s."SchoolId" = @schoolId
             GROUP BY s."GradeId", g."Name"
             ORDER BY g."Name"
             """,
-            bind: null,
+            bind: p => p.AddWithValue("schoolId", schoolId),
             map: reader => new GradeMarksDto
             {
                 GradeId = reader.GetInt32("GradeId"),
@@ -98,7 +101,7 @@ public class AnalyticsStore(Database db)
         return rows;
     }
 
-    public async Task<List<AtRiskStudentDto>> GetAtRiskStudentsAsync(double attendanceThreshold, double marksThreshold) =>
+    public async Task<List<AtRiskStudentDto>> GetAtRiskStudentsAsync(int schoolId, double attendanceThreshold, double marksThreshold) =>
         await db.QueryAsync(
             """
             WITH attendance_stats AS (
@@ -120,12 +123,14 @@ public class AnalyticsStore(Database db)
             JOIN "Grades" g ON g."Id" = s."GradeId"
             LEFT JOIN attendance_stats att ON att."StudentId" = s."Id"
             LEFT JOIN marks_stats ms ON ms."StudentId" = s."Id"
-            WHERE (att.total > 0 AND (att.present * 100.0 / att.total) < @attendanceThreshold)
-               OR (ms.avg_pct IS NOT NULL AND ms.avg_pct < @marksThreshold)
+            WHERE s."SchoolId" = @schoolId
+              AND ((att.total > 0 AND (att.present * 100.0 / att.total) < @attendanceThreshold)
+               OR (ms.avg_pct IS NOT NULL AND ms.avg_pct < @marksThreshold))
             ORDER BY COALESCE(att.present * 100.0 / NULLIF(att.total, 0), 100)
             """,
             p =>
             {
+                p.AddWithValue("schoolId", schoolId);
                 p.AddWithValue("attendanceThreshold", attendanceThreshold);
                 p.AddWithValue("marksThreshold", marksThreshold);
             },
@@ -138,4 +143,57 @@ public class AnalyticsStore(Database db)
                 AttendancePercentage = reader.IsDBNull(reader.GetOrdinal("AttendancePercentage")) ? null : reader.GetDouble("AttendancePercentage"),
                 AverageMarksPercentage = reader.IsDBNull(reader.GetOrdinal("MarksPercentage")) ? null : reader.GetDouble("MarksPercentage"),
             });
+
+    // Monthly attendance/marks rollup for the last N months, scoped to one school — the trend
+    // chart's whole point is seeing change over time, so (unlike the other queries above) this
+    // one is deliberately tenant-scoped via the Students join.
+    public async Task<List<MonthlyTrendDto>> GetTrendAsync(int schoolId, int months)
+    {
+        var sinceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(-months));
+
+        return await db.QueryAsync(
+            """
+            WITH attendance_monthly AS (
+                SELECT date_trunc('month', a."Date"::timestamp) AS month,
+                       COUNT(*) AS total, COUNT(*) FILTER (WHERE a."Status" = 'Present') AS present
+                FROM "Attendance" a
+                JOIN "Students" st ON st."Id" = a."StudentId"
+                WHERE st."SchoolId" = @schoolId AND a."Date" >= @sinceDate
+                GROUP BY month
+            ),
+            marks_monthly AS (
+                SELECT date_trunc('month', asm."Date"::timestamp) AS month,
+                       SUM(m."MarksObtained") AS obtained, SUM(asm."MaximumMarks") AS maximum
+                FROM "Marks" m
+                JOIN "Assessments" asm ON asm."Id" = m."AssessmentId"
+                JOIN "Students" st ON st."Id" = m."StudentId"
+                WHERE st."SchoolId" = @schoolId AND asm."Date" >= @sinceDate
+                GROUP BY month
+            )
+            SELECT COALESCE(am.month, mm.month) AS "Month",
+                   COALESCE(am.total, 0) AS "Total", COALESCE(am.present, 0) AS "Present",
+                   COALESCE(mm.obtained, 0) AS "Obtained", COALESCE(mm.maximum, 0) AS "Maximum"
+            FROM attendance_monthly am
+            FULL OUTER JOIN marks_monthly mm ON am.month = mm.month
+            ORDER BY "Month"
+            """,
+            p =>
+            {
+                p.AddWithValue("schoolId", schoolId);
+                p.AddWithValue("sinceDate", sinceDate);
+            },
+            reader =>
+            {
+                var total = reader.GetInt64("Total");
+                var present = reader.GetInt64("Present");
+                var obtained = reader.GetInt64("Obtained");
+                var maximum = reader.GetInt64("Maximum");
+                return new MonthlyTrendDto
+                {
+                    Month = reader.GetFieldValue<DateTime>(reader.GetOrdinal("Month")).ToString("yyyy-MM"),
+                    AttendancePercentage = total == 0 ? 0 : Math.Round(present * 100.0 / total, 1),
+                    MarksPercentage = maximum == 0 ? 0 : Math.Round(obtained * 100.0 / maximum, 1),
+                };
+            });
+    }
 }

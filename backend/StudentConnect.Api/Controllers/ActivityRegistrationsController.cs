@@ -5,6 +5,7 @@ using StudentConnect.Application;
 using StudentConnect.Domain;
 using StudentConnect.Infrastructure.Data;
 using StudentConnect.Infrastructure.Data.Stores;
+using StudentConnect.Infrastructure.Notifications;
 
 namespace StudentConnect.Api.Controllers;
 
@@ -15,7 +16,10 @@ public class ActivityRegistrationsController(
     StudentStore students,
     ActivityStore activities,
     Database db,
+    NotificationRecipientResolver recipients,
+    INotificationService notifications,
     ICurrentUserService currentUser,
+    ICurrentTenantService currentTenant,
     ILogger<ActivityRegistrationsController> logger) : ControllerBase
 {
     // GET /api/activity-registrations/student/{studentId}
@@ -27,7 +31,7 @@ public class ActivityRegistrationsController(
             return Forbid();
         }
 
-        if (!await students.ExistsAsync(studentId))
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(studentId, schoolId))
         {
             return NotFound(new { message = "Student not found." });
         }
@@ -41,7 +45,7 @@ public class ActivityRegistrationsController(
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<IEnumerable<ActivityRegistrationDto>>> GetActivityRegistrations(int activityId)
     {
-        if (await activities.GetByIdAsync(activityId) is null)
+        if (currentTenant.SchoolId is not { } schoolId || await activities.GetByIdAsync(activityId, schoolId) is null)
         {
             return NotFound(new { message = "Activity not found." });
         }
@@ -66,6 +70,11 @@ public class ActivityRegistrationsController(
             return Forbid();
         }
 
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(registration.StudentId, schoolId))
+        {
+            return NotFound();
+        }
+
         return Ok(ActivityRegistrationDto.FromEntity(registration));
     }
 
@@ -80,13 +89,18 @@ public class ActivityRegistrationsController(
             return Forbid();
         }
 
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
         var student = await students.GetByIdAsync(studentId);
         if (student is null)
         {
             return BadRequest(new { message = "Student does not exist." });
         }
 
-        var activity = await activities.GetByIdAsync(dto.ActivityId);
+        var activity = await activities.GetByIdAsync(dto.ActivityId, schoolId);
         if (activity is null)
         {
             return BadRequest(new { message = "Activity does not exist." });
@@ -106,43 +120,38 @@ public class ActivityRegistrationsController(
         // requests both read a capacity count that's about to become stale — a stronger guarantee
         // (e.g. serializable isolation or a concurrency token) would be needed for a highly
         // concurrent production system; that's out of scope for this learning project.
+        // An activity at capacity waitlists the student instead of rejecting them outright.
         int registrationId;
         var registrationDate = DateTime.UtcNow;
         try
         {
-            var (Id, IsFull, AlreadyRegistered) = await db.WithTransactionAsync(async (connection, tx) =>
+            var (Id, AlreadyRegistered) = await db.WithTransactionAsync(async (connection, tx) =>
             {
                 var (existingId, existingStatus) = await registrations.GetExistingInTxAsync(connection, tx, studentId, dto.ActivityId);
 
-                if (existingId is not null && existingStatus == ActivityRegistrationStatus.Registered)
+                if (existingId is not null && existingStatus is ActivityRegistrationStatus.Registered or ActivityRegistrationStatus.Waitlisted)
                 {
-                    return (existingId.Value, false, true);
+                    return (existingId.Value, true);
                 }
 
                 var currentRegistrations = await registrations.CountActiveInTxAsync(connection, tx, dto.ActivityId);
-                if (currentRegistrations >= activity.Capacity)
-                {
-                    return (0, true, false);
-                }
+                var targetStatus = currentRegistrations >= activity.Capacity
+                    ? ActivityRegistrationStatus.Waitlisted
+                    : ActivityRegistrationStatus.Registered;
 
                 if (existingId is not null)
                 {
-                    await registrations.ReactivateInTxAsync(connection, tx, existingId.Value, registrationDate);
-                    return (existingId.Value, false, false);
+                    await registrations.ReactivateInTxAsync(connection, tx, existingId.Value, registrationDate, targetStatus);
+                    return (existingId.Value, false);
                 }
 
-                var newId = await registrations.InsertInTxAsync(connection, tx, studentId, dto.ActivityId, registrationDate);
-                return (newId, false, false);
+                var newId = await registrations.InsertInTxAsync(connection, tx, studentId, dto.ActivityId, registrationDate, targetStatus);
+                return (newId, false);
             });
 
             if (AlreadyRegistered)
             {
                 return Conflict(new { message = "Student is already registered for this activity." });
-            }
-
-            if (IsFull)
-            {
-                return Conflict(new { message = "This activity is already full." });
             }
 
             registrationId = Id;
@@ -159,7 +168,8 @@ public class ActivityRegistrationsController(
     }
 
     // PUT /api/activity-registrations/{id}/cancel — Status flips to Cancelled; the row is kept as history.
-    // The owning student (or a Teacher/Admin) may cancel a registration.
+    // The owning student (or a Teacher/Admin) may cancel a registration. Freeing a Registered seat
+    // promotes the earliest Waitlisted registration for the same activity, if any.
     [HttpPut("{id:int}/cancel")]
     public async Task<ActionResult<ActivityRegistrationDto>> CancelRegistration(int id)
     {
@@ -175,9 +185,29 @@ public class ActivityRegistrationsController(
             return Forbid();
         }
 
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(registration.StudentId, schoolId))
+        {
+            return NotFound();
+        }
+
+        var freedASeat = registration.Status == ActivityRegistrationStatus.Registered;
+        int? promotedRegistrationId = null;
+
         try
         {
-            await registrations.UpdateStatusAsync(id, ActivityRegistrationStatus.Cancelled);
+            promotedRegistrationId = await db.WithTransactionAsync(async (connection, tx) =>
+            {
+                await registrations.UpdateStatusInTxAsync(connection, tx, id, ActivityRegistrationStatus.Cancelled);
+
+                if (!freedASeat)
+                {
+                    return (int?)null;
+                }
+
+                return await registrations.GetEarliestWaitlistedInTxAsync(connection, tx, registration.ActivityId) is { } nextId
+                    ? await PromoteAndReturnIdAsync(connection, tx, nextId)
+                    : null;
+            });
         }
         catch (PostgresException ex)
         {
@@ -185,7 +215,35 @@ public class ActivityRegistrationsController(
             return StatusCode(500, new { message = "Unable to cancel the registration. Please try again." });
         }
 
+        if (promotedRegistrationId is { } promotedId)
+        {
+            var promoted = await registrations.GetByIdAsync(promotedId);
+            if (promoted is not null)
+            {
+                var recipientUserIds = await recipients.ForStudentAsync(promoted.StudentId);
+                if (recipientUserIds.Count > 0)
+                {
+                    await notifications.NotifyManyAsync(
+                        recipientUserIds,
+                        "Moved off the waitlist",
+                        $"A seat opened up for {promoted.Activity?.Title} — you're now registered.",
+                        NotificationType.General);
+                }
+            }
+        }
+
         registration.Status = ActivityRegistrationStatus.Cancelled;
         return Ok(ActivityRegistrationDto.FromEntity(registration));
+    }
+
+    private static async Task<int> PromoteAndReturnIdAsync(Npgsql.NpgsqlConnection connection, Npgsql.NpgsqlTransaction tx, int registrationId)
+    {
+        await using var command = new Npgsql.NpgsqlCommand(
+            """UPDATE "ActivityRegistrations" SET "Status" = 'Registered' WHERE "Id" = @id""",
+            connection,
+            tx);
+        command.Parameters.AddWithValue("id", registrationId);
+        await command.ExecuteNonQueryAsync();
+        return registrationId;
     }
 }

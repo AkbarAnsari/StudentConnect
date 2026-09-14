@@ -38,6 +38,8 @@ export interface Assessment {
   maximumMarks: number;
   assessmentType: AssessmentType;
   description: string;
+  termId: number | null;
+  termName: string | null;
 }
 
 export interface AssessmentInput {
@@ -47,6 +49,7 @@ export interface AssessmentInput {
   maximumMarks: number;
   assessmentType: AssessmentType;
   description: string;
+  termId?: number | null;
 }
 
 export interface BulkMarkItem {

@@ -3,6 +3,22 @@
     <h1>Welcome, {{ user.displayName }}!</h1>
     <p class="role">Role: {{ user.role }}</p>
 
+    @if (!user.emailVerified) {
+      <div class="notice">
+        @if (resendSent()) {
+          <p>A new verification email has been sent — please check your inbox.</p>
+        } @else {
+          <p>
+            Your email address hasn't been verified yet.
+            <button type="button" class="link-button" (click)="resendVerification()">Resend verification email</button>
+          </p>
+          @if (resendError()) {
+            <p class="error-message">{{ resendError() }}</p>
+          }
+        }
+      </div>
+    }
+
     @if (user.role === 'Student' && user.studentId) {
       <ul class="dashboard-list">
         <li><a [routerLink]="['/students', user.studentId]">My Profile</a></li>

@@ -14,4 +14,7 @@ public class Attendance
 
     public DateOnly Date { get; set; }
     public AttendanceStatus Status { get; set; }
+
+    // Set only when this record was corrected after its initial entry.
+    public string? CorrectionReason { get; set; }
 }

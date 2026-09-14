@@ -44,7 +44,9 @@ export class ActivityDetail {
   constructor() {
     this.registrationService.getForStudent(this.studentId).subscribe({
       next: (registrations) => {
-        this.myRegistration.set(registrations.find((r) => r.activityId === this.activityId && r.status === 'Registered') ?? null);
+        this.myRegistration.set(
+          registrations.find((r) => r.activityId === this.activityId && (r.status === 'Registered' || r.status === 'Waitlisted')) ?? null,
+        );
         this.checkedRegistration.set(true);
       },
       error: () => this.checkedRegistration.set(true),

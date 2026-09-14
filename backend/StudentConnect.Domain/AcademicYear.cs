@@ -10,4 +10,11 @@ public class AcademicYear
     public DateOnly EndDate { get; set; }
     public bool IsCurrent { get; set; }
     public int SchoolId { get; set; }
+
+    // Set once this year's students have been promoted — see AcademicYearsController rollover.
+    public DateTime? RolledOverAtUtc { get; set; }
+
+    // Archived (soft-deleted) instead of hard-deleted, so historical Terms/rollover records
+    // stay intact — see AcademicYearsController.
+    public bool IsArchived { get; set; }
 }

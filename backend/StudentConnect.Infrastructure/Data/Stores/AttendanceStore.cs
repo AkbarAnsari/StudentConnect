@@ -7,7 +7,7 @@ namespace StudentConnect.Infrastructure.Data.Stores;
 public class AttendanceStore(Database db)
 {
     private const string SelectWithNames = """
-        SELECT a."Id", a."StudentId", a."SubjectId", a."Date", a."Status",
+        SELECT a."Id", a."StudentId", a."SubjectId", a."Date", a."Status", a."CorrectionReason",
                st."FirstName" AS "StudentFirstName", st."LastName" AS "StudentLastName",
                sub."Name" AS "SubjectName"
         FROM "Attendance" a
@@ -24,10 +24,23 @@ public class AttendanceStore(Database db)
         Subject = new Subject { Name = reader.GetString("SubjectName") },
         Date = reader.GetDateOnly("Date"),
         Status = reader.GetEnum<AttendanceStatus>("Status"),
+        CorrectionReason = reader.GetNullableString("CorrectionReason"),
     };
 
     public async Task<List<Attendance>> GetAllAsync() =>
         await db.QueryAsync($"""{SelectWithNames} ORDER BY a."Date" DESC""", bind: null, map: Map);
+
+    // Every already-recorded status for a subject+date, across all students — used to prefill
+    // the teacher's bulk Record Attendance grid so re-saving doesn't silently overwrite it.
+    public async Task<List<Attendance>> GetBySubjectAndDateAsync(int subjectId, DateOnly date) =>
+        await db.QueryAsync(
+            $"""{SelectWithNames} WHERE a."SubjectId" = @subjectId AND a."Date" = @date""",
+            p =>
+            {
+                p.AddWithValue("subjectId", subjectId);
+                p.AddWithValue("date", date);
+            },
+            Map);
 
     public async Task<List<Attendance>> GetByStudentAsync(int studentId) =>
         await db.QueryAsync(
@@ -102,13 +115,14 @@ public class AttendanceStore(Database db)
     public async Task<Attendance?> GetByIdAsync(int id) =>
         await db.QuerySingleOrDefaultAsync($"""{SelectWithNames} WHERE a."Id" = @id""", p => p.AddWithValue("id", id), Map);
 
-    public async Task UpdateStatusAsync(int id, AttendanceStatus status) =>
+    public async Task UpdateStatusAsync(int id, AttendanceStatus status, string? reason = null) =>
         await db.ExecuteAsync(
-            """UPDATE "Attendance" SET "Status" = @status WHERE "Id" = @id""",
+            """UPDATE "Attendance" SET "Status" = @status, "CorrectionReason" = @reason WHERE "Id" = @id""",
             p =>
             {
                 p.AddWithValue("id", id);
                 p.AddWithValue("status", status.ToString());
+                p.AddWithValue("reason", (object?)reason ?? DBNull.Value);
             });
 
     public async Task DeleteAsync(int id) =>

@@ -11,4 +11,7 @@ public class Term
     public string Name { get; set; } = string.Empty;
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
+
+    // Once locked, no Assessment/Mark tied to this term can be created, edited, or deleted.
+    public bool IsLocked { get; set; }
 }

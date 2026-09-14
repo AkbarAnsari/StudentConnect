@@ -20,12 +20,25 @@
         }
       </div>
 
+      <label class="digest-toggle">
+        <input type="checkbox" [checked]="notificationService.digestEnabled()" (change)="toggleDigest($any($event.target).checked)" />
+        Email me a periodic digest instead of one email per event
+      </label>
+
       @if (notificationService.notifications().length === 0) {
         <p class="notification-empty">No notifications yet.</p>
       } @else {
         <ul class="notification-list">
           @for (n of notificationService.notifications(); track n.id) {
-            <li class="notification-item" [class.unread]="!n.isRead" (click)="markAsRead(n.id)">
+            <li
+              class="notification-item"
+              [class.unread]="!n.isRead"
+              role="button"
+              tabindex="0"
+              (click)="markAsRead(n.id)"
+              (keyup.enter)="markAsRead(n.id)"
+              (keyup.space)="markAsRead(n.id)"
+            >
               <strong>{{ n.title }}</strong>
               <p>{{ n.message }}</p>
               <span class="notification-time">{{ n.createdAtUtc | date: 'short' }}</span>

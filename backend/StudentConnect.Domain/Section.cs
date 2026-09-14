@@ -13,4 +13,8 @@ public class Section
 
     public int? HomeroomTeacherId { get; set; }
     public Teacher? HomeroomTeacher { get; set; }
+
+    // Archived (soft-deleted) instead of hard-deleted, so a closed section's historical
+    // attendance/marks/homework stay resolvable — see SectionsController.
+    public bool IsArchived { get; set; }
 }

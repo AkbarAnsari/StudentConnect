@@ -9,6 +9,9 @@ public class Grade
     public string Name { get; set; } = string.Empty;
     public int SchoolId { get; set; }
 
+    // Determines "the next grade" for academic-year rollover; null falls back to Id order.
+    public int? SequenceOrder { get; set; }
+
     [JsonIgnore]
     public List<Student> Students { get; set; } = [];
 }

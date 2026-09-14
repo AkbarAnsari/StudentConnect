@@ -65,31 +65,62 @@ public class EmailOutboxStore(Database db)
                 p.AddWithValue("error", error);
             });
 
-    // Newest first — used by the admin Email Outbox page.
-    public async Task<List<EmailOutboxEntry>> GetRecentAsync(int take) =>
+    // Manual admin retry: resets the attempt counter and clears the error so the background
+    // processor's normal GetPendingAsync poll picks the row up again.
+    public async Task RetryAsync(int id) =>
+        await db.ExecuteAsync(
+            """UPDATE "EmailOutbox" SET "Attempts" = 0, "LastError" = NULL WHERE "Id" = @id AND "SentAtUtc" IS NULL""",
+            p => p.AddWithValue("id", id));
+
+    // Tenant-scoped via the recipient's SchoolId (every real EnqueueAsync call passes a
+    // toUserId — see EmailNotificationService/AuthController/SchoolsController).
+    public async Task<bool> ExistsAsync(int id, int schoolId) =>
+        await db.ExistsAsync(
+            """
+            SELECT 1 FROM "EmailOutbox" eo JOIN "Users" u ON u."Id" = eo."ToUserId"
+            WHERE eo."Id" = @id AND u."SchoolId" = @schoolId
+            """,
+            p =>
+            {
+                p.AddWithValue("id", id);
+                p.AddWithValue("schoolId", schoolId);
+            });
+
+    // Newest first — used by the admin Email Outbox page. Tenant-scoped via the recipient's
+    // SchoolId, same rationale as ExistsAsync above.
+    public async Task<List<EmailOutboxEntry>> GetRecentAsync(int schoolId, int take) =>
         await db.QueryAsync(
             """
-            SELECT "Id", "ToEmail", "ToUserId", "Subject", "Body", "CreatedAtUtc", "SentAtUtc", "Attempts", "LastError"
-            FROM "EmailOutbox"
-            ORDER BY "CreatedAtUtc" DESC
+            SELECT eo."Id", eo."ToEmail", eo."ToUserId", eo."Subject", eo."Body", eo."CreatedAtUtc", eo."SentAtUtc", eo."Attempts", eo."LastError"
+            FROM "EmailOutbox" eo
+            JOIN "Users" u ON u."Id" = eo."ToUserId"
+            WHERE u."SchoolId" = @schoolId
+            ORDER BY eo."CreatedAtUtc" DESC
             LIMIT @take
             """,
-            p => p.AddWithValue("take", take),
+            p =>
+            {
+                p.AddWithValue("schoolId", schoolId);
+                p.AddWithValue("take", take);
+            },
             Map);
 
-    // Used by the admin Operations page's dependency status summary.
-    public async Task<(long Pending, long Failed)> GetStatsAsync()
+    // Used by the admin Operations page's dependency status summary. Tenant-scoped like
+    // GetRecentAsync above.
+    public async Task<(long Pending, long Failed)> GetStatsAsync(int schoolId)
     {
         const string sql = """
             SELECT
-                COUNT(*) FILTER (WHERE "SentAtUtc" IS NULL AND "LastError" IS NULL) AS "Pending",
-                COUNT(*) FILTER (WHERE "SentAtUtc" IS NULL AND "LastError" IS NOT NULL) AS "Failed"
-            FROM "EmailOutbox"
+                COUNT(*) FILTER (WHERE eo."SentAtUtc" IS NULL AND eo."LastError" IS NULL) AS "Pending",
+                COUNT(*) FILTER (WHERE eo."SentAtUtc" IS NULL AND eo."LastError" IS NOT NULL) AS "Failed"
+            FROM "EmailOutbox" eo
+            JOIN "Users" u ON u."Id" = eo."ToUserId"
+            WHERE u."SchoolId" = @schoolId
             """;
 
         var row = await db.QuerySingleOrDefaultAsync(
             sql,
-            bind: null,
+            bind: p => p.AddWithValue("schoolId", schoolId),
             map: reader => new { Pending = reader.GetInt64("Pending"), Failed = reader.GetInt64("Failed") });
 
         return row is null ? (0, 0) : (row.Pending, row.Failed);

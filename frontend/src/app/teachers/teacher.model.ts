@@ -15,3 +15,9 @@ export interface TeacherCreateInput {
   username?: string;
   password?: string;
 }
+
+export interface TeacherUpdateInput {
+  firstName: string;
+  lastName: string;
+  email: string;
+}

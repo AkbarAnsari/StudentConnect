@@ -46,14 +46,22 @@ export interface HomeworkSubmission {
   submittedDate: string;
   status: HomeworkStatus;
   comments: string;
+  fileName: string | null;
+  contentType: string | null;
+  fileSize: number | null;
+  teacherFeedback: string | null;
+  feedbackAtUtc: string | null;
 }
 
 export interface SubmissionOverview {
+  submissionId: number | null;
   studentId: number;
   studentName: string;
   status: HomeworkStatus;
   submittedDate: string | null;
   comments: string | null;
+  hasFile: boolean;
+  teacherFeedback: string | null;
 }
 
 // StudentId is intentionally absent — the backend derives it from the authenticated user.

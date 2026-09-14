@@ -51,13 +51,27 @@
     <ul class="entity-list">
       @for (teacher of teachers(); track teacher.id) {
         <li>
-          <span>
-            {{ teacher.firstName }} {{ teacher.lastName }} ({{ teacher.teacherId }}) — {{ teacher.email }}
-            @if (teacher.username) {
-              <span class="badge badge-success">Login: {{ teacher.username }}</span>
+          @if (editingId() === teacher.id) {
+            <form class="inline-edit-form" [formGroup]="editForm" (ngSubmit)="saveEdit(teacher.id)">
+              <input type="text" formControlName="firstName" placeholder="First name" />
+              <input type="text" formControlName="lastName" placeholder="Last name" />
+              <input type="email" formControlName="email" placeholder="Email" />
+              <button type="submit" [disabled]="editSubmitting()">{{ editSubmitting() ? 'Saving...' : 'Save' }}</button>
+              <button type="button" class="link-button" (click)="cancelEdit()">Cancel</button>
+            </form>
+            @if (editError()) {
+              <p class="error-message">{{ editError() }}</p>
             }
-          </span>
-          <button type="button" class="link-button" (click)="deleteTeacher(teacher.id)">Delete</button>
+          } @else {
+            <span>
+              {{ teacher.firstName }} {{ teacher.lastName }} ({{ teacher.teacherId }}) — {{ teacher.email }}
+              @if (teacher.username) {
+                <span class="badge badge-success">Login: {{ teacher.username }}</span>
+              }
+            </span>
+            <button type="button" class="link-button" (click)="startEdit(teacher)">Edit</button>
+            <button type="button" class="link-button" (click)="deleteTeacher(teacher.id)">Delete</button>
+          }
         </li>
       }
     </ul>

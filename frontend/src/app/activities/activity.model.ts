@@ -9,6 +9,7 @@ export interface Activity {
   capacity: number;
   currentRegistrations: number;
   availableSeats: number;
+  currentWaitlisted: number;
 }
 
 export interface ActivityInput {
@@ -28,7 +29,7 @@ export interface ActivityUpdateInput {
   capacity: number;
 }
 
-export type RegistrationStatus = 'Registered' | 'Cancelled';
+export type RegistrationStatus = 'Registered' | 'Cancelled' | 'Waitlisted';
 
 export interface ActivityRegistration {
   id: number;

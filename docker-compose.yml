@@ -1,0 +1,62 @@
+# Local Docker deployment of the whole stack: Postgres + the ASP.NET Core API + the
+# Angular SPA (served by nginx, which also reverse-proxies /api to the api container).
+#
+# Usage:
+#   docker compose up --build
+# Then open http://localhost:4200 (frontend) — the API is also reachable directly at
+# http://localhost:5286 if needed (e.g. for the .http file / direct API testing).
+#
+# NOTE: the secrets below are throwaway local-only dev values (same spirit as the
+# "CHANGE_ME" placeholders in appsettings.json) — never reuse them outside a local
+# machine.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: studentconnect_db
+      POSTGRES_USER: studentconnect
+      POSTGRES_PASSWORD: studentconnect_dev_password
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studentconnect -d studentconnect_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: StudentConnect.Api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=studentconnect_db;Username=studentconnect;Password=studentconnect_dev_password;SSL Mode=Disable"
+      Jwt__Secret: "local-docker-dev-only-secret-please-change-32chars-min"
+      Jwt__Issuer: "StudentConnect"
+      Jwt__Audience: "StudentConnect"
+      Jwt__ExpiryMinutes: "120"
+      AllowedOrigins__0: "http://localhost:4200"
+      Frontend__BaseUrl: "http://localhost:4200"
+      Storage__Provider: "Local"
+    volumes:
+      - api-storage:/app/storage/learning-materials
+    ports:
+      - "5286:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "4200:80"
+
+volumes:
+  db-data:
+  api-storage:

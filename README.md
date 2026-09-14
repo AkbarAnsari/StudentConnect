@@ -2,230 +2,116 @@
 
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
 ![Angular](https://img.shields.io/badge/Angular-22-DD0031?logo=angular&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-local-4169E1?logo=postgresql&logoColor=white)
-![Azure](https://img.shields.io/badge/Azure-Blob%20Storage-0078D4?logo=microsoftazure&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A beginner-friendly, cloud-bound student learning and school management portal, built
-incrementally as a teaching project for an Azure Fundamentals program. See
-[StudentConnect.md](StudentConnect.md) for the full blueprint (roles, phases, Azure
-mapping) and `docs/phase-*.md` for what each phase taught and built.
+A multi-tenant school management portal — schools self-register and get their own
+isolated data (students, teachers, classes, marks, attendance, and more).
+
+## Features
+
+- **Roles**: Admin, Teacher, Student, Parent — each with their own dashboard and permissions
+- **Academic structure**: grades, subjects, sections, academic years, terms, teacher-subject assignments
+- **Attendance** and **marks/assessments**, entered by teachers, viewable by students/parents
+- **Homework** (with file submissions) and **learning materials**
+- **Extracurricular activities** with student registration
+- **Notifications** (in-app + email digest) and an **email outbox** with retry
+- **Analytics dashboard** (attendance/marks trends, at-risk students) and an **audit log**
+- **Report cards**, **transcripts**, and cross-entity **search**
+- **Multi-tenancy**: every school's data is isolated by `SchoolId`
+- **Auth**: JWT with refresh tokens, email verification, and rate-limited login
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Angular 22 (standalone components, signals) |
+| Backend | ASP.NET Core 10 Web API, plain ADO.NET/Npgsql (no ORM) |
+| Database | PostgreSQL |
+| File storage | Local disk by default; pluggable Azure Blob Storage |
+| Auth | Custom JWT (HMAC-SHA256) |
+| Deployment | Docker Compose (local) or Azure (Bicep in `infra/`, not deployed) |
 
 ## Repository structure
 
 ```
 StudentConnect/
-├── frontend/     Angular app (studentconnect UI)
-├── backend/      ASP.NET Core Web API (StudentConnect.Api)
-│                 includes Dockerfile (Phase 12, container packaging)
-├── docs/         Phase-by-phase explanations
-│   └── labs/     Hands-on reasoning exercises
-└── StudentConnect.md   Living project blueprint / Copilot instructions
+├── backend/
+│   ├── StudentConnect.Api/              ASP.NET Core Web API + Dockerfile
+│   ├── StudentConnect.Application/      DTOs and service interfaces
+│   ├── StudentConnect.Domain/           Entities
+│   ├── StudentConnect.Infrastructure/   Data access (ADO.NET stores), auth, email, storage
+│   ├── StudentConnect.Api.Tests/        xUnit tests (run against a real Postgres test DB)
+│   └── database/                        schema.sql + seed.sql (applied automatically on startup)
+├── frontend/                             Angular app + Dockerfile + nginx.conf
+├── infra/                                Bicep templates for a possible future Azure deployment
+└── docker-compose.yml                    Local db + api + frontend stack
 ```
 
-## Architecture
-
-### Phase 12 (previous)
-
-Conceptual compute/hosting overview + a Dockerfile for the API (never deployed). See
-[docs/phase-12.md](docs/phase-12.md).
-
-### Phase 13 (current) — Azure Storage & Data
-
-Extends `IFileStorage` (Phase 8) with a real **`AzureBlobStorage`** implementation
-alongside the existing `LocalFileStorage`, selected purely via configuration
-(`Storage:Provider` = `Local` | `AzureBlob`) — no controller or Angular code knows or
-cares which one is active. This part was **implemented and live-tested against a real
-Azure subscription**: a storage account + private `learning-materials` container were
-created, and upload/download/delete were verified end-to-end through the actual
-running API using Azure AD auth (`DefaultAzureCredential`) — no storage key or
-connection string anywhere in the code. The database side of this phase (Azure
-Database for PostgreSQL) is **documented only, not provisioned** — the app continues
-running against local PostgreSQL by default. See
-[docs/phase-13.md](docs/phase-13.md), [docs/azure-storage-glossary.md](docs/azure-storage-glossary.md),
-[docs/data-storage-decision-guide.md](docs/data-storage-decision-guide.md),
-[docs/labs/phase-13-storage-data.md](docs/labs/phase-13-storage-data.md), and the
-updated [docs/studentconnect-cloud-architecture.md](docs/studentconnect-cloud-architecture.md).
-
-```
-ASP.NET Core API
-   ├── PostgreSQL (local; Azure Database for PostgreSQL documented, not provisioned)
-   └── IFileStorage
-          ├── LocalFileStorage   (default)
-          └── AzureBlobStorage   (real Azure resource — see docs/phase-13.md)
-```
-
-### Phase 12
-
-Conceptual compute/hosting overview + a Dockerfile for the API (never deployed). See
-[docs/phase-12.md](docs/phase-12.md),
-[docs/azure-compute-decision-guide.md](docs/azure-compute-decision-guide.md),
-[docs/labs/phase-12-compute-hosting.md](docs/labs/phase-12-compute-hosting.md).
-
-Conceptual Phase 12 hosting target (not deployed):
-
-```
-Browser
-   ↓
-Azure Static Web Apps   (Angular)
-   ↓
-HTTPS
-   ↓
-Azure App Service       (ASP.NET Core API)
-   ↓
-Current database/storage (local PostgreSQL + local file storage)
-```
-
-**Database update:** the API now runs against a local PostgreSQL database
-(`studentconnect_db`, EF Core via `Npgsql.EntityFrameworkCore.PostgreSQL`) instead of
-SQL Server LocalDB — same EF Core models/migrations workflow, just a different
-relational engine. See the connection string in `appsettings.json` and the
-"Running locally" section below.
-
-**Docker note:** a Dockerfile was created and reviewed against the actual project, but
-could not be built/run in this environment because the local Docker Desktop background
-service wasn't running — see `docs/phase-12.md` for the exact commands to use once it
-is. No Azure SQL, Blob Storage, Entra ID, Key Vault, Application Insights, CI/CD, or
-Kubernetes were introduced.
-
-### Phase 10
-
-```
-                         Browser
-                            │
-                            ▼
-                       Angular App
-                            │
-                     Login / Token
-                            │
-                            ▼
-                  ASP.NET Core Web API
-                            │
-                 Authentication
-                            │
-                 Authorization
-                            │
-                ┌───────────┴───────────┐
-                │                       │
-                ▼                       ▼
-          SQL Server              Local File Storage
-```
-
-### Phase 11 (current) — Introduction to Cloud Computing & Azure
-
-Phase 11 is **conceptual only — no application code changed**. StudentConnect still
-runs exactly as it did at the end of Phase 10, entirely locally. This phase adds
-learning material that explains why cloud computing exists, what Azure provides, and
-how to map an application requirement to a cloud capability *before* picking an Azure
-service name:
-
-```
-Application requirement → Capability → Architecture decision → Azure service
-```
-
-Covers: traditional IT vs. cloud computing, cloud characteristics (on-demand,
-elasticity, broad network access, resource pooling, measured consumption), CapEx vs.
-OpEx, IaaS/PaaS/SaaS/serverless, shared responsibility, Azure core concepts
-(subscription → resource group → resource), region vs. availability zone, the Azure
-Portal, and cost awareness (cloud ≠ free). Includes a conceptual (not implemented)
-future architecture mapping StudentConnect's current pieces to Azure capabilities —
-see [docs/phase-11.md](docs/phase-11.md), [docs/cloud-glossary.md](docs/cloud-glossary.md),
-and [docs/studentconnect-cloud-architecture.md](docs/studentconnect-cloud-architecture.md).
-
-No Azure SDK packages, Azure configuration, Azure resources, Microsoft Entra ID, Azure
-SQL, or Blob Storage were added — those remain future phases.
-
-### Phase 9
-
-```
-                                         +---- SQL Server (structured data)
-Browser → Angular → HTTP → ASP.NET Core API
-                                         +---- Local File Storage (learning material files)
-```
-
-Phase 10 adds **Identity & Access**: local JWT-based authentication (no Microsoft Entra
-ID yet), three roles (`Student`, `Teacher`, `Admin`), and role/ownership-based
-authorization enforced on every API endpoint. A student can view their own attendance,
-marks, homework, and learning materials, and register themselves for activities — but
-cannot view another student's data or perform teacher/admin actions, even by editing a
-request. Endpoints that previously accepted a client-supplied `studentId` for
-"self" actions (submitting homework, registering for an activity) now derive the
-student from the authenticated token instead. Angular has a login page, an
-`AuthService` + HTTP interceptor (attaches the bearer token automatically), route
-guards (`authGuard`, `roleGuard`), a role-aware dashboard/nav, and logout. Passwords are
-hashed with ASP.NET Core's `PasswordHasher<T>` (never stored or returned in plaintext).
-No Microsoft Entra ID and no Azure yet — see [docs/phase-10.md](docs/phase-10.md),
-[docs/phase-9.md](docs/phase-9.md), [docs/phase-8.md](docs/phase-8.md),
-[docs/phase-7.md](docs/phase-7.md), [docs/phase-6.md](docs/phase-6.md),
-[docs/phase-5.md](docs/phase-5.md), [docs/phase-4.md](docs/phase-4.md), and
-[docs/sql-basics.md](docs/sql-basics.md).
-
-### Development accounts (local learning/testing only)
+## Demo accounts (local dev/seed data, School: "Demo School")
 
 | Username | Password | Role |
 |---|---|---|
-| `student1` | `Student123!` | Student (Ananya Sharma) |
-| `student2` | `Student123!` | Student (Rahul Verma) |
-| `teacher1` | `Teacher123!` | Teacher (Priya Mehta) |
 | `admin1` | `Admin123!` | Admin |
+| `teacher1` | `Teacher123!` | Teacher |
+| `student1` | `Student123!` | Student |
+| `student2` | `Student123!` | Student |
 
-
+Parent accounts are created by an Admin (Manage Parents) and linked to a child. New
+schools can self-register from the login page.
 
 ## Running locally
 
-Terminal 1 — API (applies `database/schema.sql` and `database/seed.sql` automatically on startup):
-```bash
-cd backend/StudentConnect.Api
-dotnet run --launch-profile http
-```
-Runs at `http://localhost:5286`. Requires a local PostgreSQL server. `appsettings.json`
-only contains placeholder values — the real connection string and JWT signing key are
-kept out of the repo via `dotnet user-secrets` (never committed). Set them once per machine:
+**Database & JWT secret** (once per machine, kept out of the repo via user-secrets):
 ```bash
 cd backend/StudentConnect.Api
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=studentconnect_db;Username=<user>;Password=<password>;SSL Mode=Disable"
 dotnet user-secrets set "Jwt:Secret" "<any long random string>"
 ```
-The database itself is created once (`CREATE DATABASE studentconnect_db;`); the API then
-applies `backend/database/schema.sql` (idempotent `CREATE TABLE IF NOT EXISTS`) and
-`backend/database/seed.sql` (`ON CONFLICT DO NOTHING`) on every startup — no ORM, no
-migration history table, just two reviewable `.sql` files (see the "Data access" section below).
+The target database just needs to exist (`CREATE DATABASE studentconnect_db;`) — the API
+applies `backend/database/schema.sql` and `seed.sql` automatically on every startup.
 
-Terminal 2 — Frontend:
+**Terminal 1 — API** (`http://localhost:5286`):
+```bash
+cd backend/StudentConnect.Api
+dotnet run --launch-profile http
+```
+
+**Terminal 2 — Frontend** (`http://localhost:4200`):
 ```bash
 cd frontend
 npm start
 ```
-Runs at `http://localhost:4200`.
 
-Both must be running for the Students pages to load data.
+## Running with Docker
 
-By default, uploaded learning materials are stored on local disk
-(`Storage:Provider = Local`). To run against the real Azure Blob Storage account
-created for Phase 13 instead (requires `az login`), set two environment variables
-before `dotnet run` — see [docs/phase-13.md](docs/phase-13.md):
-```powershell
-$env:Storage__Provider = "AzureBlob"
-$env:AzureBlobStorage__AccountUrl = "https://<account>.blob.core.windows.net/"
+The Docker images are runtime-only (they package a pre-built app, no restore/npm-install
+happens inside the build), so build the app on the host first:
+
+```bash
+cd backend/StudentConnect.Api
+dotnet publish StudentConnect.Api.csproj -c Release -o ../publish --no-self-contained
+cd ../../frontend
+npm run build
+cd ..
+docker compose up --build -d
 ```
 
-### Data access — plain ADO.NET, no ORM
+Then open **http://localhost:4200**. nginx serves the Angular app and reverse-proxies
+`/api/*` to the API container, so no CORS setup is needed. The API is also reachable
+directly at `http://localhost:5286`. All three services (Postgres, API, frontend) run
+in containers; re-run the two build commands above and `docker compose up --build -d`
+again after making code changes.
 
-The backend talks to PostgreSQL directly via `Npgsql` (no Entity Framework Core). See
-[docs/phase-14-roadmap.md](docs/phase-14-roadmap.md) for why, and:
-- `backend/database/schema.sql` — hand-written `CREATE TABLE`/index/constraint
-  statements (apply manually with `psql -f schema.sql` against a fresh database, or let
-  the API apply it automatically on startup).
-- `backend/database/seed.sql` — the original demo dataset as plain `INSERT` statements.
-- `backend/StudentConnect.Api/Data/Database.cs` — a small ADO.NET helper (open a
-  connection, run a query/command, map rows to objects).
-- `backend/StudentConnect.Api/Data/Stores/*.cs` — one class per domain area
-  (`StudentStore`, `AttendanceStore`, `AnalyticsStore`, ...) with hand-written,
-  parameterized SQL — this is what controllers call instead of `DbContext`.
+## Tests
 
-Running tests that touch the database requires a second, disposable Postgres database
-(`studentconnect_test_db` by default, or point `STUDENTCONNECT_TEST_CONNECTION_STRING`
-at one) — see `backend/StudentConnect.Api.Tests/DatabaseFixture.cs`.
+```bash
+cd backend
+dotnet test
+```
+Requires a second, disposable Postgres database (`studentconnect_test_db` by default,
+or point `STUDENTCONNECT_TEST_CONNECTION_STRING` at one).
 
 ## License
 

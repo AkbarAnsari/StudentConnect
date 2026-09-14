@@ -72,4 +72,40 @@ public class NotificationStore(Database db)
         await db.ExecuteAsync(
             """UPDATE "Notifications" SET "IsRead" = true WHERE "UserId" = @userId AND "IsRead" = false""",
             p => p.AddWithValue("userId", userId));
+
+    // Distinct user ids with digest enabled who have at least one not-yet-digested notification
+    // — polled by NotificationDigestProcessor instead of being woken up by an enqueue.
+    public async Task<List<int>> GetUserIdsWithPendingDigestAsync() =>
+        await db.QueryAsync(
+            """
+            SELECT DISTINCT n."UserId"
+            FROM "Notifications" n
+            JOIN "Users" u ON u."Id" = n."UserId"
+            WHERE n."DigestedAtUtc" IS NULL AND u."NotificationDigestEnabled" = true
+            """,
+            bind: null,
+            reader => reader.GetInt32("UserId"));
+
+    public async Task<List<Notification>> GetUndigestedForUserAsync(int userId) =>
+        await db.QueryAsync(
+            """
+            SELECT "Id", "UserId", "Title", "Message", "Type", "IsRead", "CreatedAtUtc"
+            FROM "Notifications"
+            WHERE "UserId" = @userId AND "DigestedAtUtc" IS NULL
+            ORDER BY "CreatedAtUtc"
+            """,
+            p => p.AddWithValue("userId", userId),
+            Map);
+
+    public async Task MarkDigestedAsync(IReadOnlyCollection<int> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return;
+        }
+
+        await db.ExecuteAsync(
+            """UPDATE "Notifications" SET "DigestedAtUtc" = now() WHERE "Id" = ANY(@ids)""",
+            p => p.AddWithValue("ids", ids.ToArray()));
+    }
 }

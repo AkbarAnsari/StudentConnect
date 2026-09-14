@@ -28,3 +28,9 @@ export interface AtRiskStudent {
   attendancePercentage: number | null;
   averageMarksPercentage: number | null;
 }
+
+export interface MonthlyTrend {
+  month: string;
+  attendancePercentage: number;
+  marksPercentage: number;
+}

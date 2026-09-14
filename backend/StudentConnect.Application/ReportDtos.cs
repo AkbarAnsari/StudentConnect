@@ -41,3 +41,31 @@ public class SectionClassReportDto
     public double AverageMarksPercentage { get; set; }
     public int AtRiskCount { get; set; }
 }
+
+// One subject's marks within a single academic year, for the multi-year transcript.
+public class TranscriptSubjectRowDto
+{
+    public int SubjectId { get; set; }
+    public string SubjectName { get; set; } = string.Empty;
+    public double MarksPercentage { get; set; }
+    public string ResultCategory { get; set; } = string.Empty;
+}
+
+// One academic year's row within a student's multi-year transcript.
+public class TranscriptYearRowDto
+{
+    public int AcademicYearId { get; set; }
+    public string AcademicYearName { get; set; } = string.Empty;
+    public double OverallMarksPercentage { get; set; }
+    public string OverallResultCategory { get; set; } = string.Empty;
+    public List<TranscriptSubjectRowDto> Subjects { get; set; } = [];
+}
+
+// A student's full academic history — every year that has any recorded Marks, oldest first.
+public class StudentTranscriptDto
+{
+    public int StudentId { get; set; }
+    public string StudentCode { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
+    public List<TranscriptYearRowDto> Years { get; set; } = [];
+}

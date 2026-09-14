@@ -1,23 +1,16 @@
-# Multi-stage build: restore/build/publish with the full SDK, then run the published
-# output in the smaller ASP.NET runtime image (the runtime image doesn't need the SDK).
-# Build context is the "backend/" folder (one level up from this Dockerfile) since the
-# Api project now references sibling Domain/Application/Infrastructure projects —
-# e.g. docker build -f StudentConnect.Api/Dockerfile -t studentconnect-api .
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-WORKDIR /src
-
-COPY StudentConnect.Domain/*.csproj StudentConnect.Domain/
-COPY StudentConnect.Application/*.csproj StudentConnect.Application/
-COPY StudentConnect.Infrastructure/*.csproj StudentConnect.Infrastructure/
-COPY StudentConnect.Api/*.csproj StudentConnect.Api/
-RUN dotnet restore StudentConnect.Api/StudentConnect.Api.csproj
-
-COPY . .
-RUN dotnet publish StudentConnect.Api/StudentConnect.Api.csproj -c Release -o /app/publish --no-restore
-
+# Runtime-only image: expects `dotnet publish StudentConnect.Api.csproj -c Release -o
+# ../publish` to have already been run on the host (see docs/README docker section) —
+# NuGet restore doesn't happen inside this build because this network's proxy blocks
+# nuget.org from containers. Build context is the "backend/" folder, one level up from
+# this Dockerfile — e.g. docker build -f StudentConnect.Api/Dockerfile -t studentconnect-api .
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
-COPY --from=build /app/publish .
+COPY publish/ .
+
+# Program.cs resolves "database/schema.sql"/"seed.sql" as ../database relative to
+# ContentRootPath (WORKDIR /app here), so the scripts need to land at /database for the
+# same auto-apply-on-startup logic used in local dev to work unmodified in the container.
+COPY database /database
 
 # 8080 is a common convention for containerized ASP.NET Core apps (avoids binding a
 # privileged port and matches what Azure App Service for Containers / Container Apps expect).

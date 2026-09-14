@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { environment } from '../../environments/environment';
-import { AppNotification } from './notification.model';
+import { AppNotification, NotificationPreference } from './notification.model';
 
 // Polls for new notifications every 30s while the user is logged in — a lightweight
 // stand-in for push delivery, good enough for an in-app "Local" outbox (see
@@ -12,9 +12,11 @@ const POLL_INTERVAL_MS = 30_000;
 export class NotificationService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiBaseUrl}/notifications`;
+  private readonly preferenceUrl = `${environment.apiBaseUrl}/notification-preferences`;
 
   readonly notifications = signal<AppNotification[]>([]);
   readonly unreadCount = signal(0);
+  readonly digestEnabled = signal(false);
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
 
@@ -23,6 +25,7 @@ export class NotificationService {
       return;
     }
     this.refresh();
+    this.loadPreference();
     this.pollHandle = setInterval(() => this.refresh(), POLL_INTERVAL_MS);
   }
 
@@ -52,5 +55,19 @@ export class NotificationService {
 
   markAllAsRead(): void {
     this.http.post<void>(`${this.baseUrl}/read-all`, {}).subscribe(() => this.refresh());
+  }
+
+  private loadPreference(): void {
+    this.http.get<NotificationPreference>(this.preferenceUrl).subscribe({
+      next: (pref) => this.digestEnabled.set(pref.digestEnabled),
+      error: () => undefined,
+    });
+  }
+
+  setDigestEnabled(enabled: boolean): void {
+    this.http.put<void>(this.preferenceUrl, { digestEnabled: enabled } satisfies NotificationPreference).subscribe({
+      next: () => this.digestEnabled.set(enabled),
+      error: () => undefined,
+    });
   }
 }

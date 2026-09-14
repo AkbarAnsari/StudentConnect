@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, map, of, startWith } from 'rxjs';
+import { triggerBlobDownload } from '../../shared/download.util';
 import { LearningMaterial } from '../learning-material.model';
 import { LearningMaterialsService } from '../learning-materials.service';
 
@@ -49,8 +50,8 @@ export class StudentMaterials {
     this.subjectFilter.set(value ? Number(value) : null);
   }
 
-  protected downloadUrl(id: number): string {
-    return this.materialsService.downloadUrl(id);
+  protected download(material: LearningMaterial): void {
+    this.materialsService.downloadFile(material.id).subscribe((blob) => triggerBlobDownload(blob, material.fileName));
   }
 
   protected formatSize(bytes: number): string {

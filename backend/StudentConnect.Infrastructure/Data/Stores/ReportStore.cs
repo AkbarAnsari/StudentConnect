@@ -148,6 +148,97 @@ public class ReportStore(Database db)
         };
     }
 
+    // Groups every recorded Mark by the AcademicYear whose date range contains the Assessment's
+    // date — Assessments have no direct AcademicYear/Term FK, so this is resolved by date range
+    // instead of a join column. SchoolId-scoped so a date range never matches another tenant's year.
+    public async Task<StudentTranscriptDto?> GetStudentTranscriptAsync(int studentId, int schoolId)
+    {
+        var identity = await db.QuerySingleOrDefaultAsync(
+            """
+            SELECT s."Id", s."StudentId" AS "StudentCode", s."FirstName", s."LastName"
+            FROM "Students" s
+            WHERE s."Id" = @studentId
+            """,
+            p => p.AddWithValue("studentId", studentId),
+            reader => new
+            {
+                Id = reader.GetInt32("Id"),
+                StudentCode = reader.GetString("StudentCode"),
+                FullName = $"{reader.GetString("FirstName")} {reader.GetString("LastName")}",
+            });
+
+        if (identity is null)
+        {
+            return null;
+        }
+
+        var rows = await db.QueryAsync(
+            """
+            SELECT ay."Id" AS "AcademicYearId", ay."Name" AS "AcademicYearName", ay."StartDate",
+                   asm."SubjectId", sub."Name" AS "SubjectName",
+                   SUM(m."MarksObtained") AS "TotalObtained", SUM(asm."MaximumMarks") AS "TotalMaximum"
+            FROM "Marks" m
+            JOIN "Assessments" asm ON asm."Id" = m."AssessmentId"
+            JOIN "Subjects" sub ON sub."Id" = asm."SubjectId"
+            JOIN "AcademicYears" ay ON asm."Date" BETWEEN ay."StartDate" AND ay."EndDate" AND ay."SchoolId" = @schoolId
+            WHERE m."StudentId" = @studentId
+            GROUP BY ay."Id", ay."Name", ay."StartDate", asm."SubjectId", sub."Name"
+            ORDER BY ay."StartDate", sub."Name"
+            """,
+            p =>
+            {
+                p.AddWithValue("studentId", studentId);
+                p.AddWithValue("schoolId", schoolId);
+            },
+            reader => new
+            {
+                AcademicYearId = reader.GetInt32("AcademicYearId"),
+                AcademicYearName = reader.GetString("AcademicYearName"),
+                SubjectId = reader.GetInt32("SubjectId"),
+                SubjectName = reader.GetString("SubjectName"),
+                TotalObtained = (int)reader.GetInt64("TotalObtained"),
+                TotalMaximum = (int)reader.GetInt64("TotalMaximum"),
+            });
+
+        var years = rows
+            .GroupBy(r => (r.AcademicYearId, r.AcademicYearName))
+            .Select(yearGroup =>
+            {
+                var subjectRows = yearGroup.Select(r => new TranscriptSubjectRowDto
+                {
+                    SubjectId = r.SubjectId,
+                    SubjectName = r.SubjectName,
+                    MarksPercentage = r.TotalMaximum == 0 ? 0 : Math.Round(r.TotalObtained * 100.0 / r.TotalMaximum, 1),
+                }).ToList();
+                foreach (var row in subjectRows)
+                {
+                    row.ResultCategory = ResultCategory.From(row.MarksPercentage);
+                }
+
+                var yearObtained = yearGroup.Sum(r => r.TotalObtained);
+                var yearMaximum = yearGroup.Sum(r => r.TotalMaximum);
+                var yearPercentage = yearMaximum == 0 ? 0 : Math.Round(yearObtained * 100.0 / yearMaximum, 1);
+
+                return new TranscriptYearRowDto
+                {
+                    AcademicYearId = yearGroup.Key.AcademicYearId,
+                    AcademicYearName = yearGroup.Key.AcademicYearName,
+                    OverallMarksPercentage = yearPercentage,
+                    OverallResultCategory = ResultCategory.From(yearPercentage),
+                    Subjects = subjectRows,
+                };
+            })
+            .ToList();
+
+        return new StudentTranscriptDto
+        {
+            StudentId = identity.Id,
+            StudentCode = identity.StudentCode,
+            FullName = identity.FullName,
+            Years = years,
+        };
+    }
+
     public async Task<List<SectionClassReportDto>> GetTeacherClassReportsAsync(int teacherId) =>
         await db.QueryAsync(
             """

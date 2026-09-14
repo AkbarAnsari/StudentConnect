@@ -1,10 +1,23 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { Grade, Section } from '../students/student.model';
 import { Subject } from '../attendance/attendance.model';
-import { AcademicYear, AcademicYearInput, GradeInput, SectionInput, SectionStudent, SubjectInput, Term, TermInput } from './academic-structure.model';
+import {
+  AcademicYear,
+  AcademicYearInput,
+  GradeInput,
+  GradingBand,
+  GradingBandInput,
+  RolloverCommitResult,
+  RolloverStudentRow,
+  SectionInput,
+  SectionStudent,
+  SubjectInput,
+  Term,
+  TermInput,
+} from './academic-structure.model';
 
 @Injectable({ providedIn: 'root' })
 export class AcademicStructureService {
@@ -14,9 +27,19 @@ export class AcademicStructureService {
   private readonly sectionsUrl = `${environment.apiBaseUrl}/sections`;
   private readonly gradesUrl = `${environment.apiBaseUrl}/grades`;
   private readonly subjectsUrl = `${environment.apiBaseUrl}/subjects`;
+  private readonly gradingBandsUrl = `${environment.apiBaseUrl}/grading-bands`;
 
-  getAcademicYears(): Observable<AcademicYear[]> {
-    return this.http.get<AcademicYear[]>(this.academicYearsUrl);
+  getGradingBands(): Observable<GradingBand[]> {
+    return this.http.get<GradingBand[]>(this.gradingBandsUrl);
+  }
+
+  replaceGradingBands(bands: GradingBandInput[]): Observable<GradingBand[]> {
+    return this.http.put<GradingBand[]>(this.gradingBandsUrl, { bands });
+  }
+
+  getAcademicYears(includeArchived = false): Observable<AcademicYear[]> {
+    const params = includeArchived ? new HttpParams().set('includeArchived', 'true') : undefined;
+    return this.http.get<AcademicYear[]>(this.academicYearsUrl, { params });
   }
 
   createAcademicYear(year: AcademicYearInput): Observable<AcademicYear> {
@@ -25,6 +48,20 @@ export class AcademicStructureService {
 
   deleteAcademicYear(id: number): Observable<void> {
     return this.http.delete<void>(`${this.academicYearsUrl}/${id}`);
+  }
+
+  restoreAcademicYear(id: number): Observable<void> {
+    return this.http.post<void>(`${this.academicYearsUrl}/${id}/restore`, {});
+  }
+
+  // Read-only — shows the proposed Grade/Section promotion for every student, changes nothing.
+  previewRollover(academicYearId: number): Observable<RolloverStudentRow[]> {
+    return this.http.post<RolloverStudentRow[]>(`${this.academicYearsUrl}/${academicYearId}/rollover-preview`, {});
+  }
+
+  commitRollover(academicYearId: number, force: boolean): Observable<RolloverCommitResult> {
+    const params = force ? new HttpParams().set('force', 'true') : undefined;
+    return this.http.post<RolloverCommitResult>(`${this.academicYearsUrl}/${academicYearId}/rollover-commit`, { overrides: [] }, { params });
   }
 
   getTerms(): Observable<Term[]> {
@@ -39,8 +76,17 @@ export class AcademicStructureService {
     return this.http.delete<void>(`${this.termsUrl}/${id}`);
   }
 
-  getSections(): Observable<Section[]> {
-    return this.http.get<Section[]>(this.sectionsUrl);
+  lockTerm(id: number): Observable<void> {
+    return this.http.post<void>(`${this.termsUrl}/${id}/lock`, {});
+  }
+
+  unlockTerm(id: number): Observable<void> {
+    return this.http.post<void>(`${this.termsUrl}/${id}/unlock`, {});
+  }
+
+  getSections(includeArchived = false): Observable<Section[]> {
+    const params = includeArchived ? new HttpParams().set('includeArchived', 'true') : undefined;
+    return this.http.get<Section[]>(this.sectionsUrl, { params });
   }
 
   // A Teacher's homeroom sections, for the "My Classes" roster view.
@@ -58,6 +104,10 @@ export class AcademicStructureService {
 
   deleteSection(id: number): Observable<void> {
     return this.http.delete<void>(`${this.sectionsUrl}/${id}`);
+  }
+
+  restoreSection(id: number): Observable<void> {
+    return this.http.post<void>(`${this.sectionsUrl}/${id}/restore`, {});
   }
 
   getGrades(): Observable<Grade[]> {

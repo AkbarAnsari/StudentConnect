@@ -76,6 +76,11 @@
         <button type="submit">Add Academic Year</button>
       </form>
 
+      <label class="checkbox-row">
+        <input type="checkbox" [checked]="showArchivedYears()" (change)="onShowArchivedYearsChange($any($event.target).checked)" />
+        Show archived years
+      </label>
+
       <ul class="entity-list">
         @for (year of academicYears(); track year.id) {
           <li>
@@ -83,7 +88,12 @@
             @if (year.isCurrent) {
               <span class="badge badge-success">Current</span>
             }
-            <button type="button" class="link-button" (click)="deleteAcademicYear(year.id)">Delete</button>
+            @if (year.isArchived) {
+              <span class="badge">Archived</span>
+              <button type="button" class="link-button" (click)="restoreAcademicYear(year.id)">Restore</button>
+            } @else {
+              <button type="button" class="link-button" (click)="deleteAcademicYear(year.id)">Archive</button>
+            }
           </li>
         }
       </ul>
@@ -121,7 +131,13 @@
         @for (term of terms(); track term.id) {
           <li>
             <span>{{ term.academicYearName }} · {{ term.name }} ({{ term.startDate }} – {{ term.endDate }})</span>
-            <button type="button" class="link-button" (click)="deleteTerm(term.id)">Delete</button>
+            @if (term.isLocked) {
+              <span class="badge">Locked</span>
+              <button type="button" class="link-button" (click)="unlockTerm(term.id)">Unlock</button>
+            } @else {
+              <button type="button" class="link-button" (click)="lockTerm(term.id)">Lock</button>
+              <button type="button" class="link-button" (click)="deleteTerm(term.id)">Delete</button>
+            }
           </li>
         }
       </ul>
@@ -156,6 +172,11 @@
         <button type="submit">Add Section</button>
       </form>
 
+      <label class="checkbox-row">
+        <input type="checkbox" [checked]="showArchivedSections()" (change)="onShowArchivedSectionsChange($any($event.target).checked)" />
+        Show archived sections
+      </label>
+
       <ul class="entity-list">
         @for (section of sections(); track section.id) {
           <li>
@@ -165,10 +186,165 @@
                 <span class="badge badge-success">{{ section.homeroomTeacherName }}</span>
               }
             </span>
-            <button type="button" class="link-button" (click)="deleteSection(section.id)">Delete</button>
+            @if (section.isArchived) {
+              <span class="badge">Archived</span>
+              <button type="button" class="link-button" (click)="restoreSection(section.id)">Restore</button>
+            } @else {
+              <button type="button" class="link-button" (click)="deleteSection(section.id)">Archive</button>
+            }
           </li>
         }
       </ul>
     </div>
+
+    <div class="card">
+      <h2>Teacher Subject Assignments</h2>
+      <p class="notice">Formally record which teacher teaches which subject in which section.</p>
+
+      <form [formGroup]="assignmentForm" (ngSubmit)="createAssignment()">
+        <label>
+          Teacher
+          <select formControlName="teacherId">
+            <option [value]="0">Select a teacher</option>
+            @for (teacher of teachers(); track teacher.id) {
+              <option [value]="teacher.id">{{ teacher.firstName }} {{ teacher.lastName }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          Subject
+          <select formControlName="subjectId">
+            <option [value]="0">Select a subject</option>
+            @for (subject of subjects(); track subject.id) {
+              <option [value]="subject.id">{{ subject.name }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          Section
+          <select formControlName="sectionId">
+            <option [value]="0">Select a section</option>
+            @for (section of sections(); track section.id) {
+              <option [value]="section.id">{{ section.gradeName }} - {{ section.name }}</option>
+            }
+          </select>
+        </label>
+        <button type="submit">Add Assignment</button>
+      </form>
+
+      <ul class="entity-list">
+        @for (assignment of assignments(); track assignment.id) {
+          <li>
+            <span>{{ assignment.teacherName }} — {{ assignment.subjectName }} — {{ assignment.gradeName }} - {{ assignment.sectionName }}</span>
+            <button type="button" class="link-button" (click)="deleteAssignment(assignment.id)">Remove</button>
+          </li>
+        }
+      </ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Academic Year Rollover</h2>
+    <p class="notice">
+      Preview and promote every active student to the next grade/section. Preview never changes
+      data — only "Commit Rollover" does.
+    </p>
+
+    <label>
+      Academic Year
+      <select (change)="onRolloverYearChange($any($event.target).value)">
+        <option value="0">Select an academic year</option>
+        @for (year of academicYears(); track year.id) {
+          <option [value]="year.id">{{ year.name }}</option>
+        }
+      </select>
+    </label>
+
+    @if (rolloverError()) {
+      <p class="error-message">{{ rolloverError() }}</p>
+    }
+    @if (rolloverMessage()) {
+      <p class="success-message">{{ rolloverMessage() }}</p>
+    }
+
+    <button type="button" [disabled]="!rolloverYearId() || rolloverLoading()" (click)="previewRollover()">
+      {{ rolloverLoading() ? 'Loading...' : 'Preview Rollover' }}
+    </button>
+
+    @if (rolloverPreview(); as preview) {
+      <table>
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Current</th>
+            <th>Proposed</th>
+            <th>Outcome</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of preview; track row.studentId) {
+            <tr>
+              <td>{{ row.studentName }}</td>
+              <td>{{ row.currentGradeName }}@if (row.currentSectionName) { - {{ row.currentSectionName }} }</td>
+              <td>
+                @if (row.proposedGradeName) {
+                  {{ row.proposedGradeName }}@if (row.proposedSectionName) { - {{ row.proposedSectionName }} }
+                } @else {
+                  —
+                }
+              </td>
+              <td>
+                @if (row.excluded) {
+                  <span class="field-error">Excluded: {{ row.exclusionReason }}</span>
+                } @else {
+                  Will promote
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <label>
+        <input type="checkbox" [checked]="rolloverForce()" (change)="onRolloverForceChange($any($event.target).checked)" />
+        Force (re-run even if already rolled over)
+      </label>
+
+      <button type="button" [disabled]="rolloverLoading()" (click)="commitRollover()">
+        {{ rolloverLoading() ? 'Committing...' : 'Commit Rollover' }}
+      </button>
+    }
+  </div>
+
+  <div class="card">
+    <h2>Grading Bands</h2>
+    <p class="notice">
+      Defines the result label shown for a given marks percentage (the highest matching band wins).
+    </p>
+
+    @if (gradingBandsError()) {
+      <p class="error-message">{{ gradingBandsError() }}</p>
+    }
+    @if (gradingBandsMessage()) {
+      <p class="success-message">{{ gradingBandsMessage() }}</p>
+    }
+
+    <ul class="entity-list">
+      @for (band of gradingBands(); track $index) {
+        <li>
+          <input type="text" [value]="band.label" (input)="updateBandLabel($index, $any($event.target).value)" placeholder="Label" />
+          <input
+            type="number"
+            [value]="band.minPercentage"
+            (input)="updateBandMin($index, $any($event.target).value)"
+            placeholder="Min %"
+          />
+          <button type="button" class="link-button" (click)="removeBand($index)">Remove</button>
+        </li>
+      }
+    </ul>
+
+    <button type="button" (click)="addBand()">Add Band</button>
+    <button type="button" (click)="saveGradingBands()">Save Grading Bands</button>
   </div>
 </section>

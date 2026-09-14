@@ -16,6 +16,7 @@ export class AnalyticsDashboard {
   protected readonly attendanceByGrade = toSignal(this.analyticsService.getAttendanceByGrade(), { initialValue: [] });
   protected readonly marksByGrade = toSignal(this.analyticsService.getMarksByGrade(), { initialValue: [] });
   protected readonly atRiskStudents = toSignal(this.analyticsService.getAtRiskStudents(), { initialValue: [] });
+  protected readonly trend = toSignal(this.analyticsService.getTrend(), { initialValue: [] });
 
   protected resultBadgeClass(category: string): string {
     switch (category) {

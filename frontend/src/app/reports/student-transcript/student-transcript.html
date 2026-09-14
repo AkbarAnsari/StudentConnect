@@ -1,0 +1,54 @@
+<section class="page report-card-page">
+  <a class="back-link no-print" [routerLink]="['/students', studentId]">← Back to Profile</a>
+
+  @if (state().loading) {
+    <p class="loading">Loading transcript...</p>
+  } @else if (state().error) {
+    <p class="error-message">Unable to load the transcript. Please check whether the StudentConnect API is running.</p>
+  } @else if (state().transcript; as transcript) {
+    <div class="report-card">
+      <div class="report-header">
+        <h1>Academic Transcript</h1>
+        <button type="button" class="btn no-print" (click)="print()">Print / Save as PDF</button>
+        <button type="button" class="btn no-print" (click)="downloadCsv()">Download CSV</button>
+      </div>
+
+      <dl class="profile-details">
+        <dt>Name</dt>
+        <dd>{{ transcript.fullName }}</dd>
+        <dt>Student ID</dt>
+        <dd>{{ transcript.studentCode }}</dd>
+      </dl>
+
+      @if (transcript.years.length === 0) {
+        <p class="empty">No recorded marks yet across any academic year.</p>
+      }
+
+      @for (year of transcript.years; track year.academicYearId) {
+        <h2>{{ year.academicYearName }}</h2>
+        <p>
+          Overall: <strong>{{ year.overallMarksPercentage }}%</strong>
+          <span class="badge">{{ year.overallResultCategory }}</span>
+        </p>
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Subject</th>
+              <th>Marks</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (subject of year.subjects; track subject.subjectId) {
+              <tr>
+                <td>{{ subject.subjectName }}</td>
+                <td>{{ subject.marksPercentage }}%</td>
+                <td>{{ subject.resultCategory }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </div>
+  }
+</section>

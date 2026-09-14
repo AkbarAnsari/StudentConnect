@@ -22,4 +22,11 @@ public class ApplicationUser
     // Only set directly for Parent-role users (Student/Teacher accounts resolve their
     // email through the linked Student/Teacher row instead — see UserStore.GetEmailForUserAsync).
     public string? Email { get; set; }
+
+    // Null until the address on file has been confirmed via the emailed verification link.
+    public DateTime? EmailVerifiedAtUtc { get; set; }
+
+    // Opt-in: batch notification emails into one periodic digest instead of a realtime email
+    // per event (see NotificationDigestProcessor) — primarily aimed at Parents.
+    public bool NotificationDigestEnabled { get; set; }
 }

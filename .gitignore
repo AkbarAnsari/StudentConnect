@@ -1,6 +1,7 @@
 # ===== .NET / backend =====
 backend/**/bin/
 backend/**/obj/
+backend/publish/
 *.user
 *.suo
 .vs/

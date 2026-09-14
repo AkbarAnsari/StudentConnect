@@ -28,6 +28,13 @@ public class EmailNotificationService(NotificationService inApp, EmailOutboxStor
 
     private async Task EnqueueEmailAsync(int userId, string title, string message)
     {
+        // Digest-enabled users (Parents, typically) get their emails batched by
+        // NotificationDigestProcessor instead of one realtime email per event.
+        if (await users.GetNotificationDigestEnabledAsync(userId))
+        {
+            return;
+        }
+
         var email = await users.GetEmailForUserAsync(userId);
         if (!string.IsNullOrWhiteSpace(email))
         {

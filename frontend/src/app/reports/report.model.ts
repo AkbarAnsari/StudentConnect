@@ -30,3 +30,25 @@ export interface SectionClassReport {
   averageMarksPercentage: number;
   atRiskCount: number;
 }
+
+export interface TranscriptSubjectRow {
+  subjectId: number;
+  subjectName: string;
+  marksPercentage: number;
+  resultCategory: string;
+}
+
+export interface TranscriptYearRow {
+  academicYearId: number;
+  academicYearName: string;
+  overallMarksPercentage: number;
+  overallResultCategory: string;
+  subjects: TranscriptSubjectRow[];
+}
+
+export interface StudentTranscript {
+  studentId: number;
+  studentCode: string;
+  fullName: string;
+  years: TranscriptYearRow[];
+}

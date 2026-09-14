@@ -10,17 +10,17 @@ namespace StudentConnect.Api.Controllers;
 [Route("api/sections")]
 public class SectionsController(SectionStore sections, ReferenceDataStore referenceData, StudentStore students, ICurrentUserService currentUser, ICurrentTenantService currentTenant, ILogger<SectionsController> logger) : ControllerBase
 {
-    // GET /api/sections
+    // GET /api/sections?includeArchived=true
     [HttpGet]
     [Authorize]
-    public async Task<ActionResult<IEnumerable<SectionDto>>> GetSections()
+    public async Task<ActionResult<IEnumerable<SectionDto>>> GetSections(bool includeArchived = false)
     {
         if (currentTenant.SchoolId is not { } schoolId)
         {
             return Forbid();
         }
 
-        var all = await sections.GetAllAsync(schoolId);
+        var all = await sections.GetAllAsync(schoolId, includeArchived);
         return Ok(all.Select(SectionDto.FromEntity));
     }
 
@@ -128,7 +128,8 @@ public class SectionsController(SectionStore sections, ReferenceDataStore refere
         return CreatedAtAction(nameof(GetSections), null, SectionDto.FromEntity(created));
     }
 
-    // DELETE /api/sections/{id}
+    // DELETE /api/sections/{id} — archives (soft-deletes) rather than physically deleting, so a
+    // closed section's historical attendance/marks/homework stay resolvable.
     [HttpDelete("{id:int}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteSection(int id)
@@ -143,16 +144,26 @@ public class SectionsController(SectionStore sections, ReferenceDataStore refere
             return NotFound();
         }
 
-        try
+        await sections.ArchiveAsync(id);
+        return NoContent();
+    }
+
+    // POST /api/sections/{id}/restore
+    [HttpPost("{id:int}/restore")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> RestoreSection(int id)
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
         {
-            await sections.DeleteAsync(id);
-        }
-        catch (Npgsql.PostgresException ex)
-        {
-            logger.LogError(ex, "Failed to delete section {Id}", id);
-            return Conflict(new { message = "Cannot delete a section that still has students assigned to it." });
+            return Forbid();
         }
 
+        if (!await sections.ExistsAsync(id, schoolId))
+        {
+            return NotFound();
+        }
+
+        await sections.RestoreAsync(id);
         return NoContent();
     }
 }

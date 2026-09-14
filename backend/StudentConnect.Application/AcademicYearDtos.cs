@@ -9,6 +9,7 @@ public class AcademicYearDto
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
     public bool IsCurrent { get; set; }
+    public bool IsArchived { get; set; }
 
     public static AcademicYearDto FromEntity(AcademicYear year) => new()
     {
@@ -17,6 +18,7 @@ public class AcademicYearDto
         StartDate = year.StartDate,
         EndDate = year.EndDate,
         IsCurrent = year.IsCurrent,
+        IsArchived = year.IsArchived,
     };
 }
 

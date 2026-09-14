@@ -21,7 +21,8 @@ public class ActivitiesController(ActivityStore activities, ActivityRegistration
         foreach (var activity in all)
         {
             var currentRegistrations = await registrations.CountActiveAsync(activity.Id);
-            result.Add(ActivityDto.FromEntity(activity, currentRegistrations));
+            var currentWaitlisted = await registrations.CountWaitlistedAsync(activity.Id);
+            result.Add(ActivityDto.FromEntity(activity, currentRegistrations, currentWaitlisted));
         }
 
         return Ok(result);
@@ -38,7 +39,8 @@ public class ActivitiesController(ActivityStore activities, ActivityRegistration
         }
 
         var currentRegistrations = await registrations.CountActiveAsync(id);
-        return Ok(ActivityDto.FromEntity(activity, currentRegistrations));
+        var currentWaitlisted = await registrations.CountWaitlistedAsync(id);
+        return Ok(ActivityDto.FromEntity(activity, currentRegistrations, currentWaitlisted));
     }
 
     // GET /api/activities/grade/{gradeId}
@@ -55,7 +57,8 @@ public class ActivitiesController(ActivityStore activities, ActivityRegistration
         foreach (var activity in byGrade)
         {
             var currentRegistrations = await registrations.CountActiveAsync(activity.Id);
-            result.Add(ActivityDto.FromEntity(activity, currentRegistrations));
+            var currentWaitlisted = await registrations.CountWaitlistedAsync(activity.Id);
+            result.Add(ActivityDto.FromEntity(activity, currentRegistrations, currentWaitlisted));
         }
 
         return Ok(result);

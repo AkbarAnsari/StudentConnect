@@ -16,6 +16,7 @@ public class AttendanceController(
     ReferenceDataStore referenceData,
     NotificationRecipientResolver recipients,
     ICurrentUserService currentUser,
+    ICurrentTenantService currentTenant,
     INotificationService notifications,
     IAuditService audit,
     ILogger<AttendanceController> logger) : ControllerBase
@@ -29,6 +30,21 @@ public class AttendanceController(
         return Ok(records.Select(AttendanceRecordDto.FromEntity));
     }
 
+    // GET /api/attendance/subject/{subjectId}/date/{date} — every already-recorded status for
+    // that subject+date, used to prefill the Record Attendance grid before a bulk save.
+    [HttpGet("subject/{subjectId:int}/date/{date}")]
+    [Authorize(Roles = "Teacher,Admin")]
+    public async Task<ActionResult<IEnumerable<AttendanceRecordDto>>> GetBySubjectAndDate(int subjectId, DateOnly date)
+    {
+        if (currentTenant.SchoolId is not { } schoolId || !await referenceData.SubjectExistsAsync(subjectId, schoolId))
+        {
+            return NotFound(new { message = "Subject not found." });
+        }
+
+        var records = await attendance.GetBySubjectAndDateAsync(subjectId, date);
+        return Ok(records.Select(AttendanceRecordDto.FromEntity));
+    }
+
     // GET /api/attendance/student/{studentId} — a Student may only view their own attendance.
     [HttpGet("student/{studentId:int}")]
     public async Task<ActionResult<IEnumerable<AttendanceRecordDto>>> GetStudentAttendance(int studentId)
@@ -38,7 +54,7 @@ public class AttendanceController(
             return Forbid();
         }
 
-        if (!await students.ExistsAsync(studentId))
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(studentId, schoolId))
         {
             return NotFound(new { message = "Student not found." });
         }
@@ -56,12 +72,12 @@ public class AttendanceController(
             return Forbid();
         }
 
-        if (!await students.ExistsAsync(studentId))
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(studentId, schoolId))
         {
             return NotFound(new { message = "Student not found." });
         }
 
-        if (!await referenceData.SubjectExistsAsync(subjectId))
+        if (!await referenceData.SubjectExistsAsync(subjectId, schoolId))
         {
             return NotFound(new { message = "Subject not found." });
         }
@@ -79,7 +95,7 @@ public class AttendanceController(
             return Forbid();
         }
 
-        if (!await students.ExistsAsync(studentId))
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(studentId, schoolId))
         {
             return NotFound(new { message = "Student not found." });
         }
@@ -99,12 +115,17 @@ public class AttendanceController(
             return BadRequest(new { message = "Status must be 'Present' or 'Absent'." });
         }
 
-        if (!await students.ExistsAsync(dto.StudentId))
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await students.ExistsAsync(dto.StudentId, schoolId))
         {
             return BadRequest(new { message = "Student does not exist." });
         }
 
-        if (!await referenceData.SubjectExistsAsync(dto.SubjectId))
+        if (!await referenceData.SubjectExistsAsync(dto.SubjectId, schoolId))
         {
             return BadRequest(new { message = "Subject does not exist." });
         }
@@ -148,7 +169,12 @@ public class AttendanceController(
             return BadRequest(new { message = "At least one attendance record is required." });
         }
 
-        var subject = await referenceData.GetSubjectByIdAsync(dto.SubjectId);
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var subject = await referenceData.GetSubjectByIdAsync(dto.SubjectId, schoolId);
         if (subject is null)
         {
             return BadRequest(new { message = "Subject does not exist." });
@@ -158,7 +184,7 @@ public class AttendanceController(
         var missingStudentIds = new List<int>();
         foreach (var studentId in studentIds)
         {
-            if (!await students.ExistsAsync(studentId))
+            if (!await students.ExistsAsync(studentId, schoolId))
             {
                 missingStudentIds.Add(studentId);
             }
@@ -168,7 +194,7 @@ public class AttendanceController(
             return BadRequest(new { message = $"Unknown student id(s): {string.Join(", ", missingStudentIds)}" });
         }
 
-        var parsedRecords = new List<(int StudentId, AttendanceStatus Status)>();
+        var parsedRecords = new List<(int StudentId, AttendanceStatus Status, string? Reason)>();
         foreach (var record in dto.Records)
         {
             if (!TryParseStatus(record.Status, out var status))
@@ -176,18 +202,23 @@ public class AttendanceController(
                 return BadRequest(new { message = $"Invalid status '{record.Status}' for student {record.StudentId}." });
             }
 
-            parsedRecords.Add((record.StudentId, status));
+            parsedRecords.Add((record.StudentId, status, record.Reason));
         }
 
         var existingByStudent = await attendance.GetExistingForSubjectDateAsync(dto.SubjectId, dto.Date, studentIds);
 
         try
         {
-            foreach (var (studentId, status) in parsedRecords)
+            foreach (var (studentId, status, reason) in parsedRecords)
             {
                 if (existingByStudent.TryGetValue(studentId, out var existingRecord))
                 {
-                    await attendance.UpdateStatusAsync(existingRecord.Id, status);
+                    // Only overwrite when the status actually changed, so a reason isn't
+                    // required/stamped on rows that were re-saved unchanged.
+                    if (existingRecord.Status != status)
+                    {
+                        await attendance.UpdateStatusAsync(existingRecord.Id, status, reason);
+                    }
                 }
                 else
                 {
@@ -201,7 +232,7 @@ public class AttendanceController(
             return StatusCode(500, new { message = "Unable to save attendance. Please try again." });
         }
 
-        foreach (var (studentId, status) in parsedRecords.Where(r => r.Status == AttendanceStatus.Absent))
+        foreach (var (studentId, status, _) in parsedRecords.Where(r => r.Status == AttendanceStatus.Absent))
         {
             await NotifyAbsence(studentId, subject.Name, dto.Date);
         }
@@ -220,15 +251,25 @@ public class AttendanceController(
             return BadRequest(new { message = "Status must be 'Present' or 'Absent'." });
         }
 
+        if (string.IsNullOrWhiteSpace(dto.Reason))
+        {
+            return BadRequest(new { message = "A reason is required when correcting an attendance record." });
+        }
+
         var record = await attendance.GetByIdAsync(id);
         if (record is null)
         {
             return NotFound();
         }
 
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(record.StudentId, schoolId))
+        {
+            return NotFound();
+        }
+
         try
         {
-            await attendance.UpdateStatusAsync(id, status);
+            await attendance.UpdateStatusAsync(id, status, dto.Reason);
         }
         catch (PostgresException ex)
         {
@@ -236,8 +277,9 @@ public class AttendanceController(
             return StatusCode(500, new { message = "Unable to update the attendance record. Please try again." });
         }
 
-        await audit.LogAsync("Update", "Attendance", id.ToString(), $"Status: {record.Status} -> {status}");
+        await audit.LogAsync("Update", "Attendance", id.ToString(), $"Status: {record.Status} -> {status}; Reason: {dto.Reason}");
         record.Status = status;
+        record.CorrectionReason = dto.Reason;
         return Ok(AttendanceRecordDto.FromEntity(record));
     }
 
@@ -248,6 +290,11 @@ public class AttendanceController(
     {
         var record = await attendance.GetByIdAsync(id);
         if (record is null)
+        {
+            return NotFound();
+        }
+
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(record.StudentId, schoolId))
         {
             return NotFound();
         }

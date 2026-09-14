@@ -24,6 +24,10 @@
       <dd>{{ a.currentRegistrations }}</dd>
       <dt>Available</dt>
       <dd>{{ a.availableSeats }}</dd>
+      @if (a.currentWaitlisted > 0) {
+        <dt>Waitlisted</dt>
+        <dd>{{ a.currentWaitlisted }}</dd>
+      }
     </dl>
 
     @if (actionError()) {
@@ -33,14 +37,18 @@
     @if (!checkedRegistration()) {
       <p class="loading">Checking registration status...</p>
     } @else if (myRegistration(); as registration) {
-      <p class="status-registered">You are registered for this activity.</p>
+      @if (registration.status === 'Waitlisted') {
+        <p class="status-full">You are on the waitlist for this activity.</p>
+      } @else {
+        <p class="status-registered">You are registered for this activity.</p>
+      }
       <button type="button" class="cancel-button" (click)="onCancel()">Cancel Registration</button>
     } @else if (isPast(a)) {
       <p class="status-closed">Registration is closed because this activity has already occurred.</p>
-    } @else if (a.availableSeats === 0) {
-      <p class="status-full">This activity is full.</p>
     } @else {
-      <button type="button" class="register-button" (click)="onRegister()">Register</button>
+      <button type="button" class="register-button" (click)="onRegister()">
+        {{ a.availableSeats > 0 ? 'Register' : 'Join Waitlist' }}
+      </button>
     }
   }
 </section>

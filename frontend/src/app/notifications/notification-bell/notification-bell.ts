@@ -32,6 +32,10 @@ export class NotificationBell implements OnInit, OnDestroy {
     this.notificationService.markAllAsRead();
   }
 
+  protected toggleDigest(checked: boolean): void {
+    this.notificationService.setDigestEnabled(checked);
+  }
+
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
     if (!(event.target as HTMLElement).closest('.notification-bell')) {

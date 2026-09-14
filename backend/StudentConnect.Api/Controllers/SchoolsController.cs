@@ -1,7 +1,10 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using StudentConnect.Application;
 using StudentConnect.Domain;
 using StudentConnect.Infrastructure.Auth;
@@ -10,15 +13,25 @@ using StudentConnect.Infrastructure.Data.Stores;
 namespace StudentConnect.Api.Controllers;
 
 // Public, unauthenticated self-service tenant onboarding — creates a brand-new School and its
-// first Admin user account in one call, and logs that admin in immediately. No email
-// verification in this pass — see docs/solution-architecture-multi-tenancy.md for what's
-// deliberately deferred (platform-admin console, billing, RLS, etc.).
+// first Admin user account in one call, and logs that admin in immediately. The admin's email
+// is captured and a verification email is enqueued (see docs/solution-architecture-multi-tenancy.md
+// for what's still deliberately deferred: platform-admin console, billing, RLS, etc.).
 [ApiController]
 [Route("api/schools")]
 [AllowAnonymous]
-public class SchoolsController(SchoolStore schools, UserStore users, JwtTokenService tokenService, ILogger<SchoolsController> logger) : ControllerBase
+public class SchoolsController(
+    SchoolStore schools,
+    UserStore users,
+    EmailVerificationTokenStore verificationTokens,
+    EmailOutboxStore emailOutbox,
+    RefreshTokenStore refreshTokens,
+    JwtTokenService tokenService,
+    IConfiguration configuration,
+    ILogger<SchoolsController> logger) : ControllerBase
 {
     private static readonly PasswordHasher<ApplicationUser> Hasher = new();
+    private const int VerificationTokenValidityMinutes = 60 * 24;
+    private const int RefreshTokenValidityDays = 30;
 
     // POST /api/schools/register
     [HttpPost("register")]
@@ -26,14 +39,20 @@ public class SchoolsController(SchoolStore schools, UserStore users, JwtTokenSer
     {
         if (string.IsNullOrWhiteSpace(dto.SchoolName) ||
             string.IsNullOrWhiteSpace(dto.AdminUsername) ||
-            string.IsNullOrWhiteSpace(dto.AdminPassword))
+            string.IsNullOrWhiteSpace(dto.AdminPassword) ||
+            string.IsNullOrWhiteSpace(dto.AdminEmail))
         {
-            return BadRequest(new { message = "SchoolName, AdminUsername, and AdminPassword are required." });
+            return BadRequest(new { message = "SchoolName, AdminUsername, AdminPassword, and AdminEmail are required." });
         }
 
         if (dto.AdminPassword.Length < 8)
         {
             return BadRequest(new { message = "AdminPassword must be at least 8 characters." });
+        }
+
+        if (!dto.AdminEmail.Contains('@'))
+        {
+            return BadRequest(new { message = "AdminEmail must be a valid email address." });
         }
 
         if (await users.UsernameExistsAsync(dto.AdminUsername))
@@ -46,20 +65,45 @@ public class SchoolsController(SchoolStore schools, UserStore users, JwtTokenSer
 
         var adminUser = new ApplicationUser { Username = dto.AdminUsername, Role = UserRole.Admin, SchoolId = schoolId };
         var passwordHash = Hasher.HashPassword(adminUser, dto.AdminPassword);
-        adminUser.Id = await users.CreateAsync(dto.AdminUsername, passwordHash, UserRole.Admin, schoolId);
+        adminUser.Id = await users.CreateAsync(dto.AdminUsername, passwordHash, UserRole.Admin, schoolId, email: dto.AdminEmail);
 
         var token = tokenService.CreateToken(adminUser);
+
+        var rawRefreshToken = Base64UrlTextEncoder.Encode(RandomNumberGenerator.GetBytes(32));
+        await refreshTokens.CreateAsync(adminUser.Id, HashToken(rawRefreshToken), DateTime.UtcNow.AddDays(RefreshTokenValidityDays));
+
+        await SendVerificationEmailAsync(adminUser.Id, dto.AdminEmail);
 
         logger.LogInformation("Self-service registration: created school '{SchoolName}' ({SchoolId}) with admin {Username}", dto.SchoolName, schoolId, dto.AdminUsername);
 
         return Ok(new LoginResponseDto
         {
             Token = token,
+            RefreshToken = rawRefreshToken,
             Username = adminUser.Username,
             Role = adminUser.Role.ToString(),
             DisplayName = "Administrator",
+            EmailVerified = false,
         });
     }
+
+    // Mirrors AuthController's own verification-email issuance exactly (can't share a private
+    // method across controllers) — generates a fresh token, stores its hash, enqueues the email.
+    private async Task SendVerificationEmailAsync(int userId, string email)
+    {
+        var rawToken = Base64UrlTextEncoder.Encode(RandomNumberGenerator.GetBytes(32));
+        await verificationTokens.CreateAsync(userId, HashToken(rawToken), DateTime.UtcNow.AddMinutes(VerificationTokenValidityMinutes));
+
+        var frontendBaseUrl = configuration["Frontend:BaseUrl"] ?? "http://localhost:4200";
+        var verifyLink = $"{frontendBaseUrl}/verify-email/{rawToken}";
+        await emailOutbox.EnqueueAsync(
+            email,
+            userId,
+            "Verify your StudentConnect email address",
+            $"Please confirm your email address by visiting the link below. It expires in {VerificationTokenValidityMinutes / 60} hours:\n\n{verifyLink}\n\nIf you didn't create this account, you can ignore this email.");
+    }
+
+    private static string HashToken(string rawToken) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
 
     private async Task<string> GenerateUniqueCodeAsync(string schoolName)
     {

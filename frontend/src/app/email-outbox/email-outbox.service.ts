@@ -12,4 +12,8 @@ export class EmailOutboxService {
   getRecent(take = 50): Observable<EmailOutboxEntry[]> {
     return this.http.get<EmailOutboxEntry[]>(this.baseUrl, { params: { take: take.toString() } });
   }
+
+  retry(id: number): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/${id}/retry`, {});
+  }
 }

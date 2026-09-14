@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { catchError, map, of, startWith } from 'rxjs';
 import { AuthService } from '../../auth/auth.service';
 import { DEMO_TEACHER_ID } from '../../homework/teacher-homework/teacher-homework';
+import { triggerBlobDownload } from '../../shared/download.util';
 import { LearningMaterial } from '../learning-material.model';
 import { LearningMaterialsService } from '../learning-materials.service';
 
@@ -37,8 +38,8 @@ export class TeacherMaterials {
     { initialValue: LOADING_STATE },
   );
 
-  protected downloadUrl(id: number): string {
-    return this.materialsService.downloadUrl(id);
+  protected download(material: LearningMaterial): void {
+    this.materialsService.downloadFile(material.id).subscribe((blob) => triggerBlobDownload(blob, material.fileName));
   }
 
   protected formatSize(bytes: number): string {

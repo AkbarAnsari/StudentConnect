@@ -33,3 +33,18 @@
   font-size: 0.85rem;
   font-weight: 600;
 }
+
+.inline-edit-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.inline-edit-form input {
+  width: auto;
+  flex: 1;
+  min-width: 8rem;
+}
+

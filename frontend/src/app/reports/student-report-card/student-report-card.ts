@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, map, of, startWith } from 'rxjs';
+import { triggerBlobDownload } from '../../shared/download.util';
 import { StudentReportCard } from '../report.model';
 import { ReportService } from '../report.service';
 
@@ -36,5 +37,9 @@ export class StudentReportCardPage {
 
   protected print(): void {
     window.print();
+  }
+
+  protected downloadCsv(): void {
+    this.reportService.exportStudentReportCard(this.studentId).subscribe((blob) => triggerBlobDownload(blob, `report-card-${this.studentId}.csv`));
   }
 }

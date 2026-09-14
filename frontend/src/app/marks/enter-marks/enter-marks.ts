@@ -1,7 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { map } from 'rxjs';
 import { AttendanceService } from '../../attendance/attendance.service';
 import { StudentService } from '../../students/student.service';
 import { Assessment, BulkMarkItem } from '../marks.model';
@@ -19,12 +20,13 @@ export class EnterMarks {
   private readonly studentService = inject(StudentService);
 
   protected readonly subjects = toSignal(this.attendanceService.getSubjects(), { initialValue: [] });
-  protected readonly students = toSignal(this.studentService.getStudents(), { initialValue: [] });
+  protected readonly students = toSignal(this.studentService.getStudents().pipe(map((r) => r.items)), { initialValue: [] });
 
   protected readonly subjectId = signal<number | null>(null);
   protected readonly assessmentId = signal<number | null>(null);
   protected readonly assessments = signal<Assessment[]>([]);
   protected readonly marksByStudentId = signal<Record<number, number | null>>({});
+  protected readonly loadingExisting = signal(false);
 
   protected readonly saving = signal(false);
   protected readonly successMessage = signal('');
@@ -33,6 +35,31 @@ export class EnterMarks {
   protected readonly selectedAssessment = computed(() =>
     this.assessments().find((a) => a.id === this.assessmentId()) ?? null,
   );
+
+  constructor() {
+    // Prefill from whatever marks are already recorded for this assessment, so the teacher can
+    // see (and selectively correct) existing values instead of facing a misleadingly blank grid.
+    effect(() => {
+      const assessmentId = this.assessmentId();
+
+      if (assessmentId === null) {
+        this.marksByStudentId.set({});
+        return;
+      }
+
+      this.loadingExisting.set(true);
+      this.marksService.getAssessmentResults(assessmentId).subscribe({
+        next: (results) => {
+          this.loadingExisting.set(false);
+          this.marksByStudentId.set(Object.fromEntries(results.map((r) => [r.studentId, r.marksObtained])));
+        },
+        error: () => {
+          this.loadingExisting.set(false);
+          this.marksByStudentId.set({});
+        },
+      });
+    });
+  }
 
   protected onSubjectChange(subjectId: number | null): void {
     this.subjectId.set(subjectId);

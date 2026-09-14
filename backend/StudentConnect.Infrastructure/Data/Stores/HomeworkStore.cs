@@ -36,6 +36,17 @@ public class HomeworkStore(Database db)
     public async Task<Homework?> GetByIdAsync(int id) =>
         await db.QuerySingleOrDefaultAsync($"""{SelectFull} WHERE h."Id" = @id""", p => p.AddWithValue("id", id), MapFull);
 
+    // Tenant-scoped transitively through Grade (Homework has no direct SchoolId column).
+    public async Task<Homework?> GetByIdAsync(int id, int schoolId) =>
+        await db.QuerySingleOrDefaultAsync(
+            $"""{SelectFull} WHERE h."Id" = @id AND g."SchoolId" = @schoolId""",
+            p =>
+            {
+                p.AddWithValue("id", id);
+                p.AddWithValue("schoolId", schoolId);
+            },
+            MapFull);
+
     public async Task<List<Homework>> GetByTeacherAsync(int teacherId) =>
         await db.QueryAsync($"""{SelectFull} WHERE h."TeacherId" = @teacherId ORDER BY h."DueDate" """, p => p.AddWithValue("teacherId", teacherId), MapFull);
 

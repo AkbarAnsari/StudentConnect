@@ -63,10 +63,53 @@
         }
       </label>
 
+      <label>
+        Date of birth (optional)
+        <input type="date" formControlName="dateOfBirth" />
+      </label>
+
+      <label>
+        Phone (optional)
+        <input type="tel" formControlName="phone" />
+      </label>
+
+      <label>
+        Address (optional)
+        <input type="text" formControlName="address" />
+      </label>
+
       <button type="submit" [disabled]="submitting()">
         {{ submitting() ? 'Saving...' : 'Save Changes' }}
       </button>
     </form>
+
+    <section class="panel">
+      <h2>Enrollment Status</h2>
+      @if (statusMessage()) {
+        <p class="success-message">{{ statusMessage() }}</p>
+      }
+      @if (statusError()) {
+        <p class="error-message">{{ statusError() }}</p>
+      }
+      <form [formGroup]="statusForm" (ngSubmit)="onStatusSubmit()">
+        <label>
+          Status
+          <select formControlName="status">
+            <option value="Active">Active</option>
+            <option value="Withdrawn">Withdrawn</option>
+            <option value="Graduated">Graduated</option>
+            <option value="Transferred">Transferred</option>
+          </select>
+        </label>
+        <label>
+          Reason (required unless Active)
+          <textarea formControlName="reason" rows="2"></textarea>
+        </label>
+        <button type="submit" [disabled]="statusSubmitting()">
+          {{ statusSubmitting() ? 'Updating...' : 'Update Status' }}
+        </button>
+      </form>
+    </section>
   } @else if (!errorMessage()) {
     <p class="loading">Loading student...</p>
   }

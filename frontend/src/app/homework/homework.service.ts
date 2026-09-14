@@ -6,7 +6,6 @@ import {
   Homework,
   HomeworkInput,
   HomeworkSubmission,
-  HomeworkSubmissionInput,
   HomeworkUpdateInput,
   StudentHomework,
   SubmissionOverview,
@@ -60,7 +59,33 @@ export class HomeworkSubmissionService {
     return this.http.get<HomeworkSubmission[]>(`${this.baseUrl}/student/${studentId}`);
   }
 
-  createSubmission(submission: HomeworkSubmissionInput): Observable<HomeworkSubmission> {
-    return this.http.post<HomeworkSubmission>(this.baseUrl, submission);
+  // Multipart/form-data — the attached file is optional alongside the comment.
+  createSubmission(homeworkId: number, comments: string, file: File | null): Observable<HomeworkSubmission> {
+    const formData = new FormData();
+    formData.append('HomeworkId', String(homeworkId));
+    formData.append('Comments', comments);
+    if (file) {
+      formData.append('File', file);
+    }
+    return this.http.post<HomeworkSubmission>(this.baseUrl, formData);
+  }
+
+  updateSubmission(id: number, comments: string, file: File | null): Observable<HomeworkSubmission> {
+    const formData = new FormData();
+    formData.append('Comments', comments);
+    if (file) {
+      formData.append('File', file);
+    }
+    return this.http.put<HomeworkSubmission>(`${this.baseUrl}/${id}`, formData);
+  }
+
+  addFeedback(id: number, teacherFeedback: string): Observable<HomeworkSubmission> {
+    return this.http.put<HomeworkSubmission>(`${this.baseUrl}/${id}/feedback`, { teacherFeedback });
+  }
+
+  // Fetched via HttpClient (blob) so the auth interceptor attaches the Bearer token — a plain
+  // anchor href would bypass it entirely and 401.
+  downloadFile(id: number): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${id}/download`, { responseType: 'blob' });
   }
 }

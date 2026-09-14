@@ -8,39 +8,63 @@ public class UserStore(Database db)
 {
     // Used at login — includes the Student/Teacher display-name fields the response needs,
     // without a full join into every column of those tables.
+    private const string LoginSelect = """
+        SELECT u."Id", u."Username", u."PasswordHash", u."Role", u."StudentId", u."TeacherId", u."SchoolId", u."EmailVerifiedAtUtc",
+               st."FirstName" AS "StudentFirstName", st."LastName" AS "StudentLastName",
+               t."FirstName" AS "TeacherFirstName", t."LastName" AS "TeacherLastName"
+        FROM "Users" u
+        LEFT JOIN "Students" st ON st."Id" = u."StudentId"
+        LEFT JOIN "Teachers" t ON t."Id" = u."TeacherId"
+        """;
+
+    private static ApplicationUser MapLogin(NpgsqlDataReader reader)
+    {
+        var user = new ApplicationUser
+        {
+            Id = reader.GetInt32("Id"),
+            Username = reader.GetString("Username"),
+            PasswordHash = reader.GetString("PasswordHash"),
+            Role = reader.GetEnum<UserRole>("Role"),
+            StudentId = reader.GetNullableInt32("StudentId"),
+            TeacherId = reader.GetNullableInt32("TeacherId"),
+            SchoolId = reader.GetNullableInt32("SchoolId") ?? 0,
+            EmailVerifiedAtUtc = reader.GetNullableDateTimeUtc("EmailVerifiedAtUtc"),
+        };
+        if (user.StudentId is not null)
+        {
+            user.Student = new Student { FirstName = reader.GetString("StudentFirstName"), LastName = reader.GetString("StudentLastName") };
+        }
+        if (user.TeacherId is not null)
+        {
+            user.Teacher = new Teacher { FirstName = reader.GetString("TeacherFirstName"), LastName = reader.GetString("TeacherLastName") };
+        }
+        return user;
+    }
+
     public async Task<ApplicationUser?> GetByUsernameForLoginAsync(string username) =>
-        await db.QuerySingleOrDefaultAsync(
-            """
-            SELECT u."Id", u."Username", u."PasswordHash", u."Role", u."StudentId", u."TeacherId", u."SchoolId",
-                   st."FirstName" AS "StudentFirstName", st."LastName" AS "StudentLastName",
-                   t."FirstName" AS "TeacherFirstName", t."LastName" AS "TeacherLastName"
-            FROM "Users" u
-            LEFT JOIN "Students" st ON st."Id" = u."StudentId"
-            LEFT JOIN "Teachers" t ON t."Id" = u."TeacherId"
-            WHERE u."Username" = @username
-            """,
-            p => p.AddWithValue("username", username),
-            reader =>
+        await db.QuerySingleOrDefaultAsync($"""{LoginSelect} WHERE u."Username" = @username""", p => p.AddWithValue("username", username), MapLogin);
+
+    // Used to re-issue an access token from a refresh token, where all we have is the user id.
+    public async Task<ApplicationUser?> GetByIdForLoginAsync(int id) =>
+        await db.QuerySingleOrDefaultAsync($"""{LoginSelect} WHERE u."Id" = @id""", p => p.AddWithValue("id", id), MapLogin);
+
+    public async Task MarkEmailVerifiedAsync(int userId) =>
+        await db.ExecuteAsync(
+            """UPDATE "Users" SET "EmailVerifiedAtUtc" = now() WHERE "Id" = @userId""",
+            p => p.AddWithValue("userId", userId));
+
+    public async Task<bool> GetNotificationDigestEnabledAsync(int userId) =>
+        await db.ExecuteScalarAsync<bool>(
+            """SELECT "NotificationDigestEnabled" FROM "Users" WHERE "Id" = @userId""",
+            p => p.AddWithValue("userId", userId));
+
+    public async Task SetNotificationDigestPreferenceAsync(int userId, bool enabled) =>
+        await db.ExecuteAsync(
+            """UPDATE "Users" SET "NotificationDigestEnabled" = @enabled WHERE "Id" = @userId""",
+            p =>
             {
-                var user = new ApplicationUser
-                {
-                    Id = reader.GetInt32("Id"),
-                    Username = reader.GetString("Username"),
-                    PasswordHash = reader.GetString("PasswordHash"),
-                    Role = reader.GetEnum<UserRole>("Role"),
-                    StudentId = reader.GetNullableInt32("StudentId"),
-                    TeacherId = reader.GetNullableInt32("TeacherId"),
-                    SchoolId = reader.GetNullableInt32("SchoolId") ?? 0,
-                };
-                if (user.StudentId is not null)
-                {
-                    user.Student = new Student { FirstName = reader.GetString("StudentFirstName"), LastName = reader.GetString("StudentLastName") };
-                }
-                if (user.TeacherId is not null)
-                {
-                    user.Teacher = new Teacher { FirstName = reader.GetString("TeacherFirstName"), LastName = reader.GetString("TeacherLastName") };
-                }
-                return user;
+                p.AddWithValue("userId", userId);
+                p.AddWithValue("enabled", enabled);
             });
 
     public async Task<bool> UsernameExistsAsync(string username) =>
@@ -62,6 +86,15 @@ public class UserStore(Database db)
                 p.AddWithValue("teacherId", (object?)teacherId ?? DBNull.Value);
                 p.AddWithValue("email", (object?)email ?? DBNull.Value);
                 p.AddWithValue("schoolId", schoolId);
+            });
+
+    public async Task UpdatePasswordHashAsync(int userId, string passwordHash) =>
+        await db.ExecuteAsync(
+            """UPDATE "Users" SET "PasswordHash" = @passwordHash WHERE "Id" = @userId""",
+            p =>
+            {
+                p.AddWithValue("passwordHash", passwordHash);
+                p.AddWithValue("userId", userId);
             });
 
     // Resolves the best email address for a user: their own Email column (Parent accounts),
@@ -101,6 +134,21 @@ public class UserStore(Database db)
             bind: null,
             reader => new ApplicationUser { Id = reader.GetInt32("Id"), Username = reader.GetString("Username"), Email = reader.GetNullableString("Email") });
 
+    public async Task<List<ApplicationUser>> GetParentUsersAsync(int schoolId) =>
+        await db.QueryAsync(
+            """SELECT "Id", "Username", "Email" FROM "Users" WHERE "Role" = 'Parent' AND "SchoolId" = @schoolId ORDER BY "Username" """,
+            bind: p => p.AddWithValue("schoolId", schoolId),
+            reader => new ApplicationUser { Id = reader.GetInt32("Id"), Username = reader.GetString("Username"), Email = reader.GetNullableString("Email") });
+
     public async Task<bool> ParentExistsAsync(int userId) =>
         await db.ExistsAsync("""SELECT 1 FROM "Users" WHERE "Id" = @id AND "Role" = 'Parent'""", p => p.AddWithValue("id", userId));
+
+    public async Task<bool> ParentExistsAsync(int userId, int schoolId) =>
+        await db.ExistsAsync(
+            """SELECT 1 FROM "Users" WHERE "Id" = @id AND "Role" = 'Parent' AND "SchoolId" = @schoolId""",
+            p =>
+            {
+                p.AddWithValue("id", userId);
+                p.AddWithValue("schoolId", schoolId);
+            });
 }

@@ -8,7 +8,8 @@ public class MarkStore(Database db)
 {
     private const string SelectWithAssessment = """
         SELECT m."Id", m."StudentId", m."AssessmentId", m."MarksObtained",
-               asm."Title" AS "AssessmentTitle", asm."SubjectId" AS "AssessmentSubjectId", asm."Date" AS "AssessmentDate", asm."MaximumMarks" AS "AssessmentMaximumMarks",
+               asm."Title" AS "AssessmentTitle", asm."SubjectId" AS "AssessmentSubjectId", asm."Date" AS "AssessmentDate",
+               asm."MaximumMarks" AS "AssessmentMaximumMarks", asm."TermId" AS "AssessmentTermId",
                sub."Name" AS "SubjectName"
         FROM "Marks" m
         JOIN "Assessments" asm ON asm."Id" = m."AssessmentId"
@@ -27,6 +28,7 @@ public class MarkStore(Database db)
             SubjectId = reader.GetInt32("AssessmentSubjectId"),
             Date = reader.GetDateOnly("AssessmentDate"),
             MaximumMarks = reader.GetInt32("AssessmentMaximumMarks"),
+            TermId = reader.GetNullableInt32("AssessmentTermId"),
             Subject = new Subject { Name = reader.GetString("SubjectName") },
         },
     };

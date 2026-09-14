@@ -9,13 +9,23 @@ namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AssessmentsController(AssessmentStore assessments, ReferenceDataStore referenceData, ILogger<AssessmentsController> logger) : ControllerBase
+public class AssessmentsController(
+    AssessmentStore assessments,
+    ReferenceDataStore referenceData,
+    TermStore terms,
+    ICurrentTenantService currentTenant,
+    ILogger<AssessmentsController> logger) : ControllerBase
 {
     // GET /api/assessments
     [HttpGet]
     public async Task<ActionResult<IEnumerable<AssessmentDto>>> GetAssessments()
     {
-        var all = await assessments.GetAllAsync();
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var all = await assessments.GetAllAsync(schoolId);
         return Ok(all.Select(AssessmentDto.FromEntity));
     }
 
@@ -23,7 +33,12 @@ public class AssessmentsController(AssessmentStore assessments, ReferenceDataSto
     [HttpGet("{id:int}")]
     public async Task<ActionResult<AssessmentDto>> GetAssessmentById(int id)
     {
-        var assessment = await assessments.GetByIdAsync(id);
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var assessment = await assessments.GetByIdAsync(id, schoolId);
 
         if (assessment is null)
         {
@@ -37,12 +52,17 @@ public class AssessmentsController(AssessmentStore assessments, ReferenceDataSto
     [HttpGet("subject/{subjectId:int}")]
     public async Task<ActionResult<IEnumerable<AssessmentDto>>> GetAssessmentsBySubject(int subjectId)
     {
-        if (!await referenceData.SubjectExistsAsync(subjectId))
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await referenceData.SubjectExistsAsync(subjectId, schoolId))
         {
             return NotFound(new { message = "Subject not found." });
         }
 
-        var bySubject = await assessments.GetBySubjectAsync(subjectId);
+        var bySubject = await assessments.GetBySubjectAsync(subjectId, schoolId);
         return Ok(bySubject.Select(AssessmentDto.FromEntity));
     }
 
@@ -51,10 +71,21 @@ public class AssessmentsController(AssessmentStore assessments, ReferenceDataSto
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<AssessmentDto>> CreateAssessment(AssessmentCreateDto dto)
     {
-        var validation = await ValidateAsync(dto.Title, dto.SubjectId, dto.MaximumMarks, dto.AssessmentType);
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var validation = await ValidateAsync(dto.Title, dto.SubjectId, dto.MaximumMarks, dto.AssessmentType, schoolId);
         if (validation is not null)
         {
             return validation;
+        }
+
+        var termValidation = await ValidateTermAsync(dto.TermId);
+        if (termValidation is not null)
+        {
+            return termValidation;
         }
 
         Enum.TryParse<AssessmentType>(dto.AssessmentType, ignoreCase: true, out var type);
@@ -67,6 +98,7 @@ public class AssessmentsController(AssessmentStore assessments, ReferenceDataSto
             MaximumMarks = dto.MaximumMarks,
             AssessmentType = type,
             Description = dto.Description,
+            TermId = dto.TermId,
         };
 
         int newId;
@@ -80,7 +112,7 @@ public class AssessmentsController(AssessmentStore assessments, ReferenceDataSto
             return StatusCode(500, new { message = "Unable to save the assessment. Please try again." });
         }
 
-        var created = await assessments.GetByIdAsync(newId);
+        var created = await assessments.GetByIdAsync(newId, schoolId);
         var result = AssessmentDto.FromEntity(created!);
         return CreatedAtAction(nameof(GetAssessmentById), new { id = newId }, result);
     }
@@ -90,15 +122,32 @@ public class AssessmentsController(AssessmentStore assessments, ReferenceDataSto
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<AssessmentDto>> UpdateAssessment(int id, AssessmentUpdateDto dto)
     {
-        var validation = await ValidateAsync(dto.Title, dto.SubjectId, dto.MaximumMarks, dto.AssessmentType);
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var validation = await ValidateAsync(dto.Title, dto.SubjectId, dto.MaximumMarks, dto.AssessmentType, schoolId);
         if (validation is not null)
         {
             return validation;
         }
 
-        if (!await assessments.ExistsAsync(id))
+        var termValidation = await ValidateTermAsync(dto.TermId);
+        if (termValidation is not null)
+        {
+            return termValidation;
+        }
+
+        var existing = await assessments.GetByIdAsync(id, schoolId);
+        if (existing is null)
         {
             return NotFound();
+        }
+
+        if (existing.TermId is not null && await terms.IsLockedAsync(existing.TermId.Value))
+        {
+            return Conflict(new { message = "This assessment's term is locked and can no longer be modified." });
         }
 
         Enum.TryParse<AssessmentType>(dto.AssessmentType, ignoreCase: true, out var type);
@@ -112,6 +161,7 @@ public class AssessmentsController(AssessmentStore assessments, ReferenceDataSto
             MaximumMarks = dto.MaximumMarks,
             AssessmentType = type,
             Description = dto.Description,
+            TermId = dto.TermId,
         };
 
         try
@@ -124,7 +174,7 @@ public class AssessmentsController(AssessmentStore assessments, ReferenceDataSto
             return StatusCode(500, new { message = "Unable to update the assessment. Please try again." });
         }
 
-        var updated = await assessments.GetByIdAsync(id);
+        var updated = await assessments.GetByIdAsync(id, schoolId);
         return Ok(AssessmentDto.FromEntity(updated!));
     }
 
@@ -133,9 +183,20 @@ public class AssessmentsController(AssessmentStore assessments, ReferenceDataSto
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<IActionResult> DeleteAssessment(int id)
     {
-        if (!await assessments.ExistsAsync(id))
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var existing = await assessments.GetByIdAsync(id, schoolId);
+        if (existing is null)
         {
             return NotFound();
+        }
+
+        if (existing.TermId is not null && await terms.IsLockedAsync(existing.TermId.Value))
+        {
+            return Conflict(new { message = "This assessment's term is locked and can no longer be deleted." });
         }
 
         try
@@ -151,7 +212,27 @@ public class AssessmentsController(AssessmentStore assessments, ReferenceDataSto
         return NoContent();
     }
 
-    private async Task<ActionResult?> ValidateAsync(string title, int subjectId, int maximumMarks, string assessmentType)
+    private async Task<ActionResult?> ValidateTermAsync(int? termId)
+    {
+        if (termId is null)
+        {
+            return null;
+        }
+
+        if (currentTenant.SchoolId is not { } schoolId || !await terms.ExistsAsync(termId.Value, schoolId))
+        {
+            return BadRequest(new { message = "Term does not exist." });
+        }
+
+        if (await terms.IsLockedAsync(termId.Value))
+        {
+            return Conflict(new { message = "This term is locked; new assessments cannot be added to it." });
+        }
+
+        return null;
+    }
+
+    private async Task<ActionResult?> ValidateAsync(string title, int subjectId, int maximumMarks, string assessmentType, int schoolId)
     {
         if (string.IsNullOrWhiteSpace(title))
         {
@@ -168,7 +249,7 @@ public class AssessmentsController(AssessmentStore assessments, ReferenceDataSto
             return BadRequest(new { message = $"AssessmentType '{assessmentType}' is not valid." });
         }
 
-        if (!await referenceData.SubjectExistsAsync(subjectId))
+        if (!await referenceData.SubjectExistsAsync(subjectId, schoolId))
         {
             return BadRequest(new { message = "Subject does not exist." });
         }

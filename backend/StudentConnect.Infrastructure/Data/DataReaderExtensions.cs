@@ -16,6 +16,12 @@ public static class DataReaderExtensions
 
     public static long GetInt64(this NpgsqlDataReader reader, string column) => reader.GetInt64(reader.GetOrdinal(column));
 
+    public static long? GetNullableInt64(this NpgsqlDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal) ? null : reader.GetInt64(ordinal);
+    }
+
     public static double GetDouble(this NpgsqlDataReader reader, string column) => reader.GetDouble(reader.GetOrdinal(column));
 
     public static string GetString(this NpgsqlDataReader reader, string column) => reader.GetString(reader.GetOrdinal(column));
@@ -29,6 +35,12 @@ public static class DataReaderExtensions
     public static bool GetBoolean(this NpgsqlDataReader reader, string column) => reader.GetBoolean(reader.GetOrdinal(column));
 
     public static DateOnly GetDateOnly(this NpgsqlDataReader reader, string column) => reader.GetFieldValue<DateOnly>(reader.GetOrdinal(column));
+
+    public static DateOnly? GetNullableDateOnly(this NpgsqlDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal) ? null : reader.GetFieldValue<DateOnly>(ordinal);
+    }
 
     public static DateTime GetDateTimeUtc(this NpgsqlDataReader reader, string column) => reader.GetFieldValue<DateTime>(reader.GetOrdinal(column));
 

@@ -30,6 +30,12 @@ export class AttendanceService {
     return this.http.get<AttendanceSummary[]>(`${this.baseUrl}/student/${studentId}/summary`);
   }
 
+  // Every already-recorded status for a subject+date — used to prefill the Record Attendance
+  // grid so re-saving a past date doesn't silently overwrite real data with defaults.
+  getBySubjectAndDate(subjectId: number, date: string): Observable<AttendanceRecord[]> {
+    return this.http.get<AttendanceRecord[]>(`${this.baseUrl}/subject/${subjectId}/date/${date}`);
+  }
+
   createAttendance(record: AttendanceCreateInput): Observable<AttendanceRecord> {
     return this.http.post<AttendanceRecord>(this.baseUrl, record);
   }
@@ -53,4 +59,5 @@ export class AttendanceService {
 
 interface AttendanceStatusInput {
   status: 'Present' | 'Absent';
+  reason?: string;
 }

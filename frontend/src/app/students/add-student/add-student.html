@@ -65,6 +65,21 @@
       }
     </label>
 
+    <label>
+      Date of birth (optional)
+      <input type="date" formControlName="dateOfBirth" />
+    </label>
+
+    <label>
+      Phone (optional)
+      <input type="tel" formControlName="phone" />
+    </label>
+
+    <label>
+      Address (optional)
+      <input type="text" formControlName="address" />
+    </label>
+
     <button type="submit" [disabled]="submitting()">
       {{ submitting() ? 'Saving...' : 'Add Student' }}
     </button>

@@ -46,11 +46,15 @@ export class StudentActivities {
   );
 
   protected readonly myRegistrations = computed(() =>
-    this.state().registrations.filter((r) => r.status === 'Registered'),
+    this.state().registrations.filter((r) => r.status === 'Registered' || r.status === 'Waitlisted'),
   );
 
   protected registrationFor(activityId: number): ActivityRegistration | null {
-    return this.state().registrations.find((r) => r.activityId === activityId && r.status === 'Registered') ?? null;
+    return (
+      this.state().registrations.find(
+        (r) => r.activityId === activityId && (r.status === 'Registered' || r.status === 'Waitlisted'),
+      ) ?? null
+    );
   }
 
   protected isPast(activity: Activity): boolean {

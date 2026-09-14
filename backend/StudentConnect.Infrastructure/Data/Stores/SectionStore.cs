@@ -8,7 +8,7 @@ public class SectionStore(Database db)
 {
     private const string SelectWithGrade = """
         SELECT sec."Id", sec."GradeId", sec."Name", g."Name" AS "GradeName",
-               sec."HomeroomTeacherId", t."FirstName" AS "TeacherFirstName", t."LastName" AS "TeacherLastName"
+               sec."HomeroomTeacherId", t."FirstName" AS "TeacherFirstName", t."LastName" AS "TeacherLastName", sec."IsArchived"
         FROM "Sections" sec
         JOIN "Grades" g ON g."Id" = sec."GradeId"
         LEFT JOIN "Teachers" t ON t."Id" = sec."HomeroomTeacherId"
@@ -24,16 +24,20 @@ public class SectionStore(Database db)
         HomeroomTeacher = reader.GetNullableInt32("HomeroomTeacherId") is not null
             ? new Teacher { FirstName = reader.GetString("TeacherFirstName"), LastName = reader.GetString("TeacherLastName") }
             : null,
+        IsArchived = reader.GetBoolean("IsArchived"),
     };
 
     public async Task<List<Section>> GetAllAsync() =>
         await db.QueryAsync($"""{SelectWithGrade} ORDER BY g."Name", sec."Name" """, bind: null, map: Map);
 
     // Tenant-scoped — Sections have no direct SchoolId column, so tenancy is resolved
-    // transitively through the (NOT NULL) GradeId foreign key.
-    public async Task<List<Section>> GetAllAsync(int schoolId) =>
+    // transitively through the (NOT NULL) GradeId foreign key. Archived sections are excluded
+    // by default since most callers (dropdowns, rosters) only care about active sections.
+    public async Task<List<Section>> GetAllAsync(int schoolId, bool includeArchived = false) =>
         await db.QueryAsync(
-            $"""{SelectWithGrade} WHERE g."SchoolId" = @schoolId ORDER BY g."Name", sec."Name" """,
+            includeArchived
+                ? $"""{SelectWithGrade} WHERE g."SchoolId" = @schoolId ORDER BY g."Name", sec."Name" """
+                : $"""{SelectWithGrade} WHERE g."SchoolId" = @schoolId AND sec."IsArchived" = false ORDER BY g."Name", sec."Name" """,
             p => p.AddWithValue("schoolId", schoolId),
             Map);
 
@@ -55,7 +59,7 @@ public class SectionStore(Database db)
 
     public async Task<List<Section>> GetByGradeAsync(int gradeId) =>
         await db.QueryAsync(
-            $"""{SelectWithGrade} WHERE sec."GradeId" = @gradeId ORDER BY sec."Name" """,
+            $"""{SelectWithGrade} WHERE sec."GradeId" = @gradeId AND sec."IsArchived" = false ORDER BY sec."Name" """,
             p => p.AddWithValue("gradeId", gradeId),
             Map);
 
@@ -114,4 +118,12 @@ public class SectionStore(Database db)
 
     public async Task DeleteAsync(int id) =>
         await db.ExecuteAsync("""DELETE FROM "Sections" WHERE "Id" = @id""", p => p.AddWithValue("id", id));
+
+    // Soft-delete: keeps the row (and its historical attendance/marks/homework) intact but
+    // hides it from the active-section views used elsewhere in the app.
+    public async Task ArchiveAsync(int id) =>
+        await db.ExecuteAsync("""UPDATE "Sections" SET "IsArchived" = true WHERE "Id" = @id""", p => p.AddWithValue("id", id));
+
+    public async Task RestoreAsync(int id) =>
+        await db.ExecuteAsync("""UPDATE "Sections" SET "IsArchived" = false WHERE "Id" = @id""", p => p.AddWithValue("id", id));
 }

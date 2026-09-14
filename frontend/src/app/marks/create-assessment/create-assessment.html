@@ -55,6 +55,16 @@
       <input type="text" formControlName="description" placeholder="Optional" />
     </label>
 
+    <label>
+      Term (optional)
+      <select formControlName="termId">
+        <option [value]="0">No term</option>
+        @for (term of terms(); track term.id) {
+          <option [value]="term.id" [disabled]="term.isLocked">{{ term.name }} ({{ term.academicYearName }}){{ term.isLocked ? ' — locked' : '' }}</option>
+        }
+      </select>
+    </label>
+
     <button type="submit" [disabled]="submitting()">
       {{ submitting() ? 'Saving...' : 'Create Assessment' }}
     </button>

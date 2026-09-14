@@ -18,7 +18,7 @@
           @for (assessment of group[1]; track assessment.id) {
             <li>
               <span class="title">{{ assessment.title }}</span>
-              <span class="meta">{{ assessment.date }} — {{ assessment.maximumMarks }} marks</span>
+              <span class="meta">{{ assessment.date }} — {{ assessment.maximumMarks }} marks{{ assessment.termName ? ' — ' + assessment.termName : '' }}</span>
             </li>
           }
         </ul>

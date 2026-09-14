@@ -30,6 +30,7 @@
               <td
                 [class.status-registered]="registration.status === 'Registered'"
                 [class.status-cancelled]="registration.status === 'Cancelled'"
+                [class.status-full]="registration.status === 'Waitlisted'"
               >
                 {{ registration.status }}
               </td>

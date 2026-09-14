@@ -1,7 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { map } from 'rxjs';
 import { AttendanceService } from '../attendance.service';
 import { AttendanceStatus, BulkAttendanceItem } from '../attendance.model';
 import { Student } from '../../students/student.model';
@@ -19,13 +20,15 @@ export class RecordAttendance {
 
   protected readonly grades = toSignal(this.studentService.getGrades(), { initialValue: [] });
   protected readonly subjects = toSignal(this.attendanceService.getSubjects(), { initialValue: [] });
-  private readonly students = toSignal(this.studentService.getStudents(), { initialValue: [] as Student[] });
+  private readonly students = toSignal(this.studentService.getStudents().pipe(map((r) => r.items)), { initialValue: [] as Student[] });
 
   protected readonly gradeId = signal<number | null>(null);
   protected readonly subjectId = signal<number | null>(null);
   protected readonly date = signal(new Date().toISOString().slice(0, 10));
+  protected readonly correctionReason = signal('');
 
   protected readonly statusByStudentId = signal<Record<number, AttendanceStatus>>({});
+  protected readonly loadingExisting = signal(false);
   protected readonly saving = signal(false);
   protected readonly successMessage = signal('');
   protected readonly errorMessage = signal('');
@@ -37,6 +40,32 @@ export class RecordAttendance {
     }
     return this.students().filter((s) => s.gradeId === grade);
   });
+
+  constructor() {
+    // Prefill from whatever is already recorded for this subject+date, so re-saving (e.g. to
+    // correct one student) doesn't silently overwrite everyone else back to the "Present" default.
+    effect(() => {
+      const subjectId = this.subjectId();
+      const date = this.date();
+
+      if (subjectId === null) {
+        this.statusByStudentId.set({});
+        return;
+      }
+
+      this.loadingExisting.set(true);
+      this.attendanceService.getBySubjectAndDate(subjectId, date).subscribe({
+        next: (records) => {
+          this.loadingExisting.set(false);
+          this.statusByStudentId.set(Object.fromEntries(records.map((r) => [r.studentId, r.status])));
+        },
+        error: () => {
+          this.loadingExisting.set(false);
+          this.statusByStudentId.set({});
+        },
+      });
+    });
+  }
 
   protected statusFor(studentId: number): AttendanceStatus {
     return this.statusByStudentId()[studentId] ?? 'Present';
@@ -59,6 +88,7 @@ export class RecordAttendance {
     const records: BulkAttendanceItem[] = students.map((s) => ({
       studentId: s.id,
       status: this.statusFor(s.id),
+      reason: this.correctionReason() || undefined,
     }));
 
     this.saving.set(true);

@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { AnalyticsOverview, AtRiskStudent, GradeAttendance, GradeMarks } from './analytics.model';
+import { AnalyticsOverview, AtRiskStudent, GradeAttendance, GradeMarks, MonthlyTrend } from './analytics.model';
 
 @Injectable({ providedIn: 'root' })
 export class AnalyticsService {
@@ -23,5 +23,9 @@ export class AnalyticsService {
 
   getAtRiskStudents(): Observable<AtRiskStudent[]> {
     return this.http.get<AtRiskStudent[]>(`${this.baseUrl}/at-risk-students`);
+  }
+
+  getTrend(months = 12): Observable<MonthlyTrend[]> {
+    return this.http.get<MonthlyTrend[]>(`${this.baseUrl}/trend`, { params: { months: months.toString() } });
   }
 }

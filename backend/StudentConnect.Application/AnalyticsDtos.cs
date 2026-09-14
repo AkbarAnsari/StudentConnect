@@ -36,3 +36,11 @@ public class AtRiskStudentDto
     public double? AttendancePercentage { get; set; }
     public double? AverageMarksPercentage { get; set; }
 }
+
+// One calendar month's rollup, for the analytics trend-over-time chart.
+public class MonthlyTrendDto
+{
+    public string Month { get; set; } = string.Empty;
+    public double AttendancePercentage { get; set; }
+    public double MarksPercentage { get; set; }
+}

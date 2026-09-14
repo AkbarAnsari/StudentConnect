@@ -2,13 +2,13 @@
   <a class="back-link" routerLink="/teacher-homework">← Back to My Homework</a>
   <h1>Submissions</h1>
 
-  @if (state().loading) {
+  @if (loading()) {
     <p class="loading">Loading submissions...</p>
-  } @else if (state().error) {
+  } @else if (error()) {
     <p class="error-message">
       Unable to load submissions. Please check whether the StudentConnect API is running.
     </p>
-  } @else if (state().submissions.length === 0) {
+  } @else if (submissions().length === 0) {
     <p class="empty">No students found for this homework's grade.</p>
   } @else {
     <table class="submissions-table">
@@ -18,10 +18,12 @@
           <th>Status</th>
           <th>Submitted</th>
           <th>Comments</th>
+          <th>File</th>
+          <th>Feedback</th>
         </tr>
       </thead>
       <tbody>
-        @for (row of state().submissions; track row.studentId) {
+        @for (row of submissions(); track row.studentId) {
           <tr>
             <td>{{ row.studentName }}</td>
             <td
@@ -33,6 +35,27 @@
             </td>
             <td>{{ row.submittedDate ?? '—' }}</td>
             <td>{{ row.comments ?? '—' }}</td>
+            <td>
+              @if (row.hasFile && row.submissionId) {
+                <button type="button" class="link-button" (click)="download(row.submissionId)">Download</button>
+              } @else {
+                —
+              }
+            </td>
+            <td>
+              @if (row.submissionId) {
+                <textarea
+                  rows="2"
+                  [value]="feedbackDrafts()[row.submissionId] ?? ''"
+                  (input)="onFeedbackChange(row.submissionId, $any($event.target).value)"
+                ></textarea>
+                <button type="button" [disabled]="savingFeedbackFor() === row.submissionId" (click)="saveFeedback(row.submissionId)">
+                  {{ savingFeedbackFor() === row.submissionId ? 'Saving...' : 'Save' }}
+                </button>
+              } @else {
+                —
+              }
+            </td>
           </tr>
         }
       </tbody>

@@ -13,6 +13,7 @@ public class ReferenceDataStore(Database db)
         Id = reader.GetInt32("Id"),
         Name = reader.GetString("Name"),
         SchoolId = reader.GetNullableInt32("SchoolId") ?? 0,
+        SequenceOrder = reader.GetNullableInt32("SequenceOrder"),
     };
 
     private static Subject MapSubject(NpgsqlDataReader reader) => new()
@@ -34,26 +35,26 @@ public class ReferenceDataStore(Database db)
 
     public async Task<List<Grade>> GetAllGradesAsync() =>
         await db.QueryAsync(
-            """SELECT "Id", "Name", "SchoolId" FROM "Grades" ORDER BY "Id" """,
+            """SELECT "Id", "Name", "SchoolId", "SequenceOrder" FROM "Grades" ORDER BY "Id" """,
             bind: null,
             map: MapGrade);
 
     // Tenant-scoped — used by the multi-tenancy-aware controllers (Grades, Students, Sections).
     public async Task<List<Grade>> GetAllGradesAsync(int schoolId) =>
         await db.QueryAsync(
-            """SELECT "Id", "Name", "SchoolId" FROM "Grades" WHERE "SchoolId" = @schoolId ORDER BY "Id" """,
+            """SELECT "Id", "Name", "SchoolId", "SequenceOrder" FROM "Grades" WHERE "SchoolId" = @schoolId ORDER BY "Id" """,
             bind: p => p.AddWithValue("schoolId", schoolId),
             map: MapGrade);
 
     public async Task<Grade?> GetGradeByIdAsync(int id) =>
         await db.QuerySingleOrDefaultAsync(
-            """SELECT "Id", "Name", "SchoolId" FROM "Grades" WHERE "Id" = @id""",
+            """SELECT "Id", "Name", "SchoolId", "SequenceOrder" FROM "Grades" WHERE "Id" = @id""",
             bind: p => p.AddWithValue("id", id),
             map: MapGrade);
 
     public async Task<Grade?> GetGradeByIdAsync(int id, int schoolId) =>
         await db.QuerySingleOrDefaultAsync(
-            """SELECT "Id", "Name", "SchoolId" FROM "Grades" WHERE "Id" = @id AND "SchoolId" = @schoolId""",
+            """SELECT "Id", "Name", "SchoolId", "SequenceOrder" FROM "Grades" WHERE "Id" = @id AND "SchoolId" = @schoolId""",
             bind: p =>
             {
                 p.AddWithValue("id", id);

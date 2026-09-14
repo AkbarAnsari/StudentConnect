@@ -37,23 +37,39 @@ public class AuditLogStore(Database db)
             });
 
     // Newest first, optionally narrowed to one entity type — used by the admin Audit Log page.
-    public async Task<List<AuditLog>> GetRecentAsync(string? entityType, int take)
+    // Tenant-scoped via the acting user's SchoolId (every real audit entry has a UserId — see
+    // AuditService — so an inner join never hides a legitimate row).
+    public async Task<List<AuditLog>> GetRecentAsync(int schoolId, string? entityType, int take)
     {
         if (string.IsNullOrWhiteSpace(entityType))
         {
             return await db.QueryAsync(
-                """SELECT "Id", "TimestampUtc", "UserId", "Username", "Role", "Action", "EntityType", "EntityId", "Details" FROM "AuditLogs" ORDER BY "TimestampUtc" DESC LIMIT @take""",
-                p => p.AddWithValue("take", take),
+                """
+                SELECT al."Id", al."TimestampUtc", al."UserId", al."Username", al."Role", al."Action", al."EntityType", al."EntityId", al."Details"
+                FROM "AuditLogs" al
+                JOIN "Users" u ON u."Id" = al."UserId"
+                WHERE u."SchoolId" = @schoolId
+                ORDER BY al."TimestampUtc" DESC LIMIT @take
+                """,
+                p =>
+                {
+                    p.AddWithValue("schoolId", schoolId);
+                    p.AddWithValue("take", take);
+                },
                 Map);
         }
 
         return await db.QueryAsync(
             """
-            SELECT "Id", "TimestampUtc", "UserId", "Username", "Role", "Action", "EntityType", "EntityId", "Details"
-            FROM "AuditLogs" WHERE "EntityType" = @entityType ORDER BY "TimestampUtc" DESC LIMIT @take
+            SELECT al."Id", al."TimestampUtc", al."UserId", al."Username", al."Role", al."Action", al."EntityType", al."EntityId", al."Details"
+            FROM "AuditLogs" al
+            JOIN "Users" u ON u."Id" = al."UserId"
+            WHERE u."SchoolId" = @schoolId AND al."EntityType" = @entityType
+            ORDER BY al."TimestampUtc" DESC LIMIT @take
             """,
             p =>
             {
+                p.AddWithValue("schoolId", schoolId);
                 p.AddWithValue("entityType", entityType);
                 p.AddWithValue("take", take);
             },

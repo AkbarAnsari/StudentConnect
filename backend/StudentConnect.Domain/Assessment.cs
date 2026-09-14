@@ -13,4 +13,8 @@ public class Assessment
     public int MaximumMarks { get; set; }
     public AssessmentType AssessmentType { get; set; }
     public string Description { get; set; } = string.Empty;
+
+    // Optional — lets an assessment be tied to a Term for locking/cumulative grading.
+    public int? TermId { get; set; }
+    public Term? Term { get; set; }
 }

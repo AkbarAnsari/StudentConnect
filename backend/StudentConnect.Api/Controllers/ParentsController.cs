@@ -22,7 +22,12 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ParentResponseDto>>> GetParents()
     {
-        var parentUsers = await users.GetParentUsersAsync();
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var parentUsers = await users.GetParentUsersAsync(schoolId);
         var links = await parents.GetAllLinksAsync();
 
         var result = parentUsers.Select(p => ParentResponseDto.FromEntity(
@@ -64,7 +69,7 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
         var distinctChildIds = dto.ChildStudentIds.Distinct().ToList();
         foreach (var studentId in distinctChildIds)
         {
-            if (!await students.ExistsAsync(studentId))
+            if (!await students.ExistsAsync(studentId, schoolId))
             {
                 return BadRequest(new { message = "One or more child student ids do not exist." });
             }
@@ -92,12 +97,17 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
     [HttpPost("{parentId:int}/children")]
     public async Task<IActionResult> LinkChild(int parentId, LinkChildDto dto)
     {
-        if (!await users.ParentExistsAsync(parentId))
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await users.ParentExistsAsync(parentId, schoolId))
         {
             return NotFound(new { message = "Parent account not found." });
         }
 
-        if (!await students.ExistsAsync(dto.StudentId))
+        if (!await students.ExistsAsync(dto.StudentId, schoolId))
         {
             return NotFound(new { message = "Student not found." });
         }
@@ -118,6 +128,11 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
     [HttpDelete("{parentId:int}/children/{studentId:int}")]
     public async Task<IActionResult> UnlinkChild(int parentId, int studentId)
     {
+        if (currentTenant.SchoolId is not { } schoolId || !await users.ParentExistsAsync(parentId, schoolId))
+        {
+            return NotFound();
+        }
+
         var deleted = await parents.UnlinkChildAsync(parentId, studentId);
         if (deleted == 0)
         {

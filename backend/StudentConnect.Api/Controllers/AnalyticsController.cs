@@ -12,22 +12,62 @@ namespace StudentConnect.Api.Controllers;
 [ApiController]
 [Route("api/analytics")]
 [Authorize(Roles = "Teacher,Admin")]
-public class AnalyticsController(AnalyticsStore analytics) : ControllerBase
+public class AnalyticsController(AnalyticsStore analytics, GradingBandStore gradingBands, ICurrentTenantService currentTenant) : ControllerBase
 {
     // GET /api/analytics/overview
     [HttpGet("overview")]
-    public async Task<ActionResult<AnalyticsOverviewDto>> GetOverview() =>
-        Ok(await analytics.GetOverviewAsync());
+    public async Task<ActionResult<AnalyticsOverviewDto>> GetOverview()
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        return Ok(await analytics.GetOverviewAsync(schoolId));
+    }
+
+    // GET /api/analytics/trend?months=12 — monthly attendance/marks rollup, oldest first.
+    [HttpGet("trend")]
+    public async Task<ActionResult<IEnumerable<MonthlyTrendDto>>> GetTrend([FromQuery] int months = 12)
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var bounded = Math.Clamp(months, 1, 36);
+        return Ok(await analytics.GetTrendAsync(schoolId, bounded));
+    }
 
     // GET /api/analytics/attendance-by-grade
     [HttpGet("attendance-by-grade")]
-    public async Task<ActionResult<IEnumerable<GradeAttendanceDto>>> GetAttendanceByGrade() =>
-        Ok(await analytics.GetAttendanceByGradeAsync());
+    public async Task<ActionResult<IEnumerable<GradeAttendanceDto>>> GetAttendanceByGrade()
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        return Ok(await analytics.GetAttendanceByGradeAsync(schoolId));
+    }
 
     // GET /api/analytics/marks-by-grade
     [HttpGet("marks-by-grade")]
-    public async Task<ActionResult<IEnumerable<GradeMarksDto>>> GetMarksByGrade() =>
-        Ok(await analytics.GetMarksByGradeAsync());
+    public async Task<ActionResult<IEnumerable<GradeMarksDto>>> GetMarksByGrade()
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var rows = await analytics.GetMarksByGradeAsync(schoolId);
+        var bands = await gradingBands.GetForSchoolAsync(schoolId);
+        foreach (var row in rows)
+        {
+            row.ResultCategory = GradingBandStore.Resolve(bands, row.AverageMarksPercentage);
+        }
+        return Ok(rows);
+    }
 
     // GET /api/analytics/at-risk-students — flags a student when EITHER their attendance
     // or their average marks fall below the given threshold (defaults are demo-reasonable,
@@ -35,6 +75,13 @@ public class AnalyticsController(AnalyticsStore analytics) : ControllerBase
     [HttpGet("at-risk-students")]
     public async Task<ActionResult<IEnumerable<AtRiskStudentDto>>> GetAtRiskStudents(
         [FromQuery] double attendanceThreshold = 75,
-        [FromQuery] double marksThreshold = 40) =>
-        Ok(await analytics.GetAtRiskStudentsAsync(attendanceThreshold, marksThreshold));
+        [FromQuery] double marksThreshold = 40)
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        return Ok(await analytics.GetAtRiskStudentsAsync(schoolId, attendanceThreshold, marksThreshold));
+    }
 }

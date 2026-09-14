@@ -10,6 +10,7 @@ public class SectionDto
     public string Name { get; set; } = string.Empty;
     public int? HomeroomTeacherId { get; set; }
     public string? HomeroomTeacherName { get; set; }
+    public bool IsArchived { get; set; }
 
     public static SectionDto FromEntity(Section section) => new()
     {
@@ -19,6 +20,7 @@ public class SectionDto
         Name = section.Name,
         HomeroomTeacherId = section.HomeroomTeacherId,
         HomeroomTeacherName = section.HomeroomTeacher is { } teacher ? $"{teacher.FirstName} {teacher.LastName}" : null,
+        IsArchived = section.IsArchived,
     };
 }
 

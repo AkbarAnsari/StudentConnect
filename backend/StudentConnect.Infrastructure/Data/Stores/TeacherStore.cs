@@ -27,12 +27,42 @@ public class TeacherStore(Database db)
     public async Task<List<TeacherResponseDto>> GetAllAsync() =>
         await db.QueryAsync($"""{SelectWithUsername} ORDER BY t."Id" """, bind: null, map: Map);
 
+    public async Task<TeacherResponseDto?> GetByIdAsync(int id, int schoolId) =>
+        await db.QuerySingleOrDefaultAsync(
+            $"""{SelectWithUsername} WHERE t."Id" = @id AND t."SchoolId" = @schoolId""",
+            p =>
+            {
+                p.AddWithValue("id", id);
+                p.AddWithValue("schoolId", schoolId);
+            },
+            map: Map);
+
     // Tenant-scoped — used by the multi-tenancy-aware TeachersController.
     public async Task<List<TeacherResponseDto>> GetAllAsync(int schoolId) =>
         await db.QueryAsync(
             $"""{SelectWithUsername} WHERE t."SchoolId" = @schoolId ORDER BY t."Id" """,
             p => p.AddWithValue("schoolId", schoolId),
             map: Map);
+
+    // Page/pageSize-bounded variant backing GET /api/teachers (see TeachersController).
+    public async Task<(List<TeacherResponseDto> Items, int TotalCount)> GetPagedAsync(int schoolId, int page, int pageSize)
+    {
+        var items = await db.QueryAsync(
+            $"""{SelectWithUsername} WHERE t."SchoolId" = @schoolId ORDER BY t."Id" LIMIT @pageSize OFFSET @offset""",
+            p =>
+            {
+                p.AddWithValue("schoolId", schoolId);
+                p.AddWithValue("pageSize", pageSize);
+                p.AddWithValue("offset", (page - 1) * pageSize);
+            },
+            map: Map);
+
+        var totalCount = await db.ExecuteScalarAsync<long>(
+            """SELECT COUNT(*) FROM "Teachers" WHERE "SchoolId" = @schoolId""",
+            p => p.AddWithValue("schoolId", schoolId));
+
+        return (items, (int)totalCount);
+    }
 
     public async Task<bool> ExistsAsync(int id) =>
         await db.ExistsAsync("""SELECT 1 FROM "Teachers" WHERE "Id" = @id""", p => p.AddWithValue("id", id));
@@ -72,6 +102,17 @@ public class TeacherStore(Database db)
                 p.AddWithValue("lastName", teacher.LastName);
                 p.AddWithValue("email", teacher.Email);
                 p.AddWithValue("schoolId", teacher.SchoolId);
+            });
+
+    public async Task UpdateAsync(Teacher teacher) =>
+        await db.ExecuteAsync(
+            """UPDATE "Teachers" SET "FirstName" = @firstName, "LastName" = @lastName, "Email" = @email WHERE "Id" = @id""",
+            p =>
+            {
+                p.AddWithValue("id", teacher.Id);
+                p.AddWithValue("firstName", teacher.FirstName);
+                p.AddWithValue("lastName", teacher.LastName);
+                p.AddWithValue("email", teacher.Email);
             });
 
     public async Task DeleteAsync(int id) =>

@@ -1,0 +1,13 @@
+<section class="page page-narrow">
+  <h1>Verify your email</h1>
+
+  @if (loading()) {
+    <p class="notice">Verifying your email address...</p>
+  } @else if (successMessage()) {
+    <p class="success-message">{{ successMessage() }}</p>
+  } @else if (errorMessage()) {
+    <p class="error-message">{{ errorMessage() }}</p>
+  }
+
+  <p class="notice"><a routerLink="/login">Back to login</a></p>
+</section>

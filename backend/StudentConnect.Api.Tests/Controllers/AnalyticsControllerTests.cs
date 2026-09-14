@@ -34,7 +34,7 @@ public class AnalyticsControllerTests(DatabaseFixture fixture)
         var expectedAttendancePct = attendanceTotal > 0 ? Math.Round(attendancePresent * 100.0 / attendanceTotal, 1) : 0;
         var expectedMarksPct = marksCount > 0 ? Math.Round(marksSum / marksCount, 1) : 0;
 
-        var controller = new AnalyticsController(new AnalyticsStore(db));
+        var controller = new AnalyticsController(new AnalyticsStore(db), new GradingBandStore(db), new FakeCurrentTenantService());
         var result = await controller.GetOverview();
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
@@ -58,8 +58,8 @@ public class AnalyticsControllerTests(DatabaseFixture fixture)
         var uniqueCode = $"ATRISK{Guid.NewGuid():N}"[..15];
         var studentId = await db.ExecuteScalarAsync<int>(
             """
-            INSERT INTO "Students" ("StudentId", "FirstName", "LastName", "Email", "GradeId")
-            VALUES (@code, 'AtRisk', 'Tester', @email, @gradeId)
+            INSERT INTO "Students" ("StudentId", "FirstName", "LastName", "Email", "GradeId", "SchoolId")
+            VALUES (@code, 'AtRisk', 'Tester', @email, @gradeId, 1)
             RETURNING "Id"
             """,
             p =>
@@ -78,7 +78,7 @@ public class AnalyticsControllerTests(DatabaseFixture fixture)
                 p.AddWithValue("date", new DateOnly(2026, 1, 1));
             });
 
-        var controller = new AnalyticsController(new AnalyticsStore(db));
+        var controller = new AnalyticsController(new AnalyticsStore(db), new GradingBandStore(db), new FakeCurrentTenantService());
         var result = await controller.GetAtRiskStudents();
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);

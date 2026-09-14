@@ -26,6 +26,11 @@
       Date
       <input type="date" [ngModel]="date()" (ngModelChange)="date.set($event)" />
     </label>
+
+    <label>
+      Correction reason (optional, only needed when changing an existing record)
+      <input type="text" [ngModel]="correctionReason()" (ngModelChange)="correctionReason.set($event)" placeholder="e.g. Marked absent by mistake" />
+    </label>
   </div>
 
   @if (successMessage()) {
@@ -33,6 +38,9 @@
   }
   @if (errorMessage()) {
     <p class="error-message">{{ errorMessage() }}</p>
+  }
+  @if (loadingExisting()) {
+    <p class="notice">Loading any attendance already recorded for this subject and date...</p>
   }
 
   @if (gradeId() === null) {

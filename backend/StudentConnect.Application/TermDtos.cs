@@ -10,6 +10,7 @@ public class TermDto
     public string Name { get; set; } = string.Empty;
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
+    public bool IsLocked { get; set; }
 
     public static TermDto FromEntity(Term term) => new()
     {
@@ -19,6 +20,7 @@ public class TermDto
         Name = term.Name,
         StartDate = term.StartDate,
         EndDate = term.EndDate,
+        IsLocked = term.IsLocked,
     };
 }
 

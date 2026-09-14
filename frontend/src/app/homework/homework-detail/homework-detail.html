@@ -29,34 +29,58 @@
 
       @if (!checkedForSubmission()) {
         <p class="loading">Loading submission status...</p>
-      } @else if (existingSubmission(); as s) {
-        <dl class="details">
-          <dt>Submitted</dt>
-          <dd>{{ s.submittedDate }}</dd>
-          <dt>Status</dt>
-          <dd>{{ s.status }}</dd>
-          <dt>Comments</dt>
-          <dd>{{ s.comments }}</dd>
-        </dl>
       } @else {
-        @if (successMessage()) {
-          <p class="success-message">{{ successMessage() }}</p>
-        }
-        @if (errorMessage()) {
-          <p class="error-message">{{ errorMessage() }}</p>
-        }
-        <form [formGroup]="form" (ngSubmit)="onSubmit()">
-          <label>
-            Comments / Answer
-            <textarea formControlName="comments" rows="4" placeholder="e.g. I completed questions 1-20."></textarea>
-            @if (form.controls.comments.invalid && form.controls.comments.touched) {
-              <span class="field-error">Comments are required.</span>
+        @if (existingSubmission(); as s) {
+          @if (!editing()) {
+            <dl class="details">
+              <dt>Submitted</dt>
+              <dd>{{ s.submittedDate }}</dd>
+              <dt>Status</dt>
+              <dd>{{ s.status }}</dd>
+              <dt>Comments</dt>
+              <dd>{{ s.comments }}</dd>
+              @if (s.fileName) {
+                <dt>Attached file</dt>
+                <dd><button type="button" class="link-button" (click)="download()">{{ s.fileName }}</button></dd>
+              }
+              @if (s.teacherFeedback) {
+                <dt>Teacher feedback</dt>
+                <dd>{{ s.teacherFeedback }}</dd>
+              }
+            </dl>
+
+            @if (successMessage()) {
+              <p class="success-message">{{ successMessage() }}</p>
             }
-          </label>
-          <button type="submit" [disabled]="submitting()">
-            {{ submitting() ? 'Submitting...' : 'Submit Homework' }}
-          </button>
-        </form>
+
+            <button type="button" (click)="startEdit()">Edit Submission</button>
+          }
+        }
+
+        @if (editing() || !existingSubmission()) {
+          @if (successMessage()) {
+            <p class="success-message">{{ successMessage() }}</p>
+          }
+          @if (errorMessage()) {
+            <p class="error-message">{{ errorMessage() }}</p>
+          }
+          <form [formGroup]="form" (ngSubmit)="onSubmit()">
+            <label>
+              Comments / Answer
+              <textarea formControlName="comments" rows="4" placeholder="e.g. I completed questions 1-20."></textarea>
+              @if (form.controls.comments.invalid && form.controls.comments.touched) {
+                <span class="field-error">Comments are required.</span>
+              }
+            </label>
+            <label>
+              Attach a file (optional — PDF, DOCX, PNG, or JPG, max 10MB)
+              <input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg" (change)="onFileChange($event)" />
+            </label>
+            <button type="submit" [disabled]="submitting()">
+              {{ submitting() ? 'Submitting...' : (existingSubmission() ? 'Save Changes' : 'Submit Homework') }}
+            </button>
+          </form>
+        }
       }
     </section>
   }

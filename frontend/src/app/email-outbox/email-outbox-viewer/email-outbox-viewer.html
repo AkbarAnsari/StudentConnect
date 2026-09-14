@@ -6,6 +6,9 @@
   @if (entries().length === 0) {
     <p>No emails have been enqueued yet.</p>
   } @else {
+    @if (retryError()) {
+      <p class="error-message">{{ retryError() }}</p>
+    }
     <table class="outbox-table">
       <thead>
         <tr>
@@ -15,6 +18,7 @@
           <th>Status</th>
           <th>Attempts</th>
           <th>Last Error</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -30,6 +34,13 @@
             </td>
             <td>{{ entry.attempts }}</td>
             <td>{{ entry.lastError }}</td>
+            <td>
+              @if (status(entry) === 'failed') {
+                <button type="button" class="link-button" [disabled]="retryingId() === entry.id" (click)="retry(entry.id)">
+                  {{ retryingId() === entry.id ? 'Retrying...' : 'Retry' }}
+                </button>
+              }
+            </td>
           </tr>
         }
       </tbody>

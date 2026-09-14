@@ -2,6 +2,21 @@
   <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
   <h1>My Classes</h1>
 
+  @if (assignments().length > 0) {
+    <div class="card">
+      <h2>My Subject Assignments</h2>
+      <ul class="entity-list">
+        @for (assignment of assignments(); track assignment.id) {
+          <li><span>{{ assignment.subjectName }} — {{ assignment.gradeName }} - {{ assignment.sectionName }}</span></li>
+        }
+      </ul>
+    </div>
+  }
+
+  @if (teacherId) {
+    <button type="button" class="btn" (click)="downloadCsv()">Download Class Reports (CSV)</button>
+  }
+
   @if (sections().length === 0) {
     <p>You are not assigned as homeroom teacher for any section yet.</p>
   }

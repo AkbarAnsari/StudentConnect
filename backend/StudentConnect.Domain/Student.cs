@@ -16,4 +16,12 @@ public class Student
 
     public int? SectionId { get; set; }
     public Section? Section { get; set; }
+
+    public StudentStatus Status { get; set; } = StudentStatus.Active;
+    public DateTime? StatusChangedAtUtc { get; set; }
+    public string? StatusReason { get; set; }
+
+    public DateOnly? DateOfBirth { get; set; }
+    public string? Phone { get; set; }
+    public string? Address { get; set; }
 }

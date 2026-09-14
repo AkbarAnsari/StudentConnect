@@ -117,4 +117,43 @@ public class TermsController(TermStore terms, AcademicYearStore academicYears, I
 
         return NoContent();
     }
+
+    // POST /api/terms/{id}/lock — once locked, no Assessment/Mark tied to this term can be
+    // created, edited, or deleted (see AssessmentsController/MarksController).
+    [HttpPost("{id:int}/lock")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> LockTerm(int id)
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await terms.ExistsAsync(id, schoolId))
+        {
+            return NotFound();
+        }
+
+        await terms.LockAsync(id);
+        return NoContent();
+    }
+
+    // POST /api/terms/{id}/unlock
+    [HttpPost("{id:int}/unlock")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UnlockTerm(int id)
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await terms.ExistsAsync(id, schoolId))
+        {
+            return NotFound();
+        }
+
+        await terms.UnlockAsync(id);
+        return NoContent();
+    }
 }

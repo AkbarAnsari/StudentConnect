@@ -4,6 +4,7 @@ export interface AcademicYear {
   startDate: string;
   endDate: string;
   isCurrent: boolean;
+  isArchived: boolean;
 }
 
 export interface AcademicYearInput {
@@ -20,6 +21,7 @@ export interface Term {
   name: string;
   startDate: string;
   endDate: string;
+  isLocked: boolean;
 }
 
 export interface TermInput {
@@ -50,4 +52,35 @@ export interface SectionStudent {
   firstName: string;
   lastName: string;
   email: string;
+}
+
+export interface GradingBand {
+  id: number;
+  label: string;
+  minPercentage: number;
+}
+
+export interface GradingBandInput {
+  label: string;
+  minPercentage: number;
+}
+
+export interface RolloverStudentRow {
+  studentId: number;
+  studentName: string;
+  currentGradeId: number;
+  currentGradeName: string;
+  currentSectionId: number | null;
+  currentSectionName: string | null;
+  proposedGradeId: number | null;
+  proposedGradeName: string | null;
+  proposedSectionId: number | null;
+  proposedSectionName: string | null;
+  excluded: boolean;
+  exclusionReason: string | null;
+}
+
+export interface RolloverCommitResult {
+  promoted: number;
+  skipped: number;
 }

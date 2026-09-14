@@ -11,6 +11,8 @@ using StudentConnect.Infrastructure.Email;
 using StudentConnect.Infrastructure.Health;
 using StudentConnect.Infrastructure.Notifications;
 using StudentConnect.Infrastructure.Storage;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,6 +42,9 @@ builder.Services.AddScoped<ActivityStore>();
 builder.Services.AddScoped<ActivityRegistrationStore>();
 builder.Services.AddScoped<UserStore>();
 builder.Services.AddScoped<ParentStore>();
+builder.Services.AddScoped<PasswordResetTokenStore>();
+builder.Services.AddScoped<EmailVerificationTokenStore>();
+builder.Services.AddScoped<RefreshTokenStore>();
 builder.Services.AddScoped<NotificationStore>();
 builder.Services.AddScoped<AnalyticsStore>();
 builder.Services.AddScoped<NotificationRecipientResolver>();
@@ -47,6 +52,9 @@ builder.Services.AddScoped<AuditLogStore>();
 builder.Services.AddScoped<SearchStore>();
 builder.Services.AddScoped<ReportStore>();
 builder.Services.AddScoped<EmailOutboxStore>();
+builder.Services.AddScoped<AnnouncementStore>();
+builder.Services.AddScoped<GradingBandStore>();
+builder.Services.AddScoped<TeacherSubjectAssignmentStore>();
 
 // Today files live on local disk; a future AzureBlobStorage class could implement the
 // same IFileStorage interface without any controller/service code changing.
@@ -92,10 +100,50 @@ else
     builder.Services.AddSingleton<IEmailSender, LoggingEmailSender>();
 }
 builder.Services.AddHostedService<EmailOutboxProcessor>();
+builder.Services.AddHostedService<NotificationDigestProcessor>();
 
 // Unauthenticated /health endpoint (see below) — the kind of thing a load balancer or
 // container orchestrator polls, so it deliberately bypasses the FallbackPolicy below.
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
+
+// Throttles the genuinely brute-forceable, unauthenticated credential endpoints (login,
+// forgot/reset-password) per client IP — a real, simple brute-force/abuse guard. A separate,
+// far more permissive policy covers the other AuthController endpoints (refresh/logout/
+// verify-email/resend-verification) — those aren't credential-guessing targets, and sharing
+// the tight "auth" budget with them could lock a legitimate user out of LOGIN ITSELF after a
+// handful of unrelated actions (see [EnableRateLimiting] placement on AuthController).
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Always return a JSON body on rejection so the frontend can show a real message instead
+    // of guessing (the default 429 response otherwise has an empty body).
+    options.OnRejected = async (context, ct) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new { message = "Too many requests. Please wait a few minutes and try again." },
+            ct);
+    };
+
+    options.AddPolicy("auth", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromMinutes(15),
+            QueueLimit = 0,
+        }));
+
+    options.AddPolicy("auth-relaxed", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 30,
+            Window = TimeSpan.FromMinutes(15),
+            QueueLimit = 0,
+        }));
+});
 
 var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -154,6 +202,8 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseCors("AngularDev");
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

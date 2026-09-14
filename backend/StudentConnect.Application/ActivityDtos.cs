@@ -14,8 +14,9 @@ public class ActivityDto
     public int Capacity { get; set; }
     public int CurrentRegistrations { get; set; }
     public int AvailableSeats { get; set; }
+    public int CurrentWaitlisted { get; set; }
 
-    public static ActivityDto FromEntity(Activity activity, int currentRegistrations) => new()
+    public static ActivityDto FromEntity(Activity activity, int currentRegistrations, int currentWaitlisted = 0) => new()
     {
         Id = activity.Id,
         Title = activity.Title,
@@ -27,6 +28,7 @@ public class ActivityDto
         Capacity = activity.Capacity,
         CurrentRegistrations = currentRegistrations,
         AvailableSeats = Math.Max(0, activity.Capacity - currentRegistrations),
+        CurrentWaitlisted = currentWaitlisted,
     };
 }
 

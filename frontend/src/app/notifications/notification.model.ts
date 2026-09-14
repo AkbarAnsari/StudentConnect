@@ -6,3 +6,7 @@ export interface AppNotification {
   isRead: boolean;
   createdAtUtc: string;
 }
+
+export interface NotificationPreference {
+  digestEnabled: boolean;
+}

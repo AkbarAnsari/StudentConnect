@@ -3,6 +3,7 @@ import { Component, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { map } from 'rxjs';
 import { StudentService } from '../../students/student.service';
 import { Parent } from '../parent.model';
 import { ParentService } from '../parent.service';
@@ -18,7 +19,7 @@ export class ManageParents {
   private readonly parentService = inject(ParentService);
   private readonly studentService = inject(StudentService);
 
-  protected readonly students = toSignal(this.studentService.getStudents(), { initialValue: [] });
+  protected readonly students = toSignal(this.studentService.getStudents().pipe(map((r) => r.items)), { initialValue: [] });
   protected readonly parents = signal<Parent[]>([]);
   protected readonly selectedChildIds = signal<number[]>([]);
   protected readonly submitting = signal(false);

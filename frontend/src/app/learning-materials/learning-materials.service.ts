@@ -27,6 +27,12 @@ export class LearningMaterialsService {
     return this.http.get<LearningMaterial>(`${this.baseUrl}/${id}`);
   }
 
+  // Fetched via HttpClient (blob) so the auth interceptor attaches the Bearer token — a plain
+  // anchor href would bypass it entirely and 401.
+  downloadFile(id: number): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${id}/download`, { responseType: 'blob' });
+  }
+
   getForStudent(studentId: number): Observable<LearningMaterial[]> {
     return this.http.get<LearningMaterial[]>(`${this.baseUrl}/student/${studentId}`);
   }
@@ -41,11 +47,5 @@ export class LearningMaterialsService {
 
   delete(id: number): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
-  }
-
-  // A plain anchor navigation to this URL triggers a normal browser download —
-  // no need to fetch the file into Angular just to hand it back to the browser.
-  downloadUrl(id: number): string {
-    return `${this.baseUrl}/${id}/download`;
   }
 }

@@ -1,0 +1,50 @@
+<section class="page page-narrow">
+  <a class="back-link" routerLink="/students">← Back to Students</a>
+  <h1>Bulk Import Students</h1>
+  <p class="notice">
+    Upload a CSV file with a header row of <code>StudentId, FirstName, LastName, Email, GradeName, SectionName</code>
+    (SectionName is optional). Rows with an existing StudentId or an unrecognized Grade/Section are skipped and
+    listed below, not overwritten.
+  </p>
+
+  @if (errorMessage()) {
+    <p class="error-message">{{ errorMessage() }}</p>
+  }
+
+  <label>
+    CSV File
+    <input type="file" accept=".csv,text/csv" (change)="onFileChange($event)" />
+  </label>
+
+  <button type="button" [disabled]="submitting()" (click)="onSubmit()">
+    {{ submitting() ? 'Importing...' : 'Import' }}
+  </button>
+
+  @if (result(); as r) {
+    <section class="panel">
+      <h2>Import Results</h2>
+      <p class="success-message">{{ r.successCount }} of {{ r.totalRows }} row(s) imported successfully.</p>
+
+      @if (r.errors.length > 0) {
+        <table>
+          <thead>
+            <tr>
+              <th>Row</th>
+              <th>StudentId</th>
+              <th>Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (e of r.errors; track e.row) {
+              <tr>
+                <td>{{ e.row }}</td>
+                <td>{{ e.studentId }}</td>
+                <td>{{ e.message }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  }
+</section>

@@ -26,7 +26,7 @@
             <span class="meta">{{ material.fileName }} — {{ formatSize(material.fileSize) }}</span>
           </div>
           <div class="actions">
-            <a class="download-link" [href]="downloadUrl(material.id)" target="_blank">Download</a>
+            <button type="button" class="download-link" (click)="download(material)">Download</button>
             <button type="button" class="delete-button" (click)="onDelete(material.id)">Delete</button>
           </div>
         </li>

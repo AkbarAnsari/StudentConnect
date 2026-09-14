@@ -14,8 +14,11 @@ public class MarksController(
     MarkStore marks,
     StudentStore students,
     AssessmentStore assessments,
+    TermStore terms,
     NotificationRecipientResolver recipients,
     ICurrentUserService currentUser,
+    ICurrentTenantService currentTenant,
+    GradingBandStore gradingBands,
     INotificationService notifications,
     IAuditService audit,
     ILogger<MarksController> logger) : ControllerBase
@@ -29,7 +32,7 @@ public class MarksController(
             return Forbid();
         }
 
-        if (!await students.ExistsAsync(studentId))
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(studentId, schoolId))
         {
             return NotFound(new { message = "Student not found." });
         }
@@ -47,7 +50,7 @@ public class MarksController(
             return Forbid();
         }
 
-        if (!await students.ExistsAsync(studentId))
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(studentId, schoolId))
         {
             return NotFound(new { message = "Student not found." });
         }
@@ -65,13 +68,18 @@ public class MarksController(
             return Forbid();
         }
 
-        if (!await students.ExistsAsync(studentId))
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(studentId, schoolId))
         {
             return NotFound(new { message = "Student not found." });
         }
 
         // Percentage and result category are calculated here, on the backend — never in Angular.
         var summary = await marks.GetSummaryAsync(studentId);
+        var bands = await gradingBands.GetForSchoolAsync(schoolId);
+        foreach (var item in summary)
+        {
+            item.ResultCategory = GradingBandStore.Resolve(bands, item.Percentage);
+        }
         return Ok(summary);
     }
 
@@ -80,7 +88,7 @@ public class MarksController(
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<IEnumerable<AssessmentResultDto>>> GetAssessmentResults(int assessmentId)
     {
-        if (!await assessments.ExistsAsync(assessmentId))
+        if (currentTenant.SchoolId is not { } schoolId || !await assessments.ExistsAsync(assessmentId, schoolId))
         {
             return NotFound(new { message = "Assessment not found." });
         }
@@ -94,12 +102,17 @@ public class MarksController(
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<MarkRecordDto>> CreateMark(MarkCreateDto dto)
     {
-        if (!await students.ExistsAsync(dto.StudentId))
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await students.ExistsAsync(dto.StudentId, schoolId))
         {
             return BadRequest(new { message = "Student does not exist." });
         }
 
-        var assessment = await assessments.GetByIdAsync(dto.AssessmentId);
+        var assessment = await assessments.GetByIdAsync(dto.AssessmentId, schoolId);
         if (assessment is null)
         {
             return BadRequest(new { message = "Assessment does not exist." });
@@ -108,6 +121,11 @@ public class MarksController(
         if (dto.MarksObtained < 0 || dto.MarksObtained > assessment.MaximumMarks)
         {
             return BadRequest(new { message = $"MarksObtained must be between 0 and {assessment.MaximumMarks}." });
+        }
+
+        if (assessment.TermId is not null && await terms.IsLockedAsync(assessment.TermId.Value))
+        {
+            return Conflict(new { message = "This assessment's term is locked; marks can no longer be recorded." });
         }
 
         if (await marks.ExistsAsync(dto.StudentId, dto.AssessmentId))
@@ -153,17 +171,27 @@ public class MarksController(
             return BadRequest(new { message = "At least one mark is required." });
         }
 
-        var assessment = await assessments.GetByIdAsync(dto.AssessmentId);
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var assessment = await assessments.GetByIdAsync(dto.AssessmentId, schoolId);
         if (assessment is null)
         {
             return BadRequest(new { message = "Assessment does not exist." });
+        }
+
+        if (assessment.TermId is not null && await terms.IsLockedAsync(assessment.TermId.Value))
+        {
+            return Conflict(new { message = "This assessment's term is locked; marks can no longer be recorded." });
         }
 
         var studentIds = dto.Marks.Select(m => m.StudentId).Distinct().ToList();
         var missingStudentIds = new List<int>();
         foreach (var studentId in studentIds)
         {
-            if (!await students.ExistsAsync(studentId))
+            if (!await students.ExistsAsync(studentId, schoolId))
             {
                 missingStudentIds.Add(studentId);
             }
@@ -219,9 +247,19 @@ public class MarksController(
             return NotFound();
         }
 
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(mark.StudentId, schoolId))
+        {
+            return NotFound();
+        }
+
         if (dto.MarksObtained < 0 || dto.MarksObtained > mark.Assessment!.MaximumMarks)
         {
             return BadRequest(new { message = $"MarksObtained must be between 0 and {mark.Assessment.MaximumMarks}." });
+        }
+
+        if (mark.Assessment.TermId is not null && await terms.IsLockedAsync(mark.Assessment.TermId.Value))
+        {
+            return Conflict(new { message = "This mark's term is locked and can no longer be modified." });
         }
 
         try
@@ -248,6 +286,16 @@ public class MarksController(
         if (mark is null)
         {
             return NotFound();
+        }
+
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(mark.StudentId, schoolId))
+        {
+            return NotFound();
+        }
+
+        if (mark.Assessment?.TermId is not null && await terms.IsLockedAsync(mark.Assessment.TermId.Value))
+        {
+            return Conflict(new { message = "This mark's term is locked and can no longer be deleted." });
         }
 
         try

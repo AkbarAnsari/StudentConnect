@@ -21,6 +21,8 @@
               <span class="seats">
                 @if (activity.availableSeats > 0) {
                   {{ activity.availableSeats }} seats available
+                } @else if (activity.currentWaitlisted > 0) {
+                  Full — {{ activity.currentWaitlisted }} on waitlist
                 } @else {
                   Full
                 }
@@ -29,14 +31,18 @@
             <div class="actions">
               <a class="view-link" [routerLink]="['/students', studentId, 'activities', activity.id]">View Details</a>
               @if (registrationFor(activity.id); as registration) {
-                <span class="status status-registered">Registered</span>
+                @if (registration.status === 'Waitlisted') {
+                  <span class="status status-full">Waitlisted</span>
+                } @else {
+                  <span class="status status-registered">Registered</span>
+                }
                 <button type="button" class="cancel-button" (click)="onCancel(registration.id)">Cancel Registration</button>
               } @else if (isPast(activity)) {
                 <span class="status status-closed">Registration Closed</span>
-              } @else if (activity.availableSeats === 0) {
-                <span class="status status-full">Full</span>
               } @else {
-                <button type="button" class="register-button" (click)="onRegister(activity.id)">Register</button>
+                <button type="button" class="register-button" (click)="onRegister(activity.id)">
+                  {{ activity.availableSeats > 0 ? 'Register' : 'Join Waitlist' }}
+                </button>
               }
             </div>
           </li>

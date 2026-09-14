@@ -2,6 +2,9 @@
   <div class="page-header">
     <h1>Students</h1>
     <a class="add-link" routerLink="/students/add">+ Add Student</a>
+    @if (authService.role() === 'Admin') {
+      <a class="add-link" routerLink="/students/import">Bulk Import</a>
+    }
   </div>
 
   <div class="filters">
@@ -17,6 +20,13 @@
       @for (grade of grades(); track grade[0]) {
         <option [value]="grade[0]">{{ grade[1] }}</option>
       }
+    </select>
+    <select class="grade-select" (change)="onStatusFilterChange($any($event.target).value)">
+      <option value="Active" selected>Active</option>
+      <option value="Withdrawn">Withdrawn</option>
+      <option value="Graduated">Graduated</option>
+      <option value="Transferred">Transferred</option>
+      <option value="All">All Statuses</option>
     </select>
   </div>
 
@@ -36,6 +46,9 @@
             <span class="student-id">{{ student.studentId }}</span>
             <span class="student-name">{{ student.firstName }} {{ student.lastName }}</span>
             <span class="student-meta">{{ student.gradeName }} - Section {{ student.sectionName }}</span>
+            @if (student.status !== 'Active') {
+              <span class="badge">{{ student.status }}</span>
+            }
           </div>
           <a class="view-link" [routerLink]="['/students', student.id]">View Profile</a>
         </li>

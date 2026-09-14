@@ -16,17 +16,26 @@ public class TeachersController(TeacherStore teachers, UserStore users, ICurrent
 {
     private static readonly PasswordHasher<ApplicationUser> Hasher = new();
 
-    // GET /api/teachers
+    // GET /api/teachers?page=&pageSize=
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<TeacherResponseDto>>> GetTeachers()
+    public async Task<ActionResult<PagedResult<TeacherResponseDto>>> GetTeachers(int page = 1, int pageSize = 100)
     {
         if (currentTenant.SchoolId is not { } schoolId)
         {
             return Forbid();
         }
 
-        var all = await teachers.GetAllAsync(schoolId);
-        return Ok(all);
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 200);
+
+        var (items, totalCount) = await teachers.GetPagedAsync(schoolId, page, pageSize);
+        return Ok(new PagedResult<TeacherResponseDto>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        });
     }
 
     // POST /api/teachers
@@ -93,6 +102,43 @@ public class TeachersController(TeacherStore teachers, UserStore users, ICurrent
         return CreatedAtAction(nameof(GetTeachers), null, TeacherResponseDto.FromEntity(
             new Teacher { Id = newId, TeacherId = dto.TeacherId, FirstName = dto.FirstName, LastName = dto.LastName, Email = dto.Email, SchoolId = schoolId },
             wantsLogin ? dto.Username : null));
+    }
+
+    // PUT /api/teachers/{id}
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult<TeacherResponseDto>> UpdateTeacher(int id, TeacherUpdateDto dto)
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.FirstName) ||
+            string.IsNullOrWhiteSpace(dto.LastName) ||
+            string.IsNullOrWhiteSpace(dto.Email))
+        {
+            return BadRequest(new { message = "FirstName, LastName, and Email are required." });
+        }
+
+        if (!await teachers.ExistsAsync(id, schoolId))
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            await teachers.UpdateAsync(new Teacher { Id = id, FirstName = dto.FirstName, LastName = dto.LastName, Email = dto.Email });
+        }
+        catch (PostgresException ex)
+        {
+            logger.LogError(ex, "Failed to update teacher {Id}", id);
+            return StatusCode(500, new { message = "Unable to update the teacher. Please try again." });
+        }
+
+        await audit.LogAsync("Update", "Teacher", id.ToString(), $"{dto.FirstName} {dto.LastName}");
+
+        var updated = await teachers.GetByIdAsync(id, schoolId);
+        return Ok(updated);
     }
 
     // DELETE /api/teachers/{id}

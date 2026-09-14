@@ -14,17 +14,22 @@ public class AcademicYearStore(Database db)
         EndDate = reader.GetDateOnly("EndDate"),
         IsCurrent = reader.GetBoolean("IsCurrent"),
         SchoolId = reader.GetNullableInt32("SchoolId") ?? 0,
+        RolledOverAtUtc = reader.GetNullableDateTimeUtc("RolledOverAtUtc"),
+        IsArchived = reader.GetBoolean("IsArchived"),
     };
 
-    private const string Select = """SELECT "Id", "Name", "StartDate", "EndDate", "IsCurrent", "SchoolId" FROM "AcademicYears" """;
+    private const string Select = """SELECT "Id", "Name", "StartDate", "EndDate", "IsCurrent", "SchoolId", "RolledOverAtUtc", "IsArchived" FROM "AcademicYears" """;
 
     public async Task<List<AcademicYear>> GetAllAsync() =>
         await db.QueryAsync($"""{Select} ORDER BY "StartDate" DESC""", bind: null, map: Map);
 
-    // Tenant-scoped — used by the multi-tenancy-aware AcademicYearsController.
-    public async Task<List<AcademicYear>> GetAllAsync(int schoolId) =>
+    // Tenant-scoped — used by the multi-tenancy-aware AcademicYearsController. Archived years are
+    // excluded by default since most callers (dropdowns, rollover) only care about active years.
+    public async Task<List<AcademicYear>> GetAllAsync(int schoolId, bool includeArchived = false) =>
         await db.QueryAsync(
-            $"""{Select} WHERE "SchoolId" = @schoolId ORDER BY "StartDate" DESC""",
+            includeArchived
+                ? $"""{Select} WHERE "SchoolId" = @schoolId ORDER BY "StartDate" DESC"""
+                : $"""{Select} WHERE "SchoolId" = @schoolId AND "IsArchived" = false ORDER BY "StartDate" DESC""",
             p => p.AddWithValue("schoolId", schoolId),
             Map);
 
@@ -85,4 +90,24 @@ public class AcademicYearStore(Database db)
 
     public async Task DeleteAsync(int id) =>
         await db.ExecuteAsync("""DELETE FROM "AcademicYears" WHERE "Id" = @id""", p => p.AddWithValue("id", id));
+
+    // Soft-delete: keeps the row (and its Terms/rollover history) intact but hides it from
+    // the active-years views used elsewhere in the app.
+    public async Task ArchiveAsync(int id) =>
+        await db.ExecuteAsync("""UPDATE "AcademicYears" SET "IsArchived" = true WHERE "Id" = @id""", p => p.AddWithValue("id", id));
+
+    public async Task RestoreAsync(int id) =>
+        await db.ExecuteAsync("""UPDATE "AcademicYears" SET "IsArchived" = false WHERE "Id" = @id""", p => p.AddWithValue("id", id));
+
+    // Used inside the rollover-commit transaction (see AcademicYearsController) to guard
+    // against accidentally re-running the same year's promotion.
+    public async Task MarkRolledOverInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int academicYearId)
+    {
+        await using var command = new NpgsqlCommand(
+            """UPDATE "AcademicYears" SET "RolledOverAtUtc" = now() WHERE "Id" = @id""",
+            connection,
+            tx);
+        command.Parameters.AddWithValue("id", academicYearId);
+        await command.ExecuteNonQueryAsync();
+    }
 }

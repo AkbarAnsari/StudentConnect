@@ -28,6 +28,9 @@ export class AddStudent {
     email: ['', [Validators.required, Validators.email]],
     gradeId: [0, [Validators.required, Validators.min(1)]],
     sectionId: [0, [Validators.required, Validators.min(1)]],
+    dateOfBirth: [''],
+    phone: [''],
+    address: [''],
   });
 
   // Refetched every time the selected grade changes — a Section only makes sense
@@ -53,16 +56,19 @@ export class AddStudent {
     this.submitting.set(true);
     this.errorMessage.set('');
 
-    this.studentService.createStudent(this.form.getRawValue()).subscribe({
-      next: (student) => this.router.navigate(['/students', student.id]),
-      error: (err: HttpErrorResponse) => {
-        this.submitting.set(false);
-        this.errorMessage.set(
-          err.status === 409
-            ? 'A student with this Student ID already exists.'
-            : 'Unable to save the student. Please check whether the StudentConnect API is running.',
-        );
-      },
-    });
+    const { dateOfBirth, phone, address, ...rest } = this.form.getRawValue();
+    this.studentService
+      .createStudent({ ...rest, dateOfBirth: dateOfBirth || null, phone: phone || null, address: address || null })
+      .subscribe({
+        next: (student) => this.router.navigate(['/students', student.id]),
+        error: (err: HttpErrorResponse) => {
+          this.submitting.set(false);
+          this.errorMessage.set(
+            err.status === 409
+              ? 'A student with this Student ID already exists.'
+              : 'Unable to save the student. Please check whether the StudentConnect API is running.',
+          );
+        },
+      });
   }
 }

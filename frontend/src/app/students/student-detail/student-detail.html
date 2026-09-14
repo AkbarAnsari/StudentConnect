@@ -17,6 +17,7 @@
     <div class="profile-actions">
       <a class="btn" [routerLink]="['/students', s.id, 'edit']">Edit</a>
       <a class="btn" [routerLink]="['/students', s.id, 'report-card']">Report Card</a>
+      <a class="btn" [routerLink]="['/students', s.id, 'transcript']">Transcript</a>
       <button type="button" class="btn btn-danger" (click)="onDelete(s.id)">Delete</button>
     </div>
 
@@ -33,6 +34,18 @@
       <dd>{{ s.sectionName }}</dd>
       <dt>Email</dt>
       <dd>{{ s.email }}</dd>
+      @if (s.dateOfBirth) {
+        <dt>Date of birth</dt>
+        <dd>{{ s.dateOfBirth }}</dd>
+      }
+      @if (s.phone) {
+        <dt>Phone</dt>
+        <dd>{{ s.phone }}</dd>
+      }
+      @if (s.address) {
+        <dt>Address</dt>
+        <dd>{{ s.address }}</dd>
+      }
     </dl>
 
     <section class="panel">

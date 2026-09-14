@@ -8,6 +8,7 @@ export interface AttendanceRecord {
   subjectName: string;
   date: string;
   status: AttendanceStatus;
+  correctionReason: string | null;
 }
 
 export interface AttendanceSummary {
@@ -35,6 +36,7 @@ export interface AttendanceCreateInput {
 export interface BulkAttendanceItem {
   studentId: number;
   status: AttendanceStatus;
+  reason?: string | null;
 }
 
 export interface BulkAttendanceInput {

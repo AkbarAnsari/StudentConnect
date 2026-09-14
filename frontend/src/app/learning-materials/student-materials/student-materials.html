@@ -28,7 +28,7 @@
             <span class="title">{{ material.title }}</span>
             <span class="meta">{{ material.fileName }} — {{ formatSize(material.fileSize) }}</span>
           </div>
-          <a class="download-link" [href]="downloadUrl(material.id)" target="_blank">Download</a>
+          <button type="button" class="download-link" (click)="download(material)">Download</button>
         </li>
       }
     </ul>

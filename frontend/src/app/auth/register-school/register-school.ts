@@ -22,6 +22,7 @@ export class RegisterSchool {
     schoolName: ['', Validators.required],
     adminUsername: ['', Validators.required],
     adminPassword: ['', [Validators.required, Validators.minLength(8)]],
+    adminEmail: ['', [Validators.required, Validators.email]],
   });
 
   protected onSubmit(): void {

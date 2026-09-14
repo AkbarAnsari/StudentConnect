@@ -15,4 +15,8 @@ public class Notification
     public NotificationType Type { get; set; }
     public bool IsRead { get; set; }
     public DateTime CreatedAtUtc { get; set; }
+
+    // Set once this notification has been folded into a digest email (see
+    // NotificationDigestProcessor) — null means still pending for a digest-enabled user.
+    public DateTime? DigestedAtUtc { get; set; }
 }

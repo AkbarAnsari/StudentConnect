@@ -63,6 +63,34 @@
   </div>
 
   <div class="card">
+    <h2>Trend Over Time</h2>
+    <p class="hint">Monthly attendance and marks rollup for this school, oldest first.</p>
+
+    @if (trend().length === 0) {
+      <p>Not enough recorded data yet to show a trend.</p>
+    } @else {
+      <table>
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th>Attendance</th>
+            <th>Marks</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of trend(); track row.month) {
+            <tr>
+              <td>{{ row.month }}</td>
+              <td>{{ row.attendancePercentage }}%</td>
+              <td>{{ row.marksPercentage }}%</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+
+  <div class="card">
     <h2>At-Risk Students</h2>
     <p class="hint">Attendance below 75% or average marks below 40%.</p>
 

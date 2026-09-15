@@ -1,0 +1,11 @@
+@if (service.request(); as req) {
+  <div class="confirm-backdrop" (click)="onCancel()">
+    <div class="confirm-dialog" role="alertdialog" aria-modal="true" [attr.aria-label]="req.message" (click)="$event.stopPropagation()">
+      <p class="confirm-message">{{ req.message }}</p>
+      <div class="confirm-actions">
+        <button type="button" class="btn" #cancelButton (click)="onCancel()">Cancel</button>
+        <button type="button" class="btn btn-danger" #confirmButton autofocus (click)="onConfirm()">Confirm</button>
+      </div>
+    </div>
+  </div>
+}

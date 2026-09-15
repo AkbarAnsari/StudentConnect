@@ -12,7 +12,7 @@ import {
   VerifyEmailRequest,
 } from './auth.model';
 
-// Development-only local authentication (see docs/phase-10.md). Holds the access token and
+// Development-only local authentication. Holds the access token and
 // current user in memory + localStorage, and is the single place the rest of the Angular
 // app asks "who is logged in?" — no other service or component talks to /api/auth directly.
 const TOKEN_STORAGE_KEY = 'studentconnect.token';

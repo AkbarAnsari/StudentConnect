@@ -23,6 +23,8 @@ export class ManageAcademicStructure {
   private readonly teacherService = inject(TeacherService);
   private readonly teacherSubjectAssignments = inject(TeacherSubjectAssignmentService);
 
+  protected readonly activeTab = signal<'structure' | 'calendar' | 'assignments' | 'grading' | 'rollover'>('structure');
+
   protected readonly grades = signal<Grade[]>([]);
   protected readonly subjects = signal<Subject[]>([]);
   protected readonly teachers = signal<Teacher[]>([]);

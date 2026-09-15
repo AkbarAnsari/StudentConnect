@@ -20,6 +20,22 @@
     }
 
     @if (user.role === 'Student' && user.studentId) {
+      @if (!studentSummaryState().loading && !studentSummaryState().error) {
+        <div class="summary-cards">
+          <div class="summary-card">
+            <span class="summary-value">{{ studentSummaryState().attendancePercentage ?? '—' }}%</span>
+            <span class="summary-label">Attendance</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-value">{{ studentSummaryState().marksPercentage ?? '—' }}%</span>
+            <span class="summary-label">Average Marks</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-value">{{ studentSummaryState().pendingHomeworkCount }}</span>
+            <span class="summary-label">Pending Homework</span>
+          </div>
+        </div>
+      }
       <ul class="dashboard-list">
         <li><a [routerLink]="['/students', user.studentId]">My Profile</a></li>
         <li><a [routerLink]="['/students', user.studentId, 'attendance']">My Attendance</a></li>
@@ -28,7 +44,37 @@
         <li><a [routerLink]="['/students', user.studentId, 'materials']">My Learning Materials</a></li>
         <li><a [routerLink]="['/students', user.studentId, 'activities']">My Activities</a></li>
       </ul>
+
+      @if (recentNotifications().length > 0) {
+        <section class="panel">
+          <h3>Recent Announcements &amp; Notifications</h3>
+          <ul class="notification-feed">
+            @for (n of recentNotifications(); track n.id) {
+              <li [class.unread]="!n.isRead">
+                <span class="notification-title">{{ n.title }}</span>
+                <span class="notification-message">{{ n.message }}</span>
+              </li>
+            }
+          </ul>
+        </section>
+      }
     } @else if (user.role === 'Teacher') {
+      @if (!overviewState().loading && !overviewState().error && overviewState().overview; as overview) {
+        <div class="summary-cards">
+          <div class="summary-card">
+            <span class="summary-value">{{ overview.totalStudents }}</span>
+            <span class="summary-label">Students</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-value">{{ overview.overallAttendancePercentage }}%</span>
+            <span class="summary-label">Overall Attendance</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-value">{{ overview.averageMarksPercentage }}%</span>
+            <span class="summary-label">Average Marks</span>
+          </div>
+        </div>
+      }
       <ul class="dashboard-list">
         <li><a routerLink="/my-classes">My Classes</a></li>
         <li><a routerLink="/record-attendance">Manage Attendance</a></li>
@@ -39,6 +85,26 @@
         <li><a routerLink="/analytics">Analytics Dashboard</a></li>
       </ul>
     } @else if (user.role === 'Admin') {
+      @if (!overviewState().loading && !overviewState().error && overviewState().overview; as overview) {
+        <div class="summary-cards">
+          <div class="summary-card">
+            <span class="summary-value">{{ overview.totalStudents }}</span>
+            <span class="summary-label">Students</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-value">{{ overview.totalTeachers }}</span>
+            <span class="summary-label">Teachers</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-value">{{ overview.overallAttendancePercentage }}%</span>
+            <span class="summary-label">Overall Attendance</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-value">{{ overview.averageMarksPercentage }}%</span>
+            <span class="summary-label">Average Marks</span>
+          </div>
+        </div>
+      }
       <ul class="dashboard-list">
         <li><a routerLink="/students">Manage Students</a></li>
         <li><a routerLink="/activity-management">Manage Activities</a></li>
@@ -67,6 +133,20 @@
         </div>
       } @else {
         <p>No children are linked to your account yet. Please contact the school admin.</p>
+      }
+
+      @if (recentNotifications().length > 0) {
+        <section class="panel">
+          <h3>Recent Announcements &amp; Notifications</h3>
+          <ul class="notification-feed">
+            @for (n of recentNotifications(); track n.id) {
+              <li [class.unread]="!n.isRead">
+                <span class="notification-title">{{ n.title }}</span>
+                <span class="notification-message">{{ n.message }}</span>
+              </li>
+            }
+          </ul>
+        </section>
       }
     }
   }

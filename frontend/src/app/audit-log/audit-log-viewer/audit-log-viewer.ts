@@ -16,6 +16,7 @@ export class AuditLogViewer {
   protected readonly entityTypes = ['Student', 'Mark', 'Attendance', 'Teacher', 'Parent'];
   protected readonly selectedEntityType = signal('');
   protected readonly logs = signal<AuditLog[]>([]);
+  protected readonly loadError = signal(false);
 
   constructor() {
     this.reload();
@@ -27,6 +28,10 @@ export class AuditLogViewer {
   }
 
   private reload(): void {
-    this.auditLogService.getRecent(this.selectedEntityType() || undefined).subscribe((logs) => this.logs.set(logs));
+    this.loadError.set(false);
+    this.auditLogService.getRecent(this.selectedEntityType() || undefined).subscribe({
+      next: (logs) => this.logs.set(logs),
+      error: () => this.loadError.set(true),
+    });
   }
 }

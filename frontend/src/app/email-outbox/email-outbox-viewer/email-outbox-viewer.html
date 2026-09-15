@@ -3,7 +3,9 @@
   <h1>Email Outbox</h1>
   <p class="hint">Emails triggered by notifications are enqueued here and delivered asynchronously by a background processor.</p>
 
-  @if (entries().length === 0) {
+  @if (loadError()) {
+    <p class="error-message">Unable to load the email outbox. Please check whether the StudentConnect API is running.</p>
+  } @else if (entries().length === 0) {
     <p>No emails have been enqueued yet.</p>
   } @else {
     @if (retryError()) {

@@ -1,9 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { map } from 'rxjs';
+import { Student } from '../../students/student.model';
 import { StudentService } from '../../students/student.service';
 import { Parent } from '../parent.model';
 import { ParentService } from '../parent.service';
@@ -26,6 +27,35 @@ export class ManageParents {
   protected readonly errorMessage = signal('');
   protected readonly linkSelection = signal<Record<number, number>>({});
 
+  // Unfiltered dropdowns/checkbox lists become unusable once a school has more than a
+  // handful of students — both pickers below filter client-side by name or student code.
+  protected readonly childSearchTerm = signal('');
+  protected readonly linkSearchTerm = signal<Record<number, string>>({});
+
+  private static matches(student: Student, term: string): boolean {
+    const t = term.trim().toLowerCase();
+    if (!t) {
+      return true;
+    }
+    return (
+      student.firstName.toLowerCase().includes(t) ||
+      student.lastName.toLowerCase().includes(t) ||
+      student.studentId.toLowerCase().includes(t)
+    );
+  }
+
+  protected readonly filteredStudentsForCreate = computed(() =>
+    this.students().filter((student) => ManageParents.matches(student, this.childSearchTerm())),
+  );
+
+  protected filteredStudentsForLink(parentId: number): Student[] {
+    return this.students().filter((student) => ManageParents.matches(student, this.linkSearchTerm()[parentId] ?? ''));
+  }
+
+  protected onLinkSearchChange(parentId: number, value: string): void {
+    this.linkSearchTerm.update((sel) => ({ ...sel, [parentId]: value }));
+  }
+
   protected readonly form = this.fb.nonNullable.group({
     username: ['', Validators.required],
     password: ['', [Validators.required, Validators.minLength(6)]],
@@ -42,6 +72,10 @@ export class ManageParents {
 
   protected toggleChild(studentId: number, checked: boolean): void {
     this.selectedChildIds.update((ids) => (checked ? [...ids, studentId] : ids.filter((id) => id !== studentId)));
+  }
+
+  protected onChildSearchChange(value: string): void {
+    this.childSearchTerm.set(value);
   }
 
   protected onSubmit(): void {

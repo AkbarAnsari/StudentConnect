@@ -62,7 +62,7 @@ builder.Services.Configure<FileStorageOptions>(builder.Configuration.GetSection(
 builder.Services.Configure<AzureBlobStorageOptions>(builder.Configuration.GetSection("AzureBlobStorage"));
 
 // Storage:Provider selects the IFileStorage implementation — "Local" (default, for
-// day-to-day development) or "AzureBlob" (see docs/phase-13.md). Controllers depend
+// day-to-day development) or "AzureBlob" (Azure Blob Storage). Controllers depend
 // only on IFileStorage, so they never need to know which one is active.
 var storageProvider = builder.Configuration["Storage:Provider"] ?? "Local";
 if (string.Equals(storageProvider, "AzureBlob", StringComparison.OrdinalIgnoreCase))
@@ -74,7 +74,7 @@ else
     builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
 }
 
-// Development-only JWT authentication — see docs/phase-10.md for what a production
+// Development-only JWT authentication — a production deployment would replace this with a
 // identity provider (e.g. Microsoft Entra ID) would replace this with.
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddSingleton<JwtTokenService>();

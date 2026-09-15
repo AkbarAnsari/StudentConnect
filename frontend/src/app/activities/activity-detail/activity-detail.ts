@@ -1,10 +1,11 @@
 import { Component, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { catchError, map, of, startWith } from 'rxjs';
+import { BehaviorSubject, catchError, map, of, startWith, switchMap } from 'rxjs';
 import { Activity, ActivityRegistration } from '../activity.model';
 import { ActivityService } from '../activity.service';
 import { ActivityRegistrationService } from '../activity-registration.service';
+import { ConfirmDialogService } from '../../shared/confirm-dialog/confirm-dialog.service';
 
 interface ActivityDetailState {
   loading: boolean;
@@ -24,15 +25,22 @@ export class ActivityDetail {
   private readonly route = inject(ActivatedRoute);
   private readonly activityService = inject(ActivityService);
   private readonly registrationService = inject(ActivityRegistrationService);
+  private readonly confirmDialog = inject(ConfirmDialogService);
+
+  private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
   protected readonly studentId = Number(this.route.snapshot.paramMap.get('id'));
   protected readonly activityId = Number(this.route.snapshot.paramMap.get('activityId'));
 
   protected readonly state = toSignal(
-    this.activityService.getById(this.activityId).pipe(
-      map((activity): ActivityDetailState => ({ loading: false, error: false, activity })),
-      catchError(() => of<ActivityDetailState>({ loading: false, error: true, activity: null })),
-      startWith(LOADING_STATE),
+    this.refresh$.pipe(
+      switchMap(() =>
+        this.activityService.getById(this.activityId).pipe(
+          map((activity): ActivityDetailState => ({ loading: false, error: false, activity })),
+          catchError(() => of<ActivityDetailState>({ loading: false, error: true, activity: null })),
+          startWith(LOADING_STATE),
+        ),
+      ),
     ),
     { initialValue: LOADING_STATE },
   );
@@ -60,21 +68,21 @@ export class ActivityDetail {
   protected onRegister(): void {
     this.actionError.set('');
     this.registrationService.register({ activityId: this.activityId }).subscribe({
-      next: () => window.location.reload(),
+      next: () => this.refresh$.next(),
       error: (err) =>
         this.actionError.set(err?.error?.message ?? 'Unable to register. Please check whether the StudentConnect API is running.'),
     });
   }
 
-  protected onCancel(): void {
+  protected async onCancel(): Promise<void> {
     const registration = this.myRegistration();
-    if (!registration || !confirm('Are you sure you want to cancel this registration?')) {
+    if (!registration || !(await this.confirmDialog.confirm('Are you sure you want to cancel this registration?'))) {
       return;
     }
 
     this.actionError.set('');
     this.registrationService.cancel(registration.id).subscribe({
-      next: () => window.location.reload(),
+      next: () => this.refresh$.next(),
       error: () => this.actionError.set('Unable to cancel registration. Please check whether the StudentConnect API is running.'),
     });
   }

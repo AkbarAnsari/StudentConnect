@@ -36,7 +36,14 @@
               <dt>Submitted</dt>
               <dd>{{ s.submittedDate }}</dd>
               <dt>Status</dt>
-              <dd>{{ s.status }}</dd>
+              <dd>
+                <span
+                  class="badge"
+                  [class.status-submitted]="s.status === 'Submitted'"
+                  [class.status-late]="s.status === 'Late'"
+                  [class.status-not-submitted]="s.status === 'Not Submitted'"
+                >{{ s.status }}</span>
+              </dd>
               <dt>Comments</dt>
               <dd>{{ s.comments }}</dd>
               @if (s.fileName) {

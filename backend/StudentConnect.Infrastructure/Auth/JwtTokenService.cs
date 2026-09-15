@@ -9,7 +9,7 @@ namespace StudentConnect.Infrastructure.Auth;
 
 public class JwtOptions
 {
-    // Development-only signing key — never a real production secret. See docs/phase-10.md.
+    // Development-only signing key — never a real production secret.
     public string Secret { get; set; } = string.Empty;
     public string Issuer { get; set; } = "StudentConnect";
     public string Audience { get; set; } = "StudentConnect";

@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
   Homework,
+  HomeworkBulkDueDateInput,
   HomeworkInput,
   HomeworkSubmission,
   HomeworkUpdateInput,
@@ -35,6 +36,10 @@ export class HomeworkService {
 
   createHomework(homework: HomeworkInput): Observable<Homework> {
     return this.http.post<Homework>(this.homeworkUrl, homework);
+  }
+
+  bulkUpdateDueDate(input: HomeworkBulkDueDateInput): Observable<void> {
+    return this.http.put<void>(`${this.homeworkUrl}/bulk-due-date`, input);
   }
 
   updateHomework(id: number, homework: HomeworkUpdateInput): Observable<Homework> {

@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.WebUtilities;
 using StudentConnect.Application;
 using StudentConnect.Domain;
@@ -33,8 +34,11 @@ public class SchoolsController(
     private const int VerificationTokenValidityMinutes = 60 * 24;
     private const int RefreshTokenValidityDays = 30;
 
-    // POST /api/schools/register
+    // POST /api/schools/register — no auth to guard, so a per-IP limit is the only abuse
+    // control against automated mass tenant creation (same "auth-relaxed" budget as the
+    // other non-credential-guessing AuthController actions).
     [HttpPost("register")]
+    [EnableRateLimiting("auth-relaxed")]
     public async Task<ActionResult<LoginResponseDto>> Register(SchoolRegistrationRequestDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.SchoolName) ||

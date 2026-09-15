@@ -37,6 +37,11 @@ export interface HomeworkUpdateInput {
   dueDate: string;
 }
 
+export interface HomeworkBulkDueDateInput {
+  homeworkIds: number[];
+  dueDate: string;
+}
+
 export interface HomeworkSubmission {
   id: number;
   homeworkId: number;

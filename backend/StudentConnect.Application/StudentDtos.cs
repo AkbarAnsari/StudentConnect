@@ -75,3 +75,11 @@ public class StudentStatusUpdateDto
     public string Status { get; set; } = string.Empty;
     public string? Reason { get; set; }
 }
+
+// A single subject the student is actually enrolled in (via StudentSubjects).
+public class StudentSubjectDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+}

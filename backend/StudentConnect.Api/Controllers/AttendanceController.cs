@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Npgsql;
 using StudentConnect.Application;
 using StudentConnect.Domain;
+using StudentConnect.Infrastructure.Data;
 using StudentConnect.Infrastructure.Data.Stores;
 using StudentConnect.Infrastructure.Notifications;
 
@@ -14,11 +15,13 @@ public class AttendanceController(
     AttendanceStore attendance,
     StudentStore students,
     ReferenceDataStore referenceData,
+    TeacherSubjectAssignmentStore teacherSubjectAssignments,
     NotificationRecipientResolver recipients,
     ICurrentUserService currentUser,
     ICurrentTenantService currentTenant,
     INotificationService notifications,
     IAuditService audit,
+    Database db,
     ILogger<AttendanceController> logger) : ControllerBase
 {
     // GET /api/attendance
@@ -130,6 +133,11 @@ public class AttendanceController(
             return BadRequest(new { message = "Subject does not exist." });
         }
 
+        if (!await IsAssignedToTeachAsync(dto.SubjectId, [dto.StudentId]))
+        {
+            return Forbid();
+        }
+
         if (await attendance.ExistsForStudentSubjectDateAsync(dto.StudentId, dto.SubjectId, dto.Date))
         {
             return Conflict(new { message = "An attendance record already exists for this student, subject, and date." });
@@ -194,6 +202,11 @@ public class AttendanceController(
             return BadRequest(new { message = $"Unknown student id(s): {string.Join(", ", missingStudentIds)}" });
         }
 
+        if (!await IsAssignedToTeachAsync(dto.SubjectId, studentIds))
+        {
+            return Forbid();
+        }
+
         var parsedRecords = new List<(int StudentId, AttendanceStatus Status, string? Reason)>();
         foreach (var record in dto.Records)
         {
@@ -209,22 +222,27 @@ public class AttendanceController(
 
         try
         {
-            foreach (var (studentId, status, reason) in parsedRecords)
+            await db.WithTransactionAsync(async (connection, tx) =>
             {
-                if (existingByStudent.TryGetValue(studentId, out var existingRecord))
+                foreach (var (studentId, status, reason) in parsedRecords)
                 {
-                    // Only overwrite when the status actually changed, so a reason isn't
-                    // required/stamped on rows that were re-saved unchanged.
-                    if (existingRecord.Status != status)
+                    if (existingByStudent.TryGetValue(studentId, out var existingRecord))
                     {
-                        await attendance.UpdateStatusAsync(existingRecord.Id, status, reason);
+                        // Only overwrite when the status actually changed, so a reason isn't
+                        // required/stamped on rows that were re-saved unchanged.
+                        if (existingRecord.Status != status)
+                        {
+                            await attendance.UpdateStatusInTxAsync(connection, tx, existingRecord.Id, status, reason);
+                        }
+                    }
+                    else
+                    {
+                        await attendance.CreateInTxAsync(connection, tx, new Attendance { StudentId = studentId, SubjectId = dto.SubjectId, Date = dto.Date, Status = status });
                     }
                 }
-                else
-                {
-                    await attendance.CreateAsync(new Attendance { StudentId = studentId, SubjectId = dto.SubjectId, Date = dto.Date, Status = status });
-                }
-            }
+
+                return true;
+            });
         }
         catch (PostgresException ex)
         {
@@ -314,6 +332,36 @@ public class AttendanceController(
 
     private static bool TryParseStatus(string? status, out AttendanceStatus result) =>
         Enum.TryParse(status, ignoreCase: true, out result) && Enum.IsDefined(result);
+
+    // Admin may write for any section; a Teacher must have an explicit TeacherSubjectAssignment
+    // for the subject in every section the target students belong to.
+    private async Task<bool> IsAssignedToTeachAsync(int subjectId, IReadOnlyCollection<int> studentIds)
+    {
+        if (currentUser.Role == "Admin")
+        {
+            return true;
+        }
+
+        if (currentUser.TeacherId is not { } teacherId)
+        {
+            return false;
+        }
+
+        var sectionIds = (await students.GetSectionIdsAsync(studentIds)).Values
+            .Where(sectionId => sectionId is not null)
+            .Select(sectionId => sectionId!.Value)
+            .Distinct();
+
+        foreach (var sectionId in sectionIds)
+        {
+            if (!await teacherSubjectAssignments.ExistsAsync(teacherId, subjectId, sectionId))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     // Notifies the student's own account plus any linked parents — same recipient
     // resolution a real email/SMS provider would use later.

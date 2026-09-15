@@ -9,6 +9,9 @@
       Unable to load activities. Please check whether the StudentConnect API is running.
     </p>
   } @else {
+    @if (actionError()) {
+      <p class="error-message">{{ actionError() }}</p>
+    }
     @if (state().activities.length === 0) {
       <p class="empty">No activities available for your grade yet.</p>
     } @else {

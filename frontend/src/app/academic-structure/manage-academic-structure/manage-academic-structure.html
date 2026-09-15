@@ -6,6 +6,15 @@
     <p class="error-message">{{ errorMessage() }}</p>
   }
 
+  <div class="tab-strip" role="tablist">
+    <button type="button" class="tab" [class.active]="activeTab() === 'structure'" (click)="activeTab.set('structure')">Structure</button>
+    <button type="button" class="tab" [class.active]="activeTab() === 'calendar'" (click)="activeTab.set('calendar')">Calendar</button>
+    <button type="button" class="tab" [class.active]="activeTab() === 'assignments'" (click)="activeTab.set('assignments')">Assignments</button>
+    <button type="button" class="tab" [class.active]="activeTab() === 'grading'" (click)="activeTab.set('grading')">Grading</button>
+    <button type="button" class="tab" [class.active]="activeTab() === 'rollover'" (click)="activeTab.set('rollover')">Rollover</button>
+  </div>
+
+  @if (activeTab() === 'structure') {
   <div class="structure-grid">
     <div class="card">
       <h2>Grades</h2>
@@ -52,7 +61,11 @@
         }
       </ul>
     </div>
+  </div>
+  }
 
+  @if (activeTab() === 'calendar') {
+  <div class="structure-grid">
     <div class="card">
       <h2>Academic Years</h2>
 
@@ -142,7 +155,11 @@
         }
       </ul>
     </div>
+  </div>
+  }
 
+  @if (activeTab() === 'structure') {
+  <div class="structure-grid">
     <div class="card">
       <h2>Sections</h2>
 
@@ -196,7 +213,11 @@
         }
       </ul>
     </div>
+  </div>
+  }
 
+  @if (activeTab() === 'assignments') {
+  <div class="structure-grid">
     <div class="card">
       <h2>Teacher Subject Assignments</h2>
       <p class="notice">Formally record which teacher teaches which subject in which section.</p>
@@ -242,7 +263,9 @@
       </ul>
     </div>
   </div>
+  }
 
+  @if (activeTab() === 'rollover') {
   <div class="card">
     <h2>Academic Year Rollover</h2>
     <p class="notice">
@@ -315,7 +338,9 @@
       </button>
     }
   </div>
+  }
 
+  @if (activeTab() === 'grading') {
   <div class="card">
     <h2>Grading Bands</h2>
     <p class="notice">
@@ -347,4 +372,5 @@
     <button type="button" (click)="addBand()">Add Band</button>
     <button type="button" (click)="saveGradingBands()">Save Grading Bands</button>
   </div>
+  }
 </section>

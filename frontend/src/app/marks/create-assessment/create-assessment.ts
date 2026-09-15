@@ -35,6 +35,7 @@ export class CreateAssessment {
     assessmentType: ['UnitTest', Validators.required],
     description: [''],
     termId: [0],
+    weight: [1, [Validators.required, Validators.min(0.1)]],
   });
 
   protected onSubmit(): void {

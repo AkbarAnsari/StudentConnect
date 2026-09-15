@@ -16,9 +16,17 @@ export class EmailOutboxViewer {
   protected readonly entries = signal<EmailOutboxEntry[]>([]);
   protected readonly retryingId = signal<number | null>(null);
   protected readonly retryError = signal('');
+  protected readonly loadError = signal(false);
 
   constructor() {
-    this.emailOutboxService.getRecent().subscribe((entries) => this.entries.set(entries));
+    this.reload();
+  }
+
+  private reload(): void {
+    this.emailOutboxService.getRecent().subscribe({
+      next: (entries) => this.entries.set(entries),
+      error: () => this.loadError.set(true),
+    });
   }
 
   protected status(entry: EmailOutboxEntry): 'sent' | 'failed' | 'pending' {
@@ -34,7 +42,7 @@ export class EmailOutboxViewer {
     this.emailOutboxService.retry(id).subscribe({
       next: () => {
         this.retryingId.set(null);
-        this.emailOutboxService.getRecent().subscribe((entries) => this.entries.set(entries));
+        this.reload();
       },
       error: () => {
         this.retryingId.set(null);

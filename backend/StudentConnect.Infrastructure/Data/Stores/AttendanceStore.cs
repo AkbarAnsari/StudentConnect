@@ -128,6 +128,35 @@ public class AttendanceStore(Database db)
     public async Task DeleteAsync(int id) =>
         await db.ExecuteAsync("""DELETE FROM "Attendance" WHERE "Id" = @id""", p => p.AddWithValue("id", id));
 
+    // --- Transactional bulk-save support (mirrors ActivityRegistrationStore's *InTxAsync pattern) ---
+
+    public async Task<int> CreateInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, Attendance attendance)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO "Attendance" ("StudentId", "SubjectId", "Date", "Status")
+            VALUES (@studentId, @subjectId, @date, @status)
+            RETURNING "Id"
+            """,
+            connection, tx);
+        command.Parameters.AddWithValue("studentId", attendance.StudentId);
+        command.Parameters.AddWithValue("subjectId", attendance.SubjectId);
+        command.Parameters.AddWithValue("date", attendance.Date);
+        command.Parameters.AddWithValue("status", attendance.Status.ToString());
+        return (int)(await command.ExecuteScalarAsync())!;
+    }
+
+    public async Task UpdateStatusInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int id, AttendanceStatus status, string? reason = null)
+    {
+        await using var command = new NpgsqlCommand(
+            """UPDATE "Attendance" SET "Status" = @status, "CorrectionReason" = @reason WHERE "Id" = @id""",
+            connection, tx);
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("status", status.ToString());
+        command.Parameters.AddWithValue("reason", (object?)reason ?? DBNull.Value);
+        await command.ExecuteNonQueryAsync();
+    }
+
     // Bulk save support: existing (studentId -> (id, status)) rows for a subject+date, so the
     // controller can decide update-in-place vs insert exactly like the original EF version.
     public async Task<Dictionary<int, (int Id, AttendanceStatus Status)>> GetExistingForSubjectDateAsync(int subjectId, DateOnly date, IReadOnlyCollection<int> studentIds)

@@ -8,7 +8,21 @@
     <p class="error-message">Unable to delete learning material. Please check whether the StudentConnect API is running.</p>
   }
 
-  @if (state().loading) {
+  @if (authService.role() === 'Admin') {
+    <label class="teacher-picker">
+      Teacher
+      <select (change)="onTeacherChange($any($event.target).value)">
+        <option value="">Select a teacher</option>
+        @for (teacher of teachers(); track teacher.id) {
+          <option [value]="teacher.id">{{ teacher.firstName }} {{ teacher.lastName }}</option>
+        }
+      </select>
+    </label>
+  }
+
+  @if (selectedTeacherId() === null) {
+    <p class="empty">Select a teacher to view their learning materials.</p>
+  } @else if (state().loading) {
     <p class="loading">Loading learning materials...</p>
   } @else if (state().error) {
     <p class="error-message">

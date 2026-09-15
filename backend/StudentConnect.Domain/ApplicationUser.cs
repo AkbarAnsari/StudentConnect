@@ -2,7 +2,7 @@ namespace StudentConnect.Domain;
 
 // Identity/User is a DIFFERENT concept from Student/Teacher — this is the account that can
 // log in; Student/Teacher are the business/domain profiles it's optionally linked to.
-// Development-only: a real application would use a proper identity provider (see docs/phase-10.md).
+// Development-only: a real application would use a proper identity provider (e.g. Microsoft Entra ID).
 public class ApplicationUser
 {
     public int Id { get; set; }

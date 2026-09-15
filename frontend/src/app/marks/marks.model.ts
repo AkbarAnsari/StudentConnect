@@ -40,6 +40,7 @@ export interface Assessment {
   description: string;
   termId: number | null;
   termName: string | null;
+  weight: number;
 }
 
 export interface AssessmentInput {
@@ -50,6 +51,7 @@ export interface AssessmentInput {
   assessmentType: AssessmentType;
   description: string;
   termId?: number | null;
+  weight?: number;
 }
 
 export interface BulkMarkItem {

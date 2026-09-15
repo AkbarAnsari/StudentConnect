@@ -4,7 +4,21 @@
     <a class="add-link" routerLink="/create-homework">+ Create Homework</a>
   </div>
 
-  @if (state().loading) {
+  @if (authService.role() === 'Admin') {
+    <label class="teacher-picker">
+      Teacher
+      <select (change)="onTeacherChange($any($event.target).value)">
+        <option value="">Select a teacher</option>
+        @for (teacher of teachers(); track teacher.id) {
+          <option [value]="teacher.id">{{ teacher.firstName }} {{ teacher.lastName }}</option>
+        }
+      </select>
+    </label>
+  }
+
+  @if (selectedTeacherId() === null) {
+    <p class="empty">Select a teacher to view their homework.</p>
+  } @else if (state().loading) {
     <p class="loading">Loading homework...</p>
   } @else if (state().error) {
     <p class="error-message">
@@ -13,9 +27,27 @@
   } @else if (state().homework.length === 0) {
     <p class="empty">No homework created yet.</p>
   } @else {
+    <div class="bulk-due-date-bar">
+      <label class="select-all">
+        <input type="checkbox" (change)="toggleSelectAll($any($event.target).checked)" />
+        Select all
+      </label>
+      <input type="date" [value]="bulkDueDate()" (input)="onBulkDueDateChange($any($event.target).value)" />
+      <button type="button" [disabled]="bulkSubmitting() || selectedIds().length === 0" (click)="applyBulkDueDate()">
+        {{ bulkSubmitting() ? 'Updating...' : 'Set Due Date for Selected (' + selectedIds().length + ')' }}
+      </button>
+      @if (bulkMessage()) {
+        <span class="success-message">{{ bulkMessage() }}</span>
+      }
+      @if (bulkError()) {
+        <span class="error-message">{{ bulkError() }}</span>
+      }
+    </div>
+
     <ul class="homework-list">
       @for (item of state().homework; track item.id) {
         <li class="homework-card">
+          <input type="checkbox" [checked]="selectedIds().includes(item.id)" (change)="toggleSelected(item.id, $any($event.target).checked)" />
           <div class="homework-info">
             <span class="title">{{ item.title }}</span>
             <span class="meta">{{ item.gradeName }} — {{ item.subjectName }} — Due {{ item.dueDate }}</span>

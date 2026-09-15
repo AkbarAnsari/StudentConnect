@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Npgsql;
 using StudentConnect.Application;
 using StudentConnect.Domain;
+using StudentConnect.Infrastructure.Data;
 using StudentConnect.Infrastructure.Data.Stores;
 using StudentConnect.Infrastructure.Notifications;
 
@@ -15,12 +16,14 @@ public class MarksController(
     StudentStore students,
     AssessmentStore assessments,
     TermStore terms,
+    TeacherSubjectAssignmentStore teacherSubjectAssignments,
     NotificationRecipientResolver recipients,
     ICurrentUserService currentUser,
     ICurrentTenantService currentTenant,
     GradingBandStore gradingBands,
     INotificationService notifications,
     IAuditService audit,
+    Database db,
     ILogger<MarksController> logger) : ControllerBase
 {
     // GET /api/marks/student/{studentId}
@@ -128,6 +131,11 @@ public class MarksController(
             return Conflict(new { message = "This assessment's term is locked; marks can no longer be recorded." });
         }
 
+        if (!await IsAssignedToTeachAsync(assessment.SubjectId, [dto.StudentId]))
+        {
+            return Forbid();
+        }
+
         if (await marks.ExistsAsync(dto.StudentId, dto.AssessmentId))
         {
             return Conflict(new { message = "This student already has a mark recorded for this assessment." });
@@ -201,6 +209,11 @@ public class MarksController(
             return BadRequest(new { message = $"Unknown student id(s): {string.Join(", ", missingStudentIds)}" });
         }
 
+        if (!await IsAssignedToTeachAsync(assessment.SubjectId, studentIds))
+        {
+            return Forbid();
+        }
+
         foreach (var item in dto.Marks)
         {
             if (item.MarksObtained < 0 || item.MarksObtained > assessment.MaximumMarks)
@@ -213,17 +226,22 @@ public class MarksController(
 
         try
         {
-            foreach (var item in dto.Marks)
+            await db.WithTransactionAsync(async (connection, tx) =>
             {
-                if (existingByStudent.TryGetValue(item.StudentId, out var markId))
+                foreach (var item in dto.Marks)
                 {
-                    await marks.UpdateMarksObtainedAsync(markId, item.MarksObtained);
+                    if (existingByStudent.TryGetValue(item.StudentId, out var markId))
+                    {
+                        await marks.UpdateMarksObtainedInTxAsync(connection, tx, markId, item.MarksObtained);
+                    }
+                    else
+                    {
+                        await marks.CreateInTxAsync(connection, tx, item.StudentId, dto.AssessmentId, item.MarksObtained);
+                    }
                 }
-                else
-                {
-                    await marks.CreateAsync(item.StudentId, dto.AssessmentId, item.MarksObtained);
-                }
-            }
+
+                return true;
+            });
         }
         catch (PostgresException ex)
         {
@@ -309,5 +327,35 @@ public class MarksController(
         }
 
         return NoContent();
+    }
+
+    // Admin may write for any section; a Teacher must have an explicit TeacherSubjectAssignment
+    // for the subject in every section the target students belong to.
+    private async Task<bool> IsAssignedToTeachAsync(int subjectId, IReadOnlyCollection<int> studentIds)
+    {
+        if (currentUser.Role == "Admin")
+        {
+            return true;
+        }
+
+        if (currentUser.TeacherId is not { } teacherId)
+        {
+            return false;
+        }
+
+        var sectionIds = (await students.GetSectionIdsAsync(studentIds)).Values
+            .Where(sectionId => sectionId is not null)
+            .Select(sectionId => sectionId!.Value)
+            .Distinct();
+
+        foreach (var sectionId in sectionIds)
+        {
+            if (!await teacherSubjectAssignments.ExistsAsync(teacherId, subjectId, sectionId))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

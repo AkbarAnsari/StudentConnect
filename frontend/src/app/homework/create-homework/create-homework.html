@@ -33,6 +33,21 @@
       }
     </label>
 
+    @if (authService.role() === 'Admin') {
+      <label>
+        Teacher
+        <select formControlName="teacherId">
+          <option [value]="0">Select a teacher</option>
+          @for (teacher of teachers(); track teacher.id) {
+            <option [value]="teacher.id">{{ teacher.firstName }} {{ teacher.lastName }}</option>
+          }
+        </select>
+        @if (form.controls.teacherId.invalid && form.controls.teacherId.touched) {
+          <span class="field-error">Teacher is required.</span>
+        }
+      </label>
+    }
+
     <label>
       Title
       <input type="text" formControlName="title" placeholder="e.g. Algebra Practice" />

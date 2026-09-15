@@ -74,12 +74,16 @@ public class MarkStore(Database db)
 
     public async Task<List<MarksSummaryDto>> GetSummaryAsync(int studentId)
     {
+        // Weighted average: each mark contributes (marksObtained/maximumMarks) * assessment
+        // weight; default Weight is 1.00 so unweighted assessments behave exactly as before.
         var summary = await db.QueryAsync(
             """
             SELECT asm."SubjectId", sub."Name" AS "SubjectName",
                    COUNT(m."Id") AS "Assessments",
                    COALESCE(SUM(m."MarksObtained"), 0) AS "TotalMarksObtained",
-                   COALESCE(SUM(asm."MaximumMarks"), 0) AS "TotalMaximumMarks"
+                   COALESCE(SUM(asm."MaximumMarks"), 0) AS "TotalMaximumMarks",
+                   COALESCE(SUM((m."MarksObtained"::numeric / NULLIF(asm."MaximumMarks", 0)) * asm."Weight"), 0) AS "WeightedScore",
+                   COALESCE(SUM(asm."Weight"), 0) AS "TotalWeight"
             FROM "Marks" m
             JOIN "Assessments" asm ON asm."Id" = m."AssessmentId"
             JOIN "Subjects" sub ON sub."Id" = asm."SubjectId"
@@ -95,16 +99,19 @@ public class MarkStore(Database db)
                 Assessments = (int)reader.GetInt64("Assessments"),
                 TotalMarksObtained = (int)reader.GetInt64("TotalMarksObtained"),
                 TotalMaximumMarks = (int)reader.GetInt64("TotalMaximumMarks"),
+                WeightedScore = reader.GetDecimal("WeightedScore"),
+                TotalWeight = reader.GetDecimal("TotalWeight"),
             });
 
         foreach (var item in summary)
         {
-            item.Percentage = item.TotalMaximumMarks == 0 ? 0 : Math.Round(item.TotalMarksObtained * 100.0 / item.TotalMaximumMarks, 0);
+            item.Percentage = item.TotalWeight == 0 ? 0 : Math.Round((double)(item.WeightedScore * 100 / item.TotalWeight), 0);
             item.ResultCategory = ResultCategory.From(item.Percentage);
         }
 
         return summary;
     }
+
 
     public async Task<bool> ExistsAsync(int studentId, int assessmentId) =>
         await db.ExistsAsync(
@@ -133,6 +140,29 @@ public class MarkStore(Database db)
                 p.AddWithValue("id", id);
                 p.AddWithValue("marksObtained", marksObtained);
             });
+
+    // --- Transactional bulk-save support (mirrors ActivityRegistrationStore's *InTxAsync pattern) ---
+
+    public async Task<int> CreateInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int studentId, int assessmentId, int marksObtained)
+    {
+        await using var command = new NpgsqlCommand(
+            """INSERT INTO "Marks" ("StudentId", "AssessmentId", "MarksObtained") VALUES (@studentId, @assessmentId, @marksObtained) RETURNING "Id" """,
+            connection, tx);
+        command.Parameters.AddWithValue("studentId", studentId);
+        command.Parameters.AddWithValue("assessmentId", assessmentId);
+        command.Parameters.AddWithValue("marksObtained", marksObtained);
+        return (int)(await command.ExecuteScalarAsync())!;
+    }
+
+    public async Task UpdateMarksObtainedInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int id, int marksObtained)
+    {
+        await using var command = new NpgsqlCommand(
+            """UPDATE "Marks" SET "MarksObtained" = @marksObtained WHERE "Id" = @id""",
+            connection, tx);
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("marksObtained", marksObtained);
+        await command.ExecuteNonQueryAsync();
+    }
 
     public async Task DeleteAsync(int id) =>
         await db.ExecuteAsync("""DELETE FROM "Marks" WHERE "Id" = @id""", p => p.AddWithValue("id", id));

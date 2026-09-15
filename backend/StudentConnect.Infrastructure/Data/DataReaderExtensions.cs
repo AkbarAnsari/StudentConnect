@@ -24,6 +24,8 @@ public static class DataReaderExtensions
 
     public static double GetDouble(this NpgsqlDataReader reader, string column) => reader.GetDouble(reader.GetOrdinal(column));
 
+    public static decimal GetDecimal(this NpgsqlDataReader reader, string column) => reader.GetDecimal(reader.GetOrdinal(column));
+
     public static string GetString(this NpgsqlDataReader reader, string column) => reader.GetString(reader.GetOrdinal(column));
 
     public static string? GetNullableString(this NpgsqlDataReader reader, string column)

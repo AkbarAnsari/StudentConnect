@@ -24,6 +24,20 @@ public class ReferenceDataStore(Database db)
         SchoolId = reader.GetNullableInt32("SchoolId") ?? 0,
     };
 
+    // Bulk lookup used by StudentsController's /subjects endpoint — turns a StudentSubjects
+    // join's raw SubjectId list into the actual Subject rows, scoped to the caller's school.
+    public async Task<List<Subject>> GetSubjectsByIdsAsync(IReadOnlyCollection<int> ids, int schoolId) =>
+        ids.Count == 0
+            ? []
+            : await db.QueryAsync(
+                """SELECT "Id", "Name", "Code", "SchoolId" FROM "Subjects" WHERE "SchoolId" = @schoolId AND "Id" = ANY(@ids)""",
+                p =>
+                {
+                    p.AddWithValue("schoolId", schoolId);
+                    p.AddWithValue("ids", ids.ToArray());
+                },
+                MapSubject);
+
     private static Teacher MapTeacher(NpgsqlDataReader reader) => new()
     {
         Id = reader.GetInt32("Id"),

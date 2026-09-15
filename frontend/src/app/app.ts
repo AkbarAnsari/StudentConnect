@@ -2,9 +2,10 @@ import { Component, HostListener, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from './auth/auth.service';
 import { NotificationBell } from './notifications/notification-bell/notification-bell';
+import { ConfirmDialog } from './shared/confirm-dialog/confirm-dialog';
 
 @Component({
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, NotificationBell],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NotificationBell, ConfirmDialog],
   selector: 'app-root',
   styleUrl: './app.css',
   templateUrl: './app.html',

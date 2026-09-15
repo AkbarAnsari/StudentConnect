@@ -17,8 +17,8 @@
     />
     <select class="grade-select" (change)="onGradeChange($any($event.target).value)">
       <option value="">All Grades</option>
-      @for (grade of grades(); track grade[0]) {
-        <option [value]="grade[0]">{{ grade[1] }}</option>
+      @for (grade of grades(); track grade.id) {
+        <option [value]="grade.id">{{ grade.name }}</option>
       }
     </select>
     <select class="grade-select" (change)="onStatusFilterChange($any($event.target).value)">
@@ -54,6 +54,14 @@
         </li>
       }
     </ul>
+
+    <div class="pagination">
+      <button type="button" (click)="previousPage()" [disabled]="currentPage() <= 1">Previous</button>
+      <span class="pagination-summary">
+        Showing {{ rangeStart() }}–{{ rangeEnd() }} of {{ state().totalCount }} students
+      </span>
+      <button type="button" (click)="nextPage()" [disabled]="currentPage() >= totalPages()">Next</button>
+    </div>
   }
 </section>
 

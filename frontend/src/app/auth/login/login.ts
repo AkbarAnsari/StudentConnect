@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../auth.service';
 
 @Component({
@@ -14,9 +14,13 @@ export class Login {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly submitting = signal(false);
-  protected readonly errorMessage = signal('');
+  // Pre-filled when the auth interceptor redirects here after a rejected/expired token.
+  protected readonly errorMessage = signal(
+    this.route.snapshot.queryParamMap.get('sessionExpired') ? 'Your session has expired. Please log in again.' : '',
+  );
 
   protected readonly form = this.fb.nonNullable.group({
     username: ['', Validators.required],

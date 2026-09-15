@@ -47,6 +47,11 @@ public class MarksSummaryDto
     public int TotalMaximumMarks { get; set; }
     public double Percentage { get; set; }
     public string ResultCategory { get; set; } = string.Empty;
+
+    // Intermediate values used only to compute the weighted Percentage above; not
+    // particularly meaningful to the frontend on their own.
+    public decimal WeightedScore { get; set; }
+    public decimal TotalWeight { get; set; }
 }
 
 public class MarkCreateDto

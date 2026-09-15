@@ -204,6 +204,43 @@ public class HomeworksController(
         return Ok(HomeworkDto.FromEntity(updated!));
     }
 
+    // PUT /api/homework/bulk-due-date — extend/correct the deadline across several of the
+    // caller's own homework items at once (Admin may act on any).
+    [HttpPut("bulk-due-date")]
+    [Authorize(Roles = "Teacher,Admin")]
+    public async Task<IActionResult> BulkUpdateDueDate(HomeworkBulkDueDateDto dto)
+    {
+        if (dto.HomeworkIds.Count == 0)
+        {
+            return BadRequest(new { message = "At least one homework id is required." });
+        }
+
+        foreach (var id in dto.HomeworkIds)
+        {
+            var item = await homework.GetByIdAsync(id);
+            if (item is null)
+            {
+                return BadRequest(new { message = $"Homework {id} does not exist." });
+            }
+
+            if (!currentUser.CanActAsTeacher(item.TeacherId))
+            {
+                return Forbid();
+            }
+        }
+
+        try
+        {
+            var updated = await homework.UpdateDueDatesAsync(dto.HomeworkIds, dto.DueDate);
+            return Ok(new { message = "Due date updated.", count = updated });
+        }
+        catch (PostgresException ex)
+        {
+            logger.LogError(ex, "Failed to bulk-update due dates for {Count} homework item(s)", dto.HomeworkIds.Count);
+            return StatusCode(500, new { message = "Unable to update due dates. Please try again." });
+        }
+    }
+
     // DELETE /api/homework/{id} — related submissions are removed with it (they have no meaning without the assignment).
     [HttpDelete("{id:int}")]
     [Authorize(Roles = "Teacher,Admin")]

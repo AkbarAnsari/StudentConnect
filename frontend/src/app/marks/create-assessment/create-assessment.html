@@ -65,6 +65,14 @@
       </select>
     </label>
 
+    <label>
+      Weight (how much this counts toward the subject average; 1 = normal)
+      <input type="number" formControlName="weight" min="0.1" step="0.1" />
+      @if (form.controls.weight.invalid && form.controls.weight.touched) {
+        <span class="field-error">Weight must be greater than zero.</span>
+      }
+    </label>
+
     <button type="submit" [disabled]="submitting()">
       {{ submitting() ? 'Saving...' : 'Create Assessment' }}
     </button>

@@ -12,11 +12,11 @@ namespace StudentConnect.Api.Controllers;
 [Route("api/[controller]")]
 public class StudentsController(StudentStore students, ReferenceDataStore referenceData, SectionStore sections, ICurrentUserService currentUser, ICurrentTenantService currentTenant, IAuditService audit, ILogger<StudentsController> logger) : ControllerBase
 {
-    // GET /api/students?status=Active|Withdrawn|Graduated|Transferred|All&page=&pageSize= —
+    // GET /api/students?status=Active|Withdrawn|Graduated|Transferred|All&gradeId=&page=&pageSize= —
     // status defaults to Active only; page/pageSize default to the first 50.
     [HttpGet]
     [Authorize(Roles = "Teacher,Admin")]
-    public async Task<ActionResult<PagedResult<StudentResponseDto>>> GetStudents(string? status, int page = 1, int pageSize = 50)
+    public async Task<ActionResult<PagedResult<StudentResponseDto>>> GetStudents(string? status, int? gradeId, int page = 1, int pageSize = 50)
     {
         if (currentTenant.SchoolId is not { } schoolId)
         {
@@ -32,7 +32,7 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
         page = Math.Max(page, 1);
         pageSize = Math.Clamp(pageSize, 1, 200);
 
-        var (items, totalCount) = await students.GetPagedAsync(schoolId, statusFilter, page, pageSize);
+        var (items, totalCount) = await students.GetPagedAsync(schoolId, statusFilter, page, pageSize, gradeId);
         return Ok(new PagedResult<StudentResponseDto>
         {
             Items = items.Select(StudentResponseDto.FromEntity).ToList(),
@@ -64,6 +64,26 @@ public class StudentsController(StudentStore students, ReferenceDataStore refere
         }
 
         return Ok(StudentResponseDto.FromEntity(student));
+    }
+
+    // GET /api/students/{id}/subjects — the student's actual enrolled subjects (StudentSubjects
+    // join), replacing the frontend's previous hardcoded subject list.
+    [HttpGet("{id:int}/subjects")]
+    public async Task<ActionResult<IEnumerable<StudentSubjectDto>>> GetStudentSubjects(int id)
+    {
+        if (!currentUser.CanAccessStudent(id))
+        {
+            return Forbid();
+        }
+
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(id, schoolId))
+        {
+            return NotFound();
+        }
+
+        var subjectIds = await students.GetSubjectIdsForStudentAsync(id);
+        var subjects = await referenceData.GetSubjectsByIdsAsync(subjectIds, schoolId);
+        return Ok(subjects.Select(s => new StudentSubjectDto { Id = s.Id, Name = s.Name, Code = s.Code }));
     }
 
     // POST /api/students

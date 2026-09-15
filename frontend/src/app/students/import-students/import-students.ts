@@ -1,8 +1,12 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { validateFile } from '../../shared/file-validation.util';
 import { StudentImportResult } from '../student.model';
 import { StudentService } from '../student.service';
+
+const ALLOWED_EXTENSIONS = ['.csv'];
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
 @Component({
   selector: 'app-import-students',
@@ -20,9 +24,17 @@ export class ImportStudents {
 
   protected onFileChange(event: Event): void {
     const input = event.target as HTMLInputElement;
-    this.selectedFile.set(input.files?.[0] ?? null);
+    const file = input.files?.[0] ?? null;
+    this.selectedFile.set(null);
     this.result.set(null);
-    this.errorMessage.set('');
+
+    const error = validateFile(file, ALLOWED_EXTENSIONS, MAX_FILE_SIZE_BYTES);
+    this.errorMessage.set(error ?? '');
+    if (error) {
+      return;
+    }
+
+    this.selectedFile.set(file);
   }
 
   protected onSubmit(): void {

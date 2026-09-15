@@ -163,7 +163,7 @@ INSERT INTO "ActivityRegistrations" ("Id", "StudentId", "ActivityId", "Registrat
     (8, 3, 4, TIMESTAMPTZ '2026-09-11 13:05:00Z', 'Cancelled')
 ON CONFLICT ("Id") DO NOTHING;
 
--- Development-only demo accounts (see docs/phase-10.md) — passwords are the literal strings
+-- Development-only demo accounts — passwords are the literal strings
 -- "Student123!", "Teacher123!", "Admin123!", hashed once with ASP.NET Core's PasswordHasher<T>.
 -- Never plaintext, never real credentials, never used outside local learning/testing.
 INSERT INTO "Users" ("Id", "Username", "PasswordHash", "Role", "StudentId", "TeacherId", "SchoolId") VALUES

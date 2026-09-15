@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { PagedResult } from '../shared/paged-result.model';
-import { Grade, Section, Student, StudentInput, StudentImportResult, StudentStatusUpdate } from './student.model';
+import { Grade, Section, Student, StudentInput, StudentImportResult, StudentStatusUpdate, StudentSubject } from './student.model';
 
 // Phase 4: the API now persists data via EF Core + SQL Server, but from
 // Angular's perspective nothing changes — it still just talks HTTP to the API.
@@ -15,18 +15,26 @@ export class StudentService {
   private readonly sectionsUrl = `${environment.apiBaseUrl}/sections`;
 
   // status defaults to "Active" server-side when omitted; pass 'All' to include every status.
-  // pageSize defaults generously so existing "just give me the roster" callers keep working
-  // unchanged; students.ts surfaces the real paging metadata.
-  getStudents(status?: string, page = 1, pageSize = 200): Observable<PagedResult<Student>> {
+  // pageSize defaults generously so existing "just give me the roster" callers (dropdowns,
+  // record-attendance, enter-marks, manage-parents) keep working unchanged; the Students list
+  // page itself passes its own smaller page/pageSize and surfaces the real paging metadata.
+  getStudents(status?: string, page = 1, pageSize = 200, gradeId?: number): Observable<PagedResult<Student>> {
     let params = new HttpParams().set('page', page).set('pageSize', pageSize);
     if (status) {
       params = params.set('status', status);
+    }
+    if (gradeId) {
+      params = params.set('gradeId', gradeId);
     }
     return this.http.get<PagedResult<Student>>(this.baseUrl, { params });
   }
 
   getStudentById(id: number): Observable<Student> {
     return this.http.get<Student>(`${this.baseUrl}/${id}`);
+  }
+
+  getStudentSubjects(id: number): Observable<StudentSubject[]> {
+    return this.http.get<StudentSubject[]>(`${this.baseUrl}/${id}/subjects`);
   }
 
   createStudent(student: StudentInput): Observable<Student> {

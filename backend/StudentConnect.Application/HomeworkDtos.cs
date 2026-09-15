@@ -42,6 +42,14 @@ public class StudentHomeworkDto
     public string Status { get; set; } = string.Empty;
 }
 
+// Bulk due-date correction for a teacher's own homework list (e.g. extending a deadline
+// across several assignments at once) — see HomeworksController.BulkUpdateDueDate.
+public class HomeworkBulkDueDateDto
+{
+    public List<int> HomeworkIds { get; set; } = [];
+    public DateOnly DueDate { get; set; }
+}
+
 public class HomeworkCreateDto
 {
     public string Title { get; set; } = string.Empty;

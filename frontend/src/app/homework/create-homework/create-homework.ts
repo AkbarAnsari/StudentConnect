@@ -3,11 +3,12 @@ import { Component, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { map } from 'rxjs';
 import { AttendanceService } from '../../attendance/attendance.service';
 import { AuthService } from '../../auth/auth.service';
 import { StudentService } from '../../students/student.service';
+import { TeacherService } from '../../teachers/teacher.service';
 import { HomeworkService } from '../homework.service';
-import { DEMO_TEACHER_ID } from '../teacher-homework/teacher-homework';
 
 @Component({
   selector: 'app-create-homework',
@@ -20,11 +21,13 @@ export class CreateHomework {
   private readonly homeworkService = inject(HomeworkService);
   private readonly attendanceService = inject(AttendanceService);
   private readonly studentService = inject(StudentService);
-  private readonly authService = inject(AuthService);
+  private readonly teacherService = inject(TeacherService);
+  protected readonly authService = inject(AuthService);
   private readonly router = inject(Router);
 
   protected readonly subjects = toSignal(this.attendanceService.getSubjects(), { initialValue: [] });
   protected readonly grades = toSignal(this.studentService.getGrades(), { initialValue: [] });
+  protected readonly teachers = toSignal(this.teacherService.getTeachers().pipe(map((r) => r.items)), { initialValue: [] });
   protected readonly submitting = signal(false);
   protected readonly errorMessage = signal('');
 
@@ -34,6 +37,7 @@ export class CreateHomework {
     subjectId: [0, [Validators.required, Validators.min(1)]],
     gradeId: [0, [Validators.required, Validators.min(1)]],
     dueDate: [new Date().toISOString().slice(0, 10), Validators.required],
+    teacherId: [this.authService.currentUser()?.teacherId ?? 0, [Validators.required, Validators.min(1)]],
   });
 
   protected onSubmit(): void {
@@ -46,7 +50,7 @@ export class CreateHomework {
     this.errorMessage.set('');
 
     this.homeworkService
-      .createHomework({ ...this.form.getRawValue(), teacherId: this.authService.currentUser()?.teacherId ?? DEMO_TEACHER_ID })
+      .createHomework(this.form.getRawValue())
       .subscribe({
         next: () => this.router.navigate(['/teacher-homework']),
         error: (err: HttpErrorResponse) => {

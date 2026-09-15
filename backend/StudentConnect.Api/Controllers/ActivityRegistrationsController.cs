@@ -127,31 +127,36 @@ public class ActivityRegistrationsController(
         {
             var (Id, AlreadyRegistered) = await db.WithTransactionAsync(async (connection, tx) =>
             {
-                var (existingId, existingStatus) = await registrations.GetExistingInTxAsync(connection, tx, studentId, dto.ActivityId);
+                var (existingId, existingStatus) = await registrations.GetExistingInTxAsync(connection, tx, studentId, dto.ActivityId, schoolId);
 
                 if (existingId is not null && existingStatus is ActivityRegistrationStatus.Registered or ActivityRegistrationStatus.Waitlisted)
                 {
                     return (existingId.Value, true);
                 }
 
-                var currentRegistrations = await registrations.CountActiveInTxAsync(connection, tx, dto.ActivityId);
+                var currentRegistrations = await registrations.CountActiveInTxAsync(connection, tx, dto.ActivityId, schoolId);
                 var targetStatus = currentRegistrations >= activity.Capacity
                     ? ActivityRegistrationStatus.Waitlisted
                     : ActivityRegistrationStatus.Registered;
 
                 if (existingId is not null)
                 {
-                    await registrations.ReactivateInTxAsync(connection, tx, existingId.Value, registrationDate, targetStatus);
+                    await registrations.ReactivateInTxAsync(connection, tx, existingId.Value, registrationDate, targetStatus, schoolId);
                     return (existingId.Value, false);
                 }
 
-                var newId = await registrations.InsertInTxAsync(connection, tx, studentId, dto.ActivityId, registrationDate, targetStatus);
-                return (newId, false);
+                var newId = await registrations.InsertInTxAsync(connection, tx, studentId, dto.ActivityId, registrationDate, targetStatus, schoolId);
+                return (newId ?? 0, false);
             });
 
             if (AlreadyRegistered)
             {
                 return Conflict(new { message = "Student is already registered for this activity." });
+            }
+
+            if (Id == 0)
+            {
+                return BadRequest(new { message = "Activity does not exist." });
             }
 
             registrationId = Id;
@@ -197,16 +202,20 @@ public class ActivityRegistrationsController(
         {
             promotedRegistrationId = await db.WithTransactionAsync(async (connection, tx) =>
             {
-                await registrations.UpdateStatusInTxAsync(connection, tx, id, ActivityRegistrationStatus.Cancelled);
+                await registrations.UpdateStatusInTxAsync(connection, tx, id, ActivityRegistrationStatus.Cancelled, schoolId);
 
                 if (!freedASeat)
                 {
                     return (int?)null;
                 }
 
-                return await registrations.GetEarliestWaitlistedInTxAsync(connection, tx, registration.ActivityId) is { } nextId
-                    ? await PromoteAndReturnIdAsync(connection, tx, nextId)
-                    : null;
+                if (await registrations.GetEarliestWaitlistedInTxAsync(connection, tx, registration.ActivityId, schoolId) is not { } nextId)
+                {
+                    return null;
+                }
+
+                await registrations.PromoteInTxAsync(connection, tx, nextId, schoolId);
+                return nextId;
             });
         }
         catch (PostgresException ex)
@@ -234,16 +243,5 @@ public class ActivityRegistrationsController(
 
         registration.Status = ActivityRegistrationStatus.Cancelled;
         return Ok(ActivityRegistrationDto.FromEntity(registration));
-    }
-
-    private static async Task<int> PromoteAndReturnIdAsync(Npgsql.NpgsqlConnection connection, Npgsql.NpgsqlTransaction tx, int registrationId)
-    {
-        await using var command = new Npgsql.NpgsqlCommand(
-            """UPDATE "ActivityRegistrations" SET "Status" = 'Registered' WHERE "Id" = @id""",
-            connection,
-            tx);
-        command.Parameters.AddWithValue("id", registrationId);
-        await command.ExecuteNonQueryAsync();
-        return registrationId;
     }
 }

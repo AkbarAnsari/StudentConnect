@@ -99,6 +99,7 @@ public class AssessmentsController(
             AssessmentType = type,
             Description = dto.Description,
             TermId = dto.TermId,
+            Weight = dto.Weight <= 0 ? 1.0m : dto.Weight,
         };
 
         int newId;
@@ -162,6 +163,7 @@ public class AssessmentsController(
             AssessmentType = type,
             Description = dto.Description,
             TermId = dto.TermId,
+            Weight = dto.Weight <= 0 ? 1.0m : dto.Weight,
         };
 
         try

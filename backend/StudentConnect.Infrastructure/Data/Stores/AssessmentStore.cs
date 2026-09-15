@@ -7,7 +7,7 @@ namespace StudentConnect.Infrastructure.Data.Stores;
 public class AssessmentStore(Database db)
 {
     private const string SelectWithSubject = """
-        SELECT a."Id", a."Title", a."SubjectId", a."Date", a."MaximumMarks", a."AssessmentType", a."Description", a."TermId",
+        SELECT a."Id", a."Title", a."SubjectId", a."Date", a."MaximumMarks", a."AssessmentType", a."Description", a."TermId", a."Weight",
                sub."Name" AS "SubjectName", term."Name" AS "TermName"
         FROM "Assessments" a
         JOIN "Subjects" sub ON sub."Id" = a."SubjectId"
@@ -26,6 +26,7 @@ public class AssessmentStore(Database db)
         Description = reader.GetString("Description"),
         TermId = reader.GetNullableInt32("TermId"),
         Term = reader.GetNullableInt32("TermId") is not null ? new Term { Name = reader.GetString("TermName") } : null,
+        Weight = reader.GetDecimal("Weight"),
     };
 
     public async Task<List<Assessment>> GetAllAsync() =>
@@ -85,8 +86,8 @@ public class AssessmentStore(Database db)
     public async Task<int> CreateAsync(Assessment assessment) =>
         await db.ExecuteScalarAsync<int>(
             """
-            INSERT INTO "Assessments" ("Title", "SubjectId", "Date", "MaximumMarks", "AssessmentType", "Description", "TermId")
-            VALUES (@title, @subjectId, @date, @maxMarks, @type, @description, @termId)
+            INSERT INTO "Assessments" ("Title", "SubjectId", "Date", "MaximumMarks", "AssessmentType", "Description", "TermId", "Weight")
+            VALUES (@title, @subjectId, @date, @maxMarks, @type, @description, @termId, @weight)
             RETURNING "Id"
             """,
             p => Bind(p, assessment));
@@ -96,7 +97,7 @@ public class AssessmentStore(Database db)
             """
             UPDATE "Assessments"
             SET "Title" = @title, "SubjectId" = @subjectId, "Date" = @date, "MaximumMarks" = @maxMarks,
-                "AssessmentType" = @type, "Description" = @description, "TermId" = @termId
+                "AssessmentType" = @type, "Description" = @description, "TermId" = @termId, "Weight" = @weight
             WHERE "Id" = @id
             """,
             p =>
@@ -119,5 +120,6 @@ public class AssessmentStore(Database db)
         p.AddWithValue("type", assessment.AssessmentType.ToString());
         p.AddWithValue("description", assessment.Description);
         p.AddWithValue("termId", (object?)assessment.TermId ?? DBNull.Value);
+        p.AddWithValue("weight", assessment.Weight);
     }
 }

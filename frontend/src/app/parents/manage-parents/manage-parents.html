@@ -36,7 +36,14 @@
 
       <fieldset class="children-picker">
         <legend>Link children (optional, can be added later)</legend>
-        @for (student of students(); track student.id) {
+        <input
+          type="text"
+          class="child-search"
+          placeholder="Search students..."
+          [value]="childSearchTerm()"
+          (input)="onChildSearchChange($any($event.target).value)"
+        />
+        @for (student of filteredStudentsForCreate(); track student.id) {
           <label class="checkbox-row">
             <input
               type="checkbox"
@@ -69,7 +76,14 @@
             @for (child of parent.children; track child.id) {
               <span class="chip">
                 {{ child.firstName }} {{ child.lastName }}
-                <button type="button" (click)="unlinkChild(parent.id, child.id)" title="Unlink">✕</button>
+                <button
+                  type="button"
+                  (click)="unlinkChild(parent.id, child.id)"
+                  [attr.aria-label]="'Unlink ' + child.firstName + ' ' + child.lastName"
+                  title="Unlink"
+                >
+                  ✕
+                </button>
               </span>
             }
           </div>
@@ -78,9 +92,15 @@
         }
 
         <div class="link-child-row">
+          <input
+            type="text"
+            class="child-search"
+            placeholder="Search students..."
+            (input)="onLinkSearchChange(parent.id, $any($event.target).value)"
+          />
           <select (change)="onLinkSelect(parent.id, +$any($event.target).value)">
             <option [value]="0">Link a student...</option>
-            @for (student of students(); track student.id) {
+            @for (student of filteredStudentsForLink(parent.id); track student.id) {
               <option [value]="student.id">{{ student.firstName }} {{ student.lastName }} ({{ student.studentId }})</option>
             }
           </select>

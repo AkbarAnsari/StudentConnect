@@ -48,15 +48,35 @@
       }
     </dl>
 
+    <div class="tab-strip" role="tablist">
+      <button type="button" class="tab" [class.active]="activeTab() === 'profile'" (click)="activeTab.set('profile')">Subjects</button>
+      <button type="button" class="tab" [class.active]="activeTab() === 'attendance'" (click)="activeTab.set('attendance')">Attendance</button>
+      <button type="button" class="tab" [class.active]="activeTab() === 'marks'" (click)="activeTab.set('marks')">Marks</button>
+      <button type="button" class="tab" [class.active]="activeTab() === 'homework'" (click)="activeTab.set('homework')">Homework</button>
+      <button type="button" class="tab" [class.active]="activeTab() === 'materials'" (click)="activeTab.set('materials')">Materials</button>
+      <button type="button" class="tab" [class.active]="activeTab() === 'activities'" (click)="activeTab.set('activities')">Activities</button>
+    </div>
+
+    @if (activeTab() === 'profile') {
     <section class="panel">
       <h3>My Subjects</h3>
-      <ul>
-        @for (subject of subjects; track subject) {
-          <li>{{ subject }}</li>
-        }
-      </ul>
+      @if (subjectsState().loading) {
+        <p class="loading">Loading subjects...</p>
+      } @else if (subjectsState().error) {
+        <p class="error-message">Unable to load subjects.</p>
+      } @else if (subjectsState().subjects.length === 0) {
+        <p class="coming-soon">No subjects assigned yet.</p>
+      } @else {
+        <ul>
+          @for (subject of subjectsState().subjects; track subject.id) {
+            <li>{{ subject.name }}</li>
+          }
+        </ul>
+      }
     </section>
+    }
 
+    @if (activeTab() === 'attendance') {
     <section class="panel">
       <h3>Attendance</h3>
       @if (attendanceState().loading) {
@@ -68,13 +88,18 @@
       } @else {
         <ul class="attendance-summary">
           @for (subject of attendanceState().summary; track subject.subjectId) {
-            <li><span>{{ subject.subjectName }}</span><span>{{ subject.percentage }}%</span></li>
+            <li>
+              <span>{{ subject.subjectName }}</span>
+              <span class="badge" [class.status-present]="subject.percentage >= 75" [class.status-absent]="subject.percentage < 75">{{ subject.percentage }}%</span>
+            </li>
           }
         </ul>
         <a class="view-link" [routerLink]="['/students', s.id, 'attendance']">View Attendance</a>
       }
     </section>
+    }
 
+    @if (activeTab() === 'marks') {
     <section class="panel">
       <h3>Marks</h3>
       @if (marksState().loading) {
@@ -86,13 +111,18 @@
       } @else {
         <ul class="attendance-summary">
           @for (subject of marksState().summary; track subject.subjectId) {
-            <li><span>{{ subject.subjectName }}</span><span>{{ subject.percentage }}%</span></li>
+            <li>
+              <span>{{ subject.subjectName }}</span>
+              <span class="badge" [class.status-present]="subject.percentage >= 40" [class.status-absent]="subject.percentage < 40">{{ subject.percentage }}%</span>
+            </li>
           }
         </ul>
         <a class="view-link" [routerLink]="['/students', s.id, 'marks']">View Marks</a>
       }
     </section>
+    }
 
+    @if (activeTab() === 'homework') {
     <section class="panel">
       <h3>Homework</h3>
       @if (homeworkState().loading) {
@@ -104,13 +134,23 @@
       } @else {
         <ul class="attendance-summary">
           @for (item of homeworkState().homework; track item.id) {
-            <li><span>{{ item.title }}</span><span>{{ item.status }}</span></li>
+            <li>
+              <span>{{ item.title }}</span>
+              <span
+                class="badge"
+                [class.status-submitted]="item.status === 'Submitted'"
+                [class.status-late]="item.status === 'Late'"
+                [class.status-not-submitted]="item.status === 'Not Submitted'"
+              >{{ item.status }}</span>
+            </li>
           }
         </ul>
         <a class="view-link" [routerLink]="['/students', s.id, 'homework']">View Homework</a>
       }
     </section>
+    }
 
+    @if (activeTab() === 'materials') {
     <section class="panel">
       <h3>Learning Materials</h3>
       @if (materialsState().loading) {
@@ -128,7 +168,9 @@
         <a class="view-link" [routerLink]="['/students', s.id, 'materials']">View Learning Materials</a>
       }
     </section>
+    }
 
+    @if (activeTab() === 'activities') {
     <section class="panel">
       <h3>Activities</h3>
       @if (activitiesState().loading) {
@@ -140,11 +182,20 @@
       } @else {
         <ul class="attendance-summary">
           @for (registration of activitiesState().registrations; track registration.id) {
-            <li><span>{{ registration.activityTitle }}</span><span>{{ registration.status }}</span></li>
+            <li>
+              <span>{{ registration.activityTitle }}</span>
+              <span
+                class="badge"
+                [class.status-registered]="registration.status === 'Registered'"
+                [class.status-full]="registration.status === 'Waitlisted'"
+                [class.status-cancelled]="registration.status === 'Cancelled'"
+              >{{ registration.status }}</span>
+            </li>
           }
         </ul>
       }
       <a class="view-link" [routerLink]="['/students', s.id, 'activities']">View Activities</a>
     </section>
+    }
   }
 </section>

@@ -13,17 +13,25 @@ import { LearningMaterial } from '../../learning-materials/learning-material.mod
 import { LearningMaterialsService } from '../../learning-materials/learning-materials.service';
 import { ActivityRegistration } from '../../activities/activity.model';
 import { ActivityRegistrationService } from '../../activities/activity-registration.service';
-import { Student } from '../student.model';
+import { ConfirmDialogService } from '../../shared/confirm-dialog/confirm-dialog.service';
+import { Student, StudentSubject } from '../student.model';
 import { StudentService } from '../student.service';
 
-interface StudentDetailState {
-  loading: boolean;
+interface StudentDetailState {  loading: boolean;
   notFound: boolean;
   error: boolean;
   student: Student | null;
 }
 
 const LOADING_STATE: StudentDetailState = { loading: true, notFound: false, error: false, student: null };
+
+interface SubjectsState {
+  loading: boolean;
+  error: boolean;
+  subjects: StudentSubject[];
+}
+
+const SUBJECTS_LOADING_STATE: SubjectsState = { loading: true, error: false, subjects: [] };
 
 interface AttendanceSummaryState {
   loading: boolean;
@@ -80,6 +88,7 @@ export class StudentDetail {
   private readonly homeworkService = inject(HomeworkService);
   private readonly materialsService = inject(LearningMaterialsService);
   private readonly activityRegistrationService = inject(ActivityRegistrationService);
+  private readonly confirmDialog = inject(ConfirmDialogService);
 
   protected readonly state = toSignal(
     this.route.paramMap.pipe(
@@ -114,6 +123,20 @@ export class StudentDetail {
       ),
     ),
     { initialValue: ATTENDANCE_LOADING_STATE },
+  );
+
+  protected readonly subjectsState = toSignal(
+    this.route.paramMap.pipe(
+      map((params) => Number(params.get('id'))),
+      switchMap((id) =>
+        this.studentService.getStudentSubjects(id).pipe(
+          map((subjects): SubjectsState => ({ loading: false, error: false, subjects })),
+          catchError(() => of<SubjectsState>({ loading: false, error: true, subjects: [] })),
+          startWith(SUBJECTS_LOADING_STATE),
+        ),
+      ),
+    ),
+    { initialValue: SUBJECTS_LOADING_STATE },
   );
 
   protected readonly marksState = toSignal(
@@ -172,11 +195,12 @@ export class StudentDetail {
     { initialValue: ACTIVITIES_LOADING_STATE },
   );
 
-  protected readonly subjects = ['Mathematics', 'Science', 'English', 'Computer Science'];
   protected readonly deleteError = signal(false);
 
-  protected onDelete(id: number): void {
-    if (!confirm('Are you sure you want to delete this student?')) {
+  protected readonly activeTab = signal<'profile' | 'attendance' | 'marks' | 'homework' | 'materials' | 'activities'>('profile');
+
+  protected async onDelete(id: number): Promise<void> {
+    if (!(await this.confirmDialog.confirm('Are you sure you want to delete this student?'))) {
       return;
     }
 

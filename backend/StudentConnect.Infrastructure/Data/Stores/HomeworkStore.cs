@@ -104,6 +104,18 @@ public class HomeworkStore(Database db)
                 p.AddWithValue("dueDate", dueDate);
             });
 
+    // Single statement, so it is atomic across the whole batch without needing an explicit transaction.
+    public async Task<int> UpdateDueDatesAsync(IReadOnlyCollection<int> ids, DateOnly dueDate) =>
+        ids.Count == 0
+            ? 0
+            : await db.ExecuteAsync(
+                """UPDATE "Homework" SET "DueDate" = @dueDate WHERE "Id" = ANY(@ids)""",
+                p =>
+                {
+                    p.AddWithValue("dueDate", dueDate);
+                    p.AddWithValue("ids", ids.ToArray());
+                });
+
     // Submissions cascade-delete at the DB level (see database/schema.sql) — no app-side cleanup needed.
     public async Task DeleteAsync(int id) =>
         await db.ExecuteAsync("""DELETE FROM "Homework" WHERE "Id" = @id""", p => p.AddWithValue("id", id));

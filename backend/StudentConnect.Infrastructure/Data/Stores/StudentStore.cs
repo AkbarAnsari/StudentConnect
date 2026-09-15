@@ -65,11 +65,18 @@ public class StudentStore(Database db)
 
     // Page/pageSize-bounded variant backing GET /api/students (see StudentsController) — keeps
     // the response fast and bounded regardless of how many students a school has.
-    public async Task<(List<Student> Items, int TotalCount)> GetPagedAsync(int schoolId, StudentStatus? statusFilter, int page, int pageSize)
+    public async Task<(List<Student> Items, int TotalCount)> GetPagedAsync(int schoolId, StudentStatus? statusFilter, int page, int pageSize, int? gradeId = null)
     {
-        var whereClause = statusFilter is null
-            ? """WHERE s."SchoolId" = @schoolId"""
-            : """WHERE s."SchoolId" = @schoolId AND s."Status" = @status""";
+        var conditions = new List<string> { """s."SchoolId" = @schoolId""" };
+        if (statusFilter is not null)
+        {
+            conditions.Add("""s."Status" = @status""");
+        }
+        if (gradeId is not null)
+        {
+            conditions.Add("""s."GradeId" = @gradeId""");
+        }
+        var whereClause = "WHERE " + string.Join(" AND ", conditions);
 
         void Bind(NpgsqlParameterCollection p)
         {
@@ -77,6 +84,10 @@ public class StudentStore(Database db)
             if (statusFilter is not null)
             {
                 p.AddWithValue("status", statusFilter.Value.ToString());
+            }
+            if (gradeId is not null)
+            {
+                p.AddWithValue("gradeId", gradeId.Value);
             }
         }
 
@@ -216,6 +227,23 @@ public class StudentStore(Database db)
             """SELECT "SubjectId" FROM "StudentSubjects" WHERE "StudentId" = @studentId""",
             p => p.AddWithValue("studentId", studentId),
             reader => reader.GetInt32("SubjectId"));
+
+    // Used to check teacher-subject-assignment authorization on Attendance/Marks bulk saves —
+    // resolves each student's SectionId so the caller can require an assignment per section touched.
+    public async Task<Dictionary<int, int?>> GetSectionIdsAsync(IReadOnlyCollection<int> studentIds)
+    {
+        if (studentIds.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = await db.QueryAsync(
+            """SELECT "Id", "SectionId" FROM "Students" WHERE "Id" = ANY(@studentIds)""",
+            p => p.AddWithValue("studentIds", studentIds.ToArray()),
+            reader => (Id: reader.GetInt32("Id"), SectionId: reader.GetNullableInt32("SectionId")));
+
+        return rows.ToDictionary(r => r.Id, r => r.SectionId);
+    }
 
     // Used by the homework "who submitted" teacher overview to build the class roster.
     public async Task<List<Student>> GetByGradeOrderedByFirstNameAsync(int gradeId) =>

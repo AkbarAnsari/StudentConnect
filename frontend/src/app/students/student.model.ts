@@ -22,6 +22,12 @@ export interface Grade {
   name: string;
 }
 
+export interface StudentSubject {
+  id: number;
+  name: string;
+  code: string;
+}
+
 export interface Section {
   id: number;
   gradeId: number;

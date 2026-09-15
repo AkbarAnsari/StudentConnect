@@ -13,7 +13,9 @@
       </select>
     </label>
 
-    @if (logs().length === 0) {
+    @if (loadError()) {
+      <p class="error-message">Unable to load audit log entries. Please check whether the StudentConnect API is running.</p>
+    } @else if (logs().length === 0) {
       <p>No audit log entries yet.</p>
     } @else {
       <table class="audit-table">

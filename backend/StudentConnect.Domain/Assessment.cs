@@ -14,6 +14,11 @@ public class Assessment
     public AssessmentType AssessmentType { get; set; }
     public string Description { get; set; } = string.Empty;
 
+    // How much this assessment counts toward a subject's overall percentage relative to other
+    // assessments in the same subject (e.g. a FinalExam weighted 3x a Quiz). Defaults to 1 so
+    // existing assessments behave exactly as before (simple equal-weight average).
+    public decimal Weight { get; set; } = 1.0m;
+
     // Optional — lets an assessment be tied to a Term for locking/cumulative grading.
     public int? TermId { get; set; }
     public Term? Term { get; set; }

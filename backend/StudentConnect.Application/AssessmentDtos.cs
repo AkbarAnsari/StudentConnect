@@ -15,6 +15,7 @@ public class AssessmentDto
     public string Description { get; set; } = string.Empty;
     public int? TermId { get; set; }
     public string? TermName { get; set; }
+    public decimal Weight { get; set; }
 
     public static AssessmentDto FromEntity(Assessment assessment) => new()
     {
@@ -28,6 +29,7 @@ public class AssessmentDto
         Description = assessment.Description,
         TermId = assessment.TermId,
         TermName = assessment.Term?.Name,
+        Weight = assessment.Weight,
     };
 }
 
@@ -40,6 +42,7 @@ public class AssessmentCreateDto
     public string AssessmentType { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public int? TermId { get; set; }
+    public decimal Weight { get; set; } = 1.0m;
 }
 
 public class AssessmentUpdateDto
@@ -51,4 +54,5 @@ public class AssessmentUpdateDto
     public string AssessmentType { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public int? TermId { get; set; }
+    public decimal Weight { get; set; } = 1.0m;
 }

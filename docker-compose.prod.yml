@@ -1,0 +1,63 @@
+# Production deployment (single VM, see infra/vm.bicep + infra/deploy-vm.ps1).
+#
+# Differences from the local docker-compose.yml:
+#  - Secrets/config come from a .env file (never committed — see .env.example) instead of
+#    hardcoded dev values.
+#  - Postgres data and uploaded files are bind-mounted onto the VM's attached data disk
+#    (/mnt/pgdata, set up by infra/cloud-init.yaml) instead of an anonymous Docker volume,
+#    so they survive `docker compose down` / container recreation and can be backed up or
+#    snapshotted independently of the containers.
+#  - The API's port is NOT published to the host — only nginx (frontend) is, on 80, which
+#    is the only port allowed in through the NSG/ufw. The frontend container already
+#    reverse-proxies /api/ to the api container over the internal compose network.
+#
+# Usage (run from /opt/studentconnect on the VM, after the deploy script has copied the
+# build artifacts + this file there):
+#   docker compose -f docker-compose.prod.yml up --build -d
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-studentconnect_db}
+      POSTGRES_USER: ${POSTGRES_USER:-studentconnect}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+    volumes:
+      - /mnt/pgdata/postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-studentconnect} -d ${POSTGRES_DB:-studentconnect_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: StudentConnect.Api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=${POSTGRES_DB:-studentconnect_db};Username=${POSTGRES_USER:-studentconnect};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env};SSL Mode=Disable"
+      Jwt__Secret: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      Jwt__Issuer: ${JWT_ISSUER:-StudentConnect}
+      Jwt__Audience: ${JWT_AUDIENCE:-StudentConnect}
+      Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES:-120}
+      AllowedOrigins__0: ${FRONTEND_ORIGIN:?FRONTEND_ORIGIN must be set in .env}
+      Frontend__BaseUrl: ${FRONTEND_ORIGIN:?FRONTEND_ORIGIN must be set in .env}
+      Storage__Provider: "Local"
+    volumes:
+      - /mnt/pgdata/storage:/app/storage/learning-materials
+    # No ports published — only reachable from the frontend container via the compose
+    # network. Use `docker compose exec api ...` or the internal network for diagnostics.
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"

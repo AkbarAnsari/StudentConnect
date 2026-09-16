@@ -4,6 +4,16 @@
 //
 // Deliberately keeps local JWT/database-driven authentication (no Entra ID) per the
 // phase-15 roadmap's explicit decision to defer identity-provider migration.
+//
+// Sizing by load tier (see README.md "Load tiers used below" for the full reasoning):
+//   Tier 1 (<300 students, ~5-15 concurrent):  App Service B1, Postgres Standard_B1ms
+//   Tier 2 (300-2,000 students, ~30-100):      App Service S1/S2, Postgres Standard_B2s/B2ms
+//     — autoscale the frontend/Static Web App freely; keep the api Web App at 1 instance
+//     (see README.md's background-worker constraint before scaling it out).
+//   Tier 3 (2,000+ students, 200+):            App Service P1v3/P2v3, Postgres General
+//     Purpose Standard_D4ds_v4+ with zone-redundant HA + a read replica for
+//     Analytics/Reports; split the api into a stateless "web" App Service (autoscaled) and a
+//     single-instance "worker" App Service for the hosted BackgroundServices.
 
 @description('Short environment name used in resource names, e.g. dev, prod.')
 @minLength(2)

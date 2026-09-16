@@ -1,0 +1,145 @@
+#cloud-config
+# StudentConnect VM bootstrap: installs Docker, mounts the attached data disk for
+# persistent Postgres/file-storage data, sets up a nightly Postgres backup, enables
+# automatic security patching, and locks down the host firewall as defense-in-depth
+# behind the NSG.
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - ufw
+  - unattended-upgrades
+
+write_files:
+  - path: /usr/local/bin/format-data-disk.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      DISK=/dev/disk/azure/scsi1/lun0
+      MOUNT_POINT=/mnt/pgdata
+
+      # Wait for the data disk to be attached (Azure attaches it slightly after boot).
+      for i in $(seq 1 30); do
+        [ -e "$DISK" ] && break
+        sleep 2
+      done
+
+      mkdir -p "$MOUNT_POINT"
+
+      # Idempotent: only format if the disk has no filesystem yet.
+      if ! blkid "$DISK" >/dev/null 2>&1; then
+        mkfs.ext4 -F "$DISK"
+      fi
+
+      if ! grep -q "$MOUNT_POINT" /etc/fstab; then
+        UUID=$(blkid -s UUID -o value "$DISK")
+        echo "UUID=$UUID $MOUNT_POINT ext4 defaults,nofail 0 2" >> /etc/fstab
+      fi
+
+      mount -a
+
+      mkdir -p "$MOUNT_POINT/postgres-data" "$MOUNT_POINT/storage" "$MOUNT_POINT/backups"
+      chown -R 999:999 "$MOUNT_POINT/postgres-data"
+      chmod 755 "$MOUNT_POINT/storage" "$MOUNT_POINT/backups"
+
+  - path: /usr/local/bin/backup-postgres.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # Nightly logical backup of the Postgres container's database, kept for 14 days.
+      # Zero-cost fallback for not using a managed database service with built-in backups.
+      set -euo pipefail
+      BACKUP_DIR=/mnt/pgdata/backups
+      TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+      cd /opt/studentconnect
+
+      docker compose -f docker-compose.prod.yml exec -T db \
+        pg_dump -U "${POSTGRES_USER:-studentconnect}" "${POSTGRES_DB:-studentconnect_db}" \
+        | gzip > "$BACKUP_DIR/studentconnect-$TIMESTAMP.sql.gz"
+
+      find "$BACKUP_DIR" -name '*.sql.gz' -mtime +14 -delete
+
+  - path: /etc/systemd/system/studentconnect.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=StudentConnect docker compose stack
+      Requires=docker.service
+      After=docker.service network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=true
+      WorkingDirectory=/opt/studentconnect
+      ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d
+      ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
+      TimeoutStartSec=300
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/systemd/system/studentconnect-backup.timer
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Nightly StudentConnect Postgres backup
+
+      [Timer]
+      OnCalendar=*-*-* 02:30:00
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
+  - path: /etc/systemd/system/studentconnect-backup.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Run StudentConnect Postgres backup once
+      After=studentconnect.service
+
+      [Service]
+      Type=oneshot
+      EnvironmentFile=-/opt/studentconnect/.env
+      ExecStart=/usr/local/bin/backup-postgres.sh
+
+runcmd:
+  # Docker Engine (official repo, matches upstream compose plugin).
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - >
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc]
+    https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable"
+    > /etc/apt/sources.list.d/docker.list
+  - apt-get update -y
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - usermod -aG docker azureuser
+
+  # Persistent data disk for Postgres + uploaded files.
+  - /usr/local/bin/format-data-disk.sh
+
+  # App directory — the deploy script copies build artifacts + compose file here.
+  - mkdir -p /opt/studentconnect
+
+  # Host firewall as defense-in-depth behind the NSG (deny by default, allow SSH/HTTP/HTTPS).
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable
+
+  # Automatic security patching.
+  - systemctl enable --now unattended-upgrades
+
+  # Enable (but don't start yet — no app files exist until the first deploy).
+  - systemctl daemon-reload
+  - systemctl enable studentconnect.service
+  - systemctl enable --now studentconnect-backup.timer

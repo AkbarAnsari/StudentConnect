@@ -1,0 +1,31 @@
+# Multi-container config for infra/app-service-compose.bicep (App Service "Docker Compose"
+# deployment option). Deliberately does NOT include a Postgres container here — App Service's
+# multi-container storage is ephemeral (wiped on restart/scale/reboot), which would silently
+# risk real data loss for a database. Postgres runs as an external Azure Database for
+# PostgreSQL Flexible Server instead (same as infra/app-service-minimal.bicep); only the
+# stateless api + frontend containers are packaged together here.
+#
+# Images are pulled from ACR at deploy time — `image:`, not `build:` (App Service cannot build
+# images, only run pre-built ones). Push both images first:
+#   az acr build -r <acrName> -g <rg> -t studentconnect-api:latest -f backend/StudentConnect.Api/Dockerfile backend
+#   az acr build -r <acrName> -g <rg> -t studentconnect-frontend:latest frontend
+#
+# Secrets (Postgres connection string, JWT secret) are injected as App Service application
+# settings (see app-service-compose.bicep), NOT hardcoded here, and surface to each container
+# as environment variables the same way Azure App Service always does for multi-container apps.
+
+version: '3'
+services:
+  api:
+    image: __ACR_LOGIN_SERVER__/studentconnect-api:__IMAGE_TAG__
+    restart: always
+    expose:
+      - "8080"
+
+  frontend:
+    image: __ACR_LOGIN_SERVER__/studentconnect-frontend:__IMAGE_TAG__
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - api

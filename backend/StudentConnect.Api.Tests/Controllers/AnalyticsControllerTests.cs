@@ -27,7 +27,7 @@ public class AnalyticsControllerTests(DatabaseFixture fixture)
             """SELECT COUNT(*) FROM "Attendance" a JOIN "Students" s ON s."Id" = a."StudentId" WHERE s."SchoolId" = 1 AND a."Status" = 'Present'""",
             bind: null);
         var marksCount = await db.ExecuteScalarAsync<long>(
-            """SELECT COUNT(*) FROM "Marks" m JOIN "Students" s ON s."Id" = m."StudentId" WHERE s."SchoolId" = 1""",
+            """SELECT COUNT(*) FROM "Marks" m JOIN "Assessments" a ON a."Id" = m."AssessmentId" JOIN "Students" s ON s."Id" = m."StudentId" WHERE s."SchoolId" = 1 AND a."Status" = 'Published'""",
             bind: null);
         var marksSum = await db.ExecuteScalarAsync<double>(
             """
@@ -35,7 +35,7 @@ public class AnalyticsControllerTests(DatabaseFixture fixture)
             FROM "Marks" m
             JOIN "Assessments" a ON a."Id" = m."AssessmentId"
             JOIN "Students" s ON s."Id" = m."StudentId"
-            WHERE s."SchoolId" = 1
+            WHERE s."SchoolId" = 1 AND a."Status" = 'Published'
             """,
             bind: null);
 

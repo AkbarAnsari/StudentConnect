@@ -29,7 +29,7 @@ public class AssessmentsController(
         }
 
         var all = await assessments.GetAllAsync(schoolId);
-        if (User.IsInRole("Teacher") && GetTeacherId() is { } teacherId)
+        if (IsInRole("Teacher") && GetTeacherId() is { } teacherId)
         {
             all = all.Where(assessment =>
                 assessment.TeacherSubjectAssignmentId is null ||
@@ -77,7 +77,7 @@ public class AssessmentsController(
         }
 
         var bySubject = await assessments.GetBySubjectAsync(subjectId, schoolId);
-        if (User.IsInRole("Teacher") && GetTeacherId() is { } teacherId)
+        if (IsInRole("Teacher") && GetTeacherId() is { } teacherId)
         {
             bySubject = bySubject.Where(assessment =>
                 assessment.TeacherSubjectAssignmentId is null ||
@@ -110,7 +110,7 @@ public class AssessmentsController(
                 return Forbid();
             }
         }
-        else if (User.Identity?.IsAuthenticated == true)
+        else if (IsAuthenticatedUser)
         {
             return BadRequest(new { message = "Select an assigned class for this assessment." });
         }
@@ -361,19 +361,27 @@ public class AssessmentsController(
 
     private bool CanManageAssessment(Assessment assessment) =>
         assessment.TeacherSubjectAssignmentId is null
-            ? !User.IsInRole("Teacher")
+            ? !IsInRole("Teacher")
             : CanManageAssignment(assessment.TeacherSubjectAssignment!.TeacherId);
 
     private bool CanViewAssessment(Assessment assessment) =>
-        !User.IsInRole("Teacher") ||
+        !IsInRole("Teacher") ||
         assessment.TeacherSubjectAssignmentId is null ||
         assessment.TeacherSubjectAssignment?.TeacherId == GetTeacherId();
 
     private bool CanManageAssignment(int teacherId) =>
-        User.Identity?.IsAuthenticated != true || User.IsInRole("Admin") || GetTeacherId() == teacherId;
+        !IsAuthenticatedUser || IsInRole("Admin") || GetTeacherId() == teacherId;
 
     private int? GetTeacherId() =>
-        int.TryParse(User.FindFirstValue("TeacherId"), out var teacherId) ? teacherId : null;
+        int.TryParse(HttpContext?.User.FindFirstValue("TeacherId"), out var teacherId) ? teacherId : null;
+
+    // Directly-constructed controllers in unit tests never populate ControllerContext/
+    // HttpContext (there's no request pipeline), so the ambient MVC `User`/`Request`
+    // properties would throw NullReferenceException — treat a missing HttpContext the same
+    // as an unauthenticated, roleless caller instead.
+    private bool IsAuthenticatedUser => HttpContext?.User.Identity?.IsAuthenticated == true;
+
+    private bool IsInRole(string role) => HttpContext?.User.IsInRole(role) == true;
 
     private async Task<ActionResult?> ValidateAsync(string title, int subjectId, int maximumMarks, string assessmentType, int schoolId)
     {

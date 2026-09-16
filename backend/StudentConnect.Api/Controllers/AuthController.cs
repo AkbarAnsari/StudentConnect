@@ -316,8 +316,13 @@ public class AuthController(
             HashToken(rawRefreshToken),
             DateTime.UtcNow.AddDays(RefreshTokenValidityDays),
             sessionId,
-            Request.Headers.UserAgent.ToString(),
-            HttpContext.Connection.RemoteIpAddress?.ToString());
+            // HttpContext is null when a controller is invoked directly (unit tests, no
+            // request pipeline) rather than through a real HTTP request — go through
+            // HttpContext directly (not the ControllerBase.Request/User shortcuts, which
+            // themselves dereference HttpContext and would throw) so this degrades to "no
+            // user agent/IP known" instead of a NullReferenceException.
+            HttpContext?.Request.Headers.UserAgent.ToString(),
+            HttpContext?.Connection.RemoteIpAddress?.ToString());
 
         var displayName = user.Role switch
         {

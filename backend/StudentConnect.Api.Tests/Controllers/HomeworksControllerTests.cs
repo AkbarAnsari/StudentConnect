@@ -66,6 +66,9 @@ public class HomeworksControllerTests(DatabaseFixture fixture)
             TeacherId = teacherId,
             CreatedDate = DateOnly.FromDateTime(DateTime.UtcNow),
             DueDate = dueDate ?? DateOnly.FromDateTime(DateTime.UtcNow.AddDays(7)),
+            // BulkUpdateDueDate/UpdateHomework only allow edits while still Draft (mirrors
+            // Assessments' publish/draft edit-lock) — these tests exercise that edit path.
+            Status = ContentLifecycleStatus.Draft,
         });
 
     [Fact]

@@ -116,13 +116,17 @@ public class MarksControllerTests(DatabaseFixture fixture)
         Assert.IsType<OkObjectResult>(firstSave);
 
         var recorded = await new MarkStore(fixture.Database).GetByStudentAndSubjectAsync(studentId, subjectId);
-        Assert.Equal(70, Assert.Single(recorded).MarksObtained);
+        var firstVersion = Assert.Single(recorded);
+        Assert.Equal(70, firstVersion.MarksObtained);
 
         var secondSave = await controller.CreateBulkMarks(new BulkMarksRequestDto
         {
             SectionId = sectionId,
             AssessmentId = assessmentId,
-            Marks = [new BulkMarkItemDto { StudentId = studentId, MarksObtained = 85 }],
+            // Optimistic concurrency: updating an existing mark requires the caller to supply
+            // the version it last read, so a stale gradebook page can't silently overwrite a
+            // newer save.
+            Marks = [new BulkMarkItemDto { StudentId = studentId, MarksObtained = 85, ExpectedVersion = firstVersion.Version }],
         });
         Assert.IsType<OkObjectResult>(secondSave);
 

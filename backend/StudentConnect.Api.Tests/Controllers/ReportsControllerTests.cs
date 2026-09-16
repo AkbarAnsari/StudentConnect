@@ -80,6 +80,10 @@ public class ReportsControllerTests(DatabaseFixture fixture)
             AssessmentType = StudentConnect.Domain.AssessmentType.UnitTest,
             Description = "",
             Weight = 1.0m,
+            // The report card's marks_agg query only counts Published assessments (unreleased
+            // Draft marks shouldn't appear on a report card) — default is Draft, so this must
+            // be explicit for the seeded marks below to be reflected in the percentages.
+            Status = StudentConnect.Domain.AssessmentStatus.Published,
         });
         await new MarkStore(db).CreateAsync(studentId, assessmentId, 80);
 

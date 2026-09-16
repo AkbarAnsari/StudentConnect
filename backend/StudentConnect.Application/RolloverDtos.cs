@@ -33,3 +33,35 @@ public class RolloverOverrideDto
     public int? GradeId { get; set; }
     public int? SectionId { get; set; }
 }
+
+public class RolloverRunDto
+{
+    public int Id { get; set; }
+    public int AcademicYearId { get; set; }
+    public string AcademicYearName { get; set; } = string.Empty;
+    public int ActorUserId { get; set; }
+    public string ActorName { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; }
+    public bool IsForced { get; set; }
+    public int PromotedCount { get; set; }
+    public int SkippedCount { get; set; }
+}
+
+public class RolloverRunDetailDto : RolloverRunDto
+{
+    public List<RolloverRunStudentDto> Students { get; set; } = [];
+}
+
+public class RolloverRunStudentDto
+{
+    public int StudentId { get; set; }
+    public string StudentName { get; set; } = string.Empty;
+    public string CurrentGradeName { get; set; } = string.Empty;
+    public string? CurrentSectionName { get; set; }
+    public int? DestinationGradeId { get; set; }
+    public string? DestinationGradeName { get; set; }
+    public int? DestinationSectionId { get; set; }
+    public string? DestinationSectionName { get; set; }
+    public string Outcome { get; set; } = string.Empty;
+    public string? Reason { get; set; }
+}

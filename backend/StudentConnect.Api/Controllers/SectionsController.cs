@@ -102,7 +102,7 @@ public class SectionsController(SectionStore sections, ReferenceDataStore refere
             return BadRequest(new { message = "Grade does not exist." });
         }
 
-        if (dto.HomeroomTeacherId is { } teacherId && !await referenceData.TeacherExistsAsync(teacherId))
+        if (dto.HomeroomTeacherId is { } teacherId && !await referenceData.TeacherExistsAsync(teacherId, schoolId))
         {
             return BadRequest(new { message = "The specified HomeroomTeacherId does not exist." });
         }
@@ -126,6 +126,41 @@ public class SectionsController(SectionStore sections, ReferenceDataStore refere
         var byGrade = await sections.GetByGradeAsync(dto.GradeId);
         var created = byGrade.First(s => s.Id == newId);
         return CreatedAtAction(nameof(GetSections), null, SectionDto.FromEntity(created));
+    }
+
+    [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<SectionDto>> UpdateSection(int id, SectionUpdateDto dto)
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var section = await sections.GetByIdAsync(id, schoolId);
+        if (section is null)
+        {
+            return NotFound();
+        }
+
+        var name = (dto.Name ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return BadRequest(new { message = "Name is required." });
+        }
+
+        if (dto.HomeroomTeacherId is { } teacherId && !await referenceData.TeacherExistsAsync(teacherId, schoolId))
+        {
+            return BadRequest(new { message = "The specified HomeroomTeacherId does not exist." });
+        }
+
+        if (await sections.NameExistsInGradeAsync(section.GradeId, name, id))
+        {
+            return Conflict(new { message = $"Section '{name}' already exists for this grade." });
+        }
+
+        await sections.UpdateAsync(id, name, dto.HomeroomTeacherId);
+        return Ok(SectionDto.FromEntity((await sections.GetByIdAsync(id, schoolId))!));
     }
 
     // DELETE /api/sections/{id} — archives (soft-deletes) rather than physically deleting, so a

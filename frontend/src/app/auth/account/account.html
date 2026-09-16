@@ -1,0 +1,14 @@
+<section class="page page-wide account-page">
+  <header><p class="page-kicker">Security and preferences</p><h1>Account</h1><p>Manage your contact details, password, and active sessions.</p></header>
+  @if (loading()) { <p class="loading">Loading account...</p> }
+  @if (error()) { <p class="error-message" role="alert">{{ error() }}</p> }
+  @if (message()) { <p class="success-message" role="status">{{ message() }}</p> }
+  @if (profile(); as user) {
+    <div class="account-summary"><div class="account-avatar" aria-hidden="true">{{ user.displayName.charAt(0) }}</div><div><h2>{{ user.displayName }}</h2><p>{{ user.username }} / {{ user.role }}</p></div><span class="badge badge-success">{{ user.status }}</span></div>
+    <div class="account-grid">
+      <section class="account-panel"><div class="panel-heading"><p class="page-kicker">Profile</p><h2>Contact details</h2></div><form [formGroup]="profileForm" (ngSubmit)="saveProfile()"><label>Email<input type="email" formControlName="email" placeholder="name@example.com" /></label><p class="verification-state">{{ user.emailVerified ? 'Email verified' : 'Email verification required after changes' }}</p><button type="submit" [disabled]="saving()">Save details</button></form></section>
+      <section class="account-panel"><div class="panel-heading"><p class="page-kicker">Password</p><h2>Change password</h2></div><form [formGroup]="passwordForm" (ngSubmit)="changePassword()"><label>Current password<input type="password" formControlName="currentPassword" autocomplete="current-password" /></label><label>New password<input type="password" formControlName="newPassword" autocomplete="new-password" /></label><label>Confirm new password<input type="password" formControlName="confirmPassword" autocomplete="new-password" /></label><button type="submit" [disabled]="saving()">Change password</button></form></section>
+      <section class="account-panel"><div class="panel-heading"><p class="page-kicker">Sessions</p><h2>Account activity</h2></div><dl><div><dt>Created</dt><dd>{{ user.createdAtUtc | date:'mediumDate' }}</dd></div><div><dt>Last sign in</dt><dd>{{ user.lastLoginAtUtc ? (user.lastLoginAtUtc | date:'medium') : 'Not recorded' }}</dd></div></dl><button type="button" class="btn btn-danger" (click)="revokeSessions()">Sign out all sessions</button></section>
+    </div>
+  }
+</section>

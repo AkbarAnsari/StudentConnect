@@ -1,0 +1,24 @@
+<section class="page page-wide notifications-page">
+  <header><p class="page-kicker">Updates</p><h1>Notifications</h1><p>Review school updates and return to related work.</p></header>
+  <section class="channel-preferences"><h2>Delivery preferences</h2><label><input type="checkbox" [ngModel]="notificationService.preference().inAppChannelEnabled" (ngModelChange)="updatePreference('inAppChannelEnabled',$event)" /> In-app</label><label><input type="checkbox" [ngModel]="notificationService.preference().emailChannelEnabled" (ngModelChange)="updatePreference('emailChannelEnabled',$event)" /> Email</label><label><input type="checkbox" [ngModel]="notificationService.preference().digestEnabled" (ngModelChange)="updatePreference('digestEnabled',$event)" /> Email digest</label><label>Quiet from (UTC)<input type="time" [ngModel]="notificationService.preference().quietHoursStart" (ngModelChange)="updatePreference('quietHoursStart',$event||null)" /></label><label>Quiet until (UTC)<input type="time" [ngModel]="notificationService.preference().quietHoursEnd" (ngModelChange)="updatePreference('quietHoursEnd',$event||null)" /></label></section>
+  <div class="controls notification-filters">
+    <label><span>Type</span><select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event); applyFilters()"><option value="">All types</option><option value="General">Announcements</option><option value="HomeworkAssigned">Homework</option><option value="AttendanceAbsent">Attendance</option><option value="MarkRecorded">Marks</option></select></label>
+    <label class="checkbox-filter"><input type="checkbox" [ngModel]="unreadOnly()" (ngModelChange)="unreadOnly.set($event); applyFilters()" /> Unread only</label>
+    <button type="button" class="btn btn-secondary" (click)="markAllRead()" [disabled]="totalCount() === 0">Mark all read</button>
+  </div>
+  @if (error()) { <p class="error-message" role="alert">{{ error() }}</p> }
+  @if (loading()) { <p class="loading">Loading notifications...</p> }
+  @else if (items().length === 0) { <div class="empty-state"><h2>No notifications</h2><p>No updates match the selected filters.</p></div> }
+  @else {
+    <div class="notification-history" role="list">
+      @for (item of items(); track item.id) {
+        <article role="listitem" [class.unread]="!item.isRead" [class.priority-important]="item.priority === 'Important'" [class.priority-urgent]="item.priority === 'Urgent'">
+          <div class="notification-heading"><div><span class="type-label">{{ item.type === 'General' ? 'Announcement' : item.type }}</span>@if (item.priority !== 'Normal') { <span class="priority-label">{{ item.priority }}</span> }</div><time>{{ item.createdAtUtc | date:'medium' }}</time></div>
+          <h2>{{ item.title }}</h2><p>{{ item.message }}</p>
+          <div class="notification-actions">@if (!item.isRead) { <button type="button" class="btn btn-secondary" (click)="markRead(item)">Mark read</button> }@if (item.actionUrl && item.actionUrl !== '/notifications') { <a class="btn" [routerLink]="item.actionUrl" (click)="markRead(item)">Open related page</a> }</div>
+        </article>
+      }
+    </div>
+    <div class="pagination"><button type="button" (click)="previous()" [disabled]="page() === 1">Previous</button><span>Page {{ page() }} of {{ totalPages() }} / {{ totalCount() }} updates</span><button type="button" (click)="next()" [disabled]="page() === totalPages()">Next</button></div>
+  }
+</section>

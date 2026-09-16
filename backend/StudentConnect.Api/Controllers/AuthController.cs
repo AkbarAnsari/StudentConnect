@@ -53,6 +53,11 @@ public class AuthController(
             return Unauthorized(new { message = invalidCredentialsMessage });
         }
 
+        if (user.Status != UserAccountStatus.Active)
+        {
+            return Unauthorized(new { message = invalidCredentialsMessage });
+        }
+
         var verification = Hasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password);
         if (verification == PasswordVerificationResult.Failed)
         {
@@ -60,6 +65,7 @@ public class AuthController(
         }
 
         logger.LogInformation("User {Username} logged in with role {Role}", user.Username, user.Role);
+        await users.MarkLoginAsync(user.Id);
 
         return Ok(await BuildLoginResponseAsync(user));
     }
@@ -84,7 +90,7 @@ public class AuthController(
         }
 
         var user = await users.GetByIdForLoginAsync(lookup.UserId);
-        if (user is null)
+        if (user is null || user.Status != UserAccountStatus.Active)
         {
             return Unauthorized(new { message = invalidTokenMessage });
         }
@@ -92,7 +98,7 @@ public class AuthController(
         // Rotate: the presented token is single-use from here on.
         await refreshTokens.RevokeAsync(lookup.Id);
 
-        return Ok(await BuildLoginResponseAsync(user));
+        return Ok(await BuildLoginResponseAsync(user, lookup.SessionId));
     }
 
     // POST /api/auth/logout — best-effort server-side revocation of the refresh token so it
@@ -218,10 +224,81 @@ public class AuthController(
         return Ok(new { message = "Your password has been reset. You can now log in." });
     }
 
+    [HttpGet("account")]
+    public async Task<ActionResult<AccountProfileDto>> GetAccount()
+    {
+        if (!currentUser.IsAuthenticated || currentUser.UserId is not { } userId ||
+            HttpContext.User.FindFirst("SchoolId")?.Value is not { } schoolValue ||
+            !int.TryParse(schoolValue, out var schoolId))
+        {
+            return Unauthorized();
+        }
+
+        var account = await users.GetAccountAsync(userId, schoolId);
+        return account is null ? NotFound() : Ok(account);
+    }
+
+    [HttpPut("account")]
+    public async Task<ActionResult<AccountProfileDto>> UpdateAccount(AccountProfileUpdateDto dto)
+    {
+        if (!currentUser.IsAuthenticated || currentUser.UserId is not { } userId ||
+            HttpContext.User.FindFirst("SchoolId")?.Value is not { } schoolValue ||
+            !int.TryParse(schoolValue, out var schoolId))
+        {
+            return Unauthorized();
+        }
+
+        var email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email.Trim();
+        if (email is not null && !email.Contains('@', StringComparison.Ordinal))
+        {
+            return BadRequest(new { message = "Enter a valid email address." });
+        }
+
+        await users.UpdateEmailAsync(userId, schoolId, email);
+        return Ok((await users.GetAccountAsync(userId, schoolId))!);
+    }
+
+    [HttpPost("change-password")]
+    [EnableRateLimiting("auth-relaxed")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordDto dto)
+    {
+        if (!currentUser.IsAuthenticated || currentUser.UserId is not { } userId)
+        {
+            return Unauthorized();
+        }
+
+        if (dto.NewPassword.Length < 8)
+        {
+            return BadRequest(new { message = "New password must be at least 8 characters." });
+        }
+
+        var user = await users.GetByIdForLoginAsync(userId);
+        if (user is null || Hasher.VerifyHashedPassword(user, user.PasswordHash, dto.CurrentPassword) == PasswordVerificationResult.Failed)
+        {
+            return BadRequest(new { message = "Current password is incorrect." });
+        }
+
+        await users.UpdatePasswordHashAsync(userId, Hasher.HashPassword(user, dto.NewPassword));
+        await refreshTokens.RevokeAllForUserAsync(userId);
+        return Ok(new { message = "Password changed. Sign in again with your new password." });
+    }
+
+    [HttpPost("revoke-sessions")]
+    public async Task<IActionResult> RevokeSessions()
+    {
+        if (!currentUser.IsAuthenticated || currentUser.UserId is not { } userId)
+        {
+            return Unauthorized();
+        }
+
+        await refreshTokens.RevokeAllForUserAsync(userId);
+        return Ok(new { message = "All refresh sessions have been revoked." });
+    }
+
     // Builds the full login/refresh response: issues a new access token, issues+stores a new
     // rotated refresh token, and resolves the display name — shared by Login and Refresh so
     // the two never drift out of sync.
-    private async Task<LoginResponseDto> BuildLoginResponseAsync(ApplicationUser user)
+    private async Task<LoginResponseDto> BuildLoginResponseAsync(ApplicationUser user, Guid? sessionId = null)
     {
         List<ParentChildDto>? children = null;
         List<int>? childStudentIds = null;
@@ -234,7 +311,13 @@ public class AuthController(
         var accessToken = tokenService.CreateToken(user, childStudentIds);
 
         var rawRefreshToken = Base64UrlTextEncoder.Encode(RandomNumberGenerator.GetBytes(32));
-        await refreshTokens.CreateAsync(user.Id, HashToken(rawRefreshToken), DateTime.UtcNow.AddDays(RefreshTokenValidityDays));
+        await refreshTokens.CreateAsync(
+            user.Id,
+            HashToken(rawRefreshToken),
+            DateTime.UtcNow.AddDays(RefreshTokenValidityDays),
+            sessionId,
+            Request.Headers.UserAgent.ToString(),
+            HttpContext.Connection.RemoteIpAddress?.ToString());
 
         var displayName = user.Role switch
         {

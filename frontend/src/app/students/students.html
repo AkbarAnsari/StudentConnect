@@ -1,64 +1,145 @@
 <section class="page page-wide">
-  <div class="page-header">
-    <h1>Students</h1>
-    <a class="add-link" routerLink="/students/add">+ Add Student</a>
-    @if (authService.role() === 'Admin') {
-      <a class="add-link" routerLink="/students/import">Bulk Import</a>
-    }
+  <header class="page-header roster-header">
+    <div>
+      <p class="page-kicker">People</p>
+      <h1>Student roster</h1>
+      <p class="page-description">Find students and open their academic record.</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="btn btn-secondary" [disabled]="exporting()" (click)="exportRoster()"><ng-icon name="lucideFileText" size="17" /> {{ exporting() ? 'Exporting...' : 'Export CSV' }}</button>
+      @if (authService.role() === 'Admin') {
+        <a class="btn btn-secondary" routerLink="/students/import"><ng-icon name="lucideFileText" size="17" /> Import</a>
+        <a class="btn" routerLink="/students/add"><ng-icon name="lucideUserRound" size="17" /> Enroll student</a>
+      }
+    </div>
+  </header>
+
+  <div class="controls roster-filters" aria-label="Student roster filters">
+    <label class="search-filter">
+      <span>Search</span>
+      <span class="search-input">
+        <ng-icon name="lucideSearch" size="17" />
+        <input
+          type="search"
+          placeholder="Name or student ID"
+          [value]="searchTerm()"
+          (input)="onSearchChange($any($event.target).value)"
+        />
+      </span>
+    </label>
+    <label>
+      <span>Grade</span>
+      <select [value]="gradeFilter() ?? ''" (change)="onGradeChange($any($event.target).value)">
+        <option value="">All grades</option>
+        @for (grade of grades(); track grade.id) {
+          <option [value]="grade.id">{{ grade.name }}</option>
+        }
+      </select>
+    </label>
+    <label>
+      <span>Status</span>
+      <select [value]="statusFilter()" (change)="onStatusFilterChange($any($event.target).value)">
+        <option value="Active">Active</option>
+        <option value="Withdrawn">Withdrawn</option>
+        <option value="Graduated">Graduated</option>
+        <option value="Transferred">Transferred</option>
+        <option value="All">All statuses</option>
+      </select>
+    </label>
+    <label>
+      <span>Section</span>
+      <select [value]="sectionFilter() ?? ''" [disabled]="!gradeFilter()" (change)="onSectionChange($any($event.target).value)">
+        <option value="">{{ gradeFilter() ? 'All sections' : 'Select a grade first' }}</option>
+        @for (section of sections(); track section.id) {
+          <option [value]="section.id">{{ section.name }}</option>
+        }
+      </select>
+    </label>
+    <label>
+      <span>Sort by</span>
+      <select [value]="sortOrder()" (change)="onSortChange($any($event.target).value)">
+        <option value="name">Name A-Z</option>
+        <option value="name-desc">Name Z-A</option>
+        <option value="student-id">Student ID A-Z</option>
+        <option value="student-id-desc">Student ID Z-A</option>
+        <option value="grade">Grade A-Z</option>
+        <option value="grade-desc">Grade Z-A</option>
+      </select>
+    </label>
   </div>
 
-  <div class="filters">
-    <input
-      type="text"
-      class="search-box"
-      placeholder="Search students..."
-      [value]="searchTerm()"
-      (input)="onSearchChange($any($event.target).value)"
-    />
-    <select class="grade-select" (change)="onGradeChange($any($event.target).value)">
-      <option value="">All Grades</option>
-      @for (grade of grades(); track grade.id) {
-        <option [value]="grade.id">{{ grade.name }}</option>
-      }
-    </select>
-    <select class="grade-select" (change)="onStatusFilterChange($any($event.target).value)">
-      <option value="Active" selected>Active</option>
-      <option value="Withdrawn">Withdrawn</option>
-      <option value="Graduated">Graduated</option>
-      <option value="Transferred">Transferred</option>
-      <option value="All">All Statuses</option>
-    </select>
-  </div>
+  @if (actionError()) { <p class="error-message" role="alert">{{ actionError() }}</p> }
+  @if (actionMessage()) { <p class="success-message" role="status">{{ actionMessage() }}</p> }
 
   @if (state().loading) {
-    <p class="loading">Loading students...</p>
+    <div class="roster-state" aria-live="polite">
+      <span class="loading-indicator" aria-hidden="true"></span>
+      <p>Loading student roster...</p>
+    </div>
   } @else if (state().error) {
-    <p class="error">
-      Unable to load students. Please check whether the StudentConnect API is running.
-    </p>
-  } @else if (filteredStudents().length === 0) {
-    <p class="empty">No students match your search.</p>
+    <div class="roster-state roster-state-error" role="alert">
+      <h2>Student roster unavailable</h2>
+      <p>We could not load the roster. Check your connection and try again.</p>
+      <button type="button" (click)="retry()">Try again</button>
+    </div>
+  } @else if (state().students.length === 0) {
+    <div class="roster-state">
+      <h2>No matching students</h2>
+      <p>Adjust the search or filters to see more of the roster.</p>
+      <button type="button" class="btn btn-secondary" (click)="clearFilters()">Clear filters</button>
+    </div>
   } @else {
-    <ul class="student-list">
-      @for (student of filteredStudents(); track student.id) {
-        <li class="student-card">
-          <div class="student-info">
-            <span class="student-id">{{ student.studentId }}</span>
-            <span class="student-name">{{ student.firstName }} {{ student.lastName }}</span>
-            <span class="student-meta">{{ student.gradeName }} - Section {{ student.sectionName }}</span>
-            @if (student.status !== 'Active') {
-              <span class="badge">{{ student.status }}</span>
-            }
-          </div>
-          <a class="view-link" [routerLink]="['/students', student.id]">View Profile</a>
-        </li>
-      }
-    </ul>
+    <div class="result-summary" aria-live="polite">
+      <p><strong>{{ state().totalCount }}</strong> {{ state().totalCount === 1 ? 'student' : 'students' }}</p>
+      <span>Page {{ currentPage() }} of {{ totalPages() }}</span>
+    </div>
+
+    @if (authService.role() === 'Admin' && selectedIds().size > 0) {
+      <section class="bulk-bar" aria-label="Bulk lifecycle action">
+        <strong>{{ selectedIds().size }} selected</strong>
+        <label><span>New status</span><select [value]="bulkStatus()" (change)="bulkStatus.set($any($event.target).value)"><option value="Active">Active</option><option value="Withdrawn">Withdrawn</option><option value="Graduated">Graduated</option><option value="Transferred">Transferred</option></select></label>
+        <label class="bulk-reason"><span>Reason {{ bulkStatus() === 'Active' ? '(optional)' : '' }}</span><input type="text" [value]="bulkReason()" (input)="bulkReason.set($any($event.target).value)" placeholder="Reason for lifecycle change" /></label>
+        <button type="button" [disabled]="bulkUpdating()" (click)="applyBulkStatus()">{{ bulkUpdating() ? 'Updating...' : 'Apply status' }}</button>
+        <button type="button" class="btn btn-secondary" (click)="togglePage(false)">Clear</button>
+      </section>
+    }
+
+    <div class="roster-table-region" tabindex="0" aria-label="Student roster table">
+      <table>
+        <caption>Student roster filtered by the controls above</caption>
+        <thead>
+          <tr>
+            @if (authService.role() === 'Admin') { <th scope="col"><input type="checkbox" title="Select current page" aria-label="Select all students on this page" [checked]="allPageSelected()" (change)="togglePage($any($event.target).checked)" /></th> }
+            <th scope="col">Student</th>
+            <th scope="col">Student ID</th>
+            <th scope="col">Class</th>
+            <th scope="col">Email</th>
+            <th scope="col">Status</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (student of state().students; track student.id) {
+            <tr>
+              @if (authService.role() === 'Admin') { <td data-label="Select"><input type="checkbox" title="Select student" [attr.aria-label]="'Select ' + student.firstName + ' ' + student.lastName" [checked]="isSelected(student.id)" (change)="toggleSelected(student.id, $any($event.target).checked)" /></td> }
+              <td data-label="Student"><strong class="student-name">{{ student.firstName }} {{ student.lastName }}</strong></td>
+              <td data-label="Student ID"><span class="student-id">{{ student.studentId }}</span></td>
+              <td data-label="Class">{{ student.gradeName }}<span class="class-section">Section {{ student.sectionName || 'Not assigned' }}</span></td>
+              <td data-label="Email"><a class="student-email" [href]="'mailto:' + student.email">{{ student.email }}</a></td>
+              <td data-label="Status">
+                <span class="badge" [class.badge-success]="student.status === 'Active'" [class.badge-info]="student.status === 'Graduated'" [class.badge-warning]="student.status === 'Transferred'">{{ student.status }}</span>
+              </td>
+              <td data-label="Action" class="row-action"><a [routerLink]="['/students', student.id]">Open profile</a></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
 
     <div class="pagination">
       <button type="button" (click)="previousPage()" [disabled]="currentPage() <= 1">Previous</button>
       <span class="pagination-summary">
-        Showing {{ rangeStart() }}–{{ rangeEnd() }} of {{ state().totalCount }} students
+        Showing {{ rangeStart() }} to {{ rangeEnd() }} of {{ state().totalCount }}
       </span>
       <button type="button" (click)="nextPage()" [disabled]="currentPage() >= totalPages()">Next</button>
     </div>

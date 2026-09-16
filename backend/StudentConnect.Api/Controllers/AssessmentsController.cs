@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
+using System.Security.Claims;
 using StudentConnect.Application;
 using StudentConnect.Domain;
 using StudentConnect.Infrastructure.Data.Stores;
@@ -9,12 +10,14 @@ namespace StudentConnect.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "Teacher,Admin")]
 public class AssessmentsController(
     AssessmentStore assessments,
     ReferenceDataStore referenceData,
     TermStore terms,
     ICurrentTenantService currentTenant,
-    ILogger<AssessmentsController> logger) : ControllerBase
+    ILogger<AssessmentsController> logger,
+    MarkStore? marks = null) : ControllerBase
 {
     // GET /api/assessments
     [HttpGet]
@@ -26,6 +29,12 @@ public class AssessmentsController(
         }
 
         var all = await assessments.GetAllAsync(schoolId);
+        if (User.IsInRole("Teacher") && GetTeacherId() is { } teacherId)
+        {
+            all = all.Where(assessment =>
+                assessment.TeacherSubjectAssignmentId is null ||
+                assessment.TeacherSubjectAssignment?.TeacherId == teacherId).ToList();
+        }
         return Ok(all.Select(AssessmentDto.FromEntity));
     }
 
@@ -41,6 +50,11 @@ public class AssessmentsController(
         var assessment = await assessments.GetByIdAsync(id, schoolId);
 
         if (assessment is null)
+        {
+            return NotFound();
+        }
+
+        if (!CanViewAssessment(assessment))
         {
             return NotFound();
         }
@@ -63,6 +77,12 @@ public class AssessmentsController(
         }
 
         var bySubject = await assessments.GetBySubjectAsync(subjectId, schoolId);
+        if (User.IsInRole("Teacher") && GetTeacherId() is { } teacherId)
+        {
+            bySubject = bySubject.Where(assessment =>
+                assessment.TeacherSubjectAssignmentId is null ||
+                assessment.TeacherSubjectAssignment?.TeacherId == teacherId).ToList();
+        }
         return Ok(bySubject.Select(AssessmentDto.FromEntity));
     }
 
@@ -76,7 +96,27 @@ public class AssessmentsController(
             return Forbid();
         }
 
-        var validation = await ValidateAsync(dto.Title, dto.SubjectId, dto.MaximumMarks, dto.AssessmentType, schoolId);
+        TeacherSubjectAssignment? assignment = null;
+        if (dto.TeacherSubjectAssignmentId is { } assignmentId)
+        {
+            assignment = await assessments.GetAssignmentAsync(assignmentId, schoolId);
+            if (assignment is null)
+            {
+                return BadRequest(new { message = "Assigned class does not exist." });
+            }
+
+            if (!CanManageAssignment(assignment.TeacherId))
+            {
+                return Forbid();
+            }
+        }
+        else if (User.Identity?.IsAuthenticated == true)
+        {
+            return BadRequest(new { message = "Select an assigned class for this assessment." });
+        }
+
+        var subjectId = assignment?.SubjectId ?? dto.SubjectId;
+        var validation = await ValidateAsync(dto.Title, subjectId, dto.MaximumMarks, dto.AssessmentType, schoolId);
         if (validation is not null)
         {
             return validation;
@@ -93,13 +133,16 @@ public class AssessmentsController(
         var assessment = new Assessment
         {
             Title = dto.Title,
-            SubjectId = dto.SubjectId,
+            SubjectId = subjectId,
             Date = dto.Date,
             MaximumMarks = dto.MaximumMarks,
             AssessmentType = type,
             Description = dto.Description,
             TermId = dto.TermId,
             Weight = dto.Weight <= 0 ? 1.0m : dto.Weight,
+            Status = dto.Publish ? AssessmentStatus.Published : AssessmentStatus.Draft,
+            PublishedAtUtc = dto.Publish ? DateTime.UtcNow : null,
+            TeacherSubjectAssignmentId = assignment?.Id,
         };
 
         int newId;
@@ -128,7 +171,28 @@ public class AssessmentsController(
             return Forbid();
         }
 
-        var validation = await ValidateAsync(dto.Title, dto.SubjectId, dto.MaximumMarks, dto.AssessmentType, schoolId);
+        var existing = await assessments.GetByIdAsync(id, schoolId);
+        if (existing is null)
+        {
+            return NotFound();
+        }
+
+        if (!CanManageAssessment(existing))
+        {
+            return Forbid();
+        }
+
+        if (existing.Status == AssessmentStatus.Published)
+        {
+            return Conflict(new { message = "Reopen this assessment to Draft before editing it." });
+        }
+
+        var maximumRecorded = marks is null ? 0 : await marks.GetMaximumRecordedAsync(id);
+        if (dto.MaximumMarks < maximumRecorded)
+            return BadRequest(new { message = $"Maximum marks cannot be less than the highest recorded score ({maximumRecorded})." });
+
+        var subjectId = existing.TeacherSubjectAssignment?.SubjectId ?? dto.SubjectId;
+        var validation = await ValidateAsync(dto.Title, subjectId, dto.MaximumMarks, dto.AssessmentType, schoolId);
         if (validation is not null)
         {
             return validation;
@@ -138,12 +202,6 @@ public class AssessmentsController(
         if (termValidation is not null)
         {
             return termValidation;
-        }
-
-        var existing = await assessments.GetByIdAsync(id, schoolId);
-        if (existing is null)
-        {
-            return NotFound();
         }
 
         if (existing.TermId is not null && await terms.IsLockedAsync(existing.TermId.Value))
@@ -157,13 +215,14 @@ public class AssessmentsController(
         {
             Id = id,
             Title = dto.Title,
-            SubjectId = dto.SubjectId,
+            SubjectId = subjectId,
             Date = dto.Date,
             MaximumMarks = dto.MaximumMarks,
             AssessmentType = type,
             Description = dto.Description,
             TermId = dto.TermId,
             Weight = dto.Weight <= 0 ? 1.0m : dto.Weight,
+            TeacherSubjectAssignmentId = existing.TeacherSubjectAssignmentId,
         };
 
         try
@@ -196,6 +255,16 @@ public class AssessmentsController(
             return NotFound();
         }
 
+        if (!CanManageAssessment(existing))
+        {
+            return Forbid();
+        }
+
+        if (existing.Status == AssessmentStatus.Published)
+        {
+            return Conflict(new { message = "Reopen this assessment to Draft before deleting it." });
+        }
+
         if (existing.TermId is not null && await terms.IsLockedAsync(existing.TermId.Value))
         {
             return Conflict(new { message = "This assessment's term is locked and can no longer be deleted." });
@@ -212,6 +281,62 @@ public class AssessmentsController(
         }
 
         return NoContent();
+    }
+
+    [HttpPost("{id:int}/publish")]
+    public async Task<ActionResult<AssessmentDto>> PublishAssessment(int id)
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var assessment = await assessments.GetByIdAsync(id, schoolId);
+        if (assessment is null)
+        {
+            return NotFound();
+        }
+
+        if (!CanManageAssessment(assessment))
+        {
+            return Forbid();
+        }
+
+        if (assessment.TermId is not null && await terms.IsLockedAsync(assessment.TermId.Value))
+        {
+            return Conflict(new { message = "This assessment's term is locked and its publication state cannot change." });
+        }
+
+        await assessments.SetStatusAsync(id, AssessmentStatus.Published);
+        return Ok(AssessmentDto.FromEntity((await assessments.GetByIdAsync(id, schoolId))!));
+    }
+
+    [HttpPost("{id:int}/reopen")]
+    public async Task<ActionResult<AssessmentDto>> ReopenAssessment(int id)
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var assessment = await assessments.GetByIdAsync(id, schoolId);
+        if (assessment is null)
+        {
+            return NotFound();
+        }
+
+        if (!CanManageAssessment(assessment))
+        {
+            return Forbid();
+        }
+
+        if (assessment.TermId is not null && await terms.IsLockedAsync(assessment.TermId.Value))
+        {
+            return Conflict(new { message = "This assessment's term is locked and its publication state cannot change." });
+        }
+
+        await assessments.SetStatusAsync(id, AssessmentStatus.Draft);
+        return Ok(AssessmentDto.FromEntity((await assessments.GetByIdAsync(id, schoolId))!));
     }
 
     private async Task<ActionResult?> ValidateTermAsync(int? termId)
@@ -233,6 +358,22 @@ public class AssessmentsController(
 
         return null;
     }
+
+    private bool CanManageAssessment(Assessment assessment) =>
+        assessment.TeacherSubjectAssignmentId is null
+            ? !User.IsInRole("Teacher")
+            : CanManageAssignment(assessment.TeacherSubjectAssignment!.TeacherId);
+
+    private bool CanViewAssessment(Assessment assessment) =>
+        !User.IsInRole("Teacher") ||
+        assessment.TeacherSubjectAssignmentId is null ||
+        assessment.TeacherSubjectAssignment?.TeacherId == GetTeacherId();
+
+    private bool CanManageAssignment(int teacherId) =>
+        User.Identity?.IsAuthenticated != true || User.IsInRole("Admin") || GetTeacherId() == teacherId;
+
+    private int? GetTeacherId() =>
+        int.TryParse(User.FindFirstValue("TeacherId"), out var teacherId) ? teacherId : null;
 
     private async Task<ActionResult?> ValidateAsync(string title, int subjectId, int maximumMarks, string assessmentType, int schoolId)
     {

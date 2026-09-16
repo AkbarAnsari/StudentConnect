@@ -1,0 +1,10 @@
+using System.Net.Http.Json;
+using StudentConnect.Infrastructure.Data.Stores;
+
+namespace StudentConnect.Infrastructure.Notifications;
+
+public class OperationalGovernanceProcessor(IServiceScopeFactory scopeFactory,IHttpClientFactory httpClientFactory,ILogger<OperationalGovernanceProcessor> logger):BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken){while(!stoppingToken.IsCancellationRequested){try{await RunAsync(stoppingToken);}catch(Exception ex){logger.LogError(ex,"Operational governance cycle failed");}try{await Task.Delay(TimeSpan.FromHours(1),stoppingToken);}catch(OperationCanceledException){}}}
+    private async Task RunAsync(CancellationToken ct){using var scope=scopeFactory.CreateScope();var settingsStore=scope.ServiceProvider.GetRequiredService<OperationalSettingsStore>();var outbox=scope.ServiceProvider.GetRequiredService<EmailOutboxStore>();foreach(var row in await settingsStore.GetAllAsync()){await settingsStore.ApplyRetentionAsync(row.SchoolId,row.Settings);var stats=await outbox.GetDeliveryStatsAsync(row.SchoolId);if(stats.Failed<row.Settings.FailedEmailThreshold||!await settingsStore.ShouldAlertAsync(row.SchoolId))continue;var message=$"StudentConnect alert: {stats.Failed} failed email deliveries. Runbook: {row.Settings.RunbookUrl}";if(!string.IsNullOrWhiteSpace(row.Settings.AlertEmail)){await outbox.EnqueueAsync(row.Settings.AlertEmail,null,"StudentConnect operational alert",message);await settingsStore.LogAlertAsync(row.SchoolId,row.Settings.AlertEmail,message,true,null);}if(!string.IsNullOrWhiteSpace(row.Settings.AlertWebhookUrl)){try{var response=await httpClientFactory.CreateClient().PostAsJsonAsync(row.Settings.AlertWebhookUrl,new{schoolId=row.SchoolId,status="Attention",failedEmailCount=stats.Failed,message,runbookUrl=row.Settings.RunbookUrl},ct);await settingsStore.LogAlertAsync(row.SchoolId,row.Settings.AlertWebhookUrl,message,response.IsSuccessStatusCode,response.IsSuccessStatusCode?null:response.StatusCode.ToString());}catch(Exception ex){await settingsStore.LogAlertAsync(row.SchoolId,row.Settings.AlertWebhookUrl,message,false,ex.Message);}}}}
+}

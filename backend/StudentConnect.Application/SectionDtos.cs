@@ -31,6 +31,12 @@ public class SectionCreateDto
     public int? HomeroomTeacherId { get; set; }
 }
 
+public class SectionUpdateDto
+{
+    public string Name { get; set; } = string.Empty;
+    public int? HomeroomTeacherId { get; set; }
+}
+
 // A single row of a teacher's "My Classes" roster — deliberately minimal, not the full
 // StudentResponseDto, since the section already tells you the grade/section context.
 public class SectionStudentDto

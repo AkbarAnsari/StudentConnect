@@ -6,4 +6,5 @@ public enum NotificationType
     AttendanceAbsent,
     MarkRecorded,
     General,
+    LearningMaterialReleased,
 }

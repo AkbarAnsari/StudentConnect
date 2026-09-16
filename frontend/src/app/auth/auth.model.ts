@@ -1,4 +1,4 @@
-export type UserRole = 'Student' | 'Teacher' | 'Admin' | 'Parent';
+export type UserRole = 'Student' | 'Teacher' | 'Admin' | 'Parent' | 'Coordinator';
 
 export interface LoginRequest {
   username: string;
@@ -54,4 +54,38 @@ export interface CurrentUser {
   teacherId: number | null;
   emailVerified: boolean;
   children: ParentChild[] | null;
+}
+
+export interface AccountProfile {
+  id: number;
+  username: string;
+  displayName: string;
+  role: UserRole;
+  email: string | null;
+  emailVerified: boolean;
+  status: 'Active' | 'Deactivated';
+  createdAtUtc: string;
+  lastLoginAtUtc: string | null;
+}
+
+export interface UserAccess extends AccountProfile {
+  studentId: number | null;
+  teacherId: number | null;
+  deactivatedAtUtc: string | null;
+}
+
+export interface UserInvitationInput {
+  username: string;
+  email: string;
+  role: UserRole;
+  studentId?: number;
+  teacherId?: number;
+}
+
+export interface UserSession {
+  sessionId: string;
+  createdAtUtc: string;
+  expiresAtUtc: string;
+  userAgent: string;
+  ipAddress: string;
 }

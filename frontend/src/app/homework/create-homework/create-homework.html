@@ -1,6 +1,6 @@
 <section class="page page-narrow">
-  <a class="back-link" routerLink="/teacher-homework">← Back to My Homework</a>
-  <h1>Create Homework</h1>
+  <a class="back-link" routerLink="/teacher-homework">Back to homework</a>
+  <header><p class="page-kicker">Teaching content</p><h1>Create homework</h1><p>Prepare work for one assigned class and control when learners can see it.</p></header>
 
   @if (errorMessage()) {
     <p class="error-message">{{ errorMessage() }}</p>
@@ -8,44 +8,20 @@
 
   <form [formGroup]="form" (ngSubmit)="onSubmit()">
     <label>
-      Subject
-      <select formControlName="subjectId">
-        <option [value]="0">Select a subject</option>
-        @for (subject of subjects(); track subject.id) {
-          <option [value]="subject.id">{{ subject.name }}</option>
+      Assigned class
+      <select formControlName="assignmentId" [disabled]="loadingAssignments()">
+        <option [value]="0">Select a class</option>
+        @for (assignment of assignments(); track assignment.id) {
+          <option [value]="assignment.id">{{ assignment.subjectName }} / {{ assignment.gradeName }} - Section {{ assignment.sectionName }}</option>
         }
       </select>
-      @if (form.controls.subjectId.invalid && form.controls.subjectId.touched) {
-        <span class="field-error">Subject is required.</span>
+      @if (form.controls.assignmentId.invalid && form.controls.assignmentId.touched) {
+        <span class="field-error">Assigned class is required.</span>
       }
     </label>
 
-    <label>
-      Grade
-      <select formControlName="gradeId">
-        <option [value]="0">Select a grade</option>
-        @for (grade of grades(); track grade.id) {
-          <option [value]="grade.id">{{ grade.name }}</option>
-        }
-      </select>
-      @if (form.controls.gradeId.invalid && form.controls.gradeId.touched) {
-        <span class="field-error">Grade is required.</span>
-      }
-    </label>
-
-    @if (authService.role() === 'Admin') {
-      <label>
-        Teacher
-        <select formControlName="teacherId">
-          <option [value]="0">Select a teacher</option>
-          @for (teacher of teachers(); track teacher.id) {
-            <option [value]="teacher.id">{{ teacher.firstName }} {{ teacher.lastName }}</option>
-          }
-        </select>
-        @if (form.controls.teacherId.invalid && form.controls.teacherId.touched) {
-          <span class="field-error">Teacher is required.</span>
-        }
-      </label>
+    @if (!loadingAssignments() && assignments().length === 0) {
+      <p class="notice">No class assignments are configured. Create a Teacher Subject Assignment before assigning homework.</p>
     }
 
     <label>
@@ -65,12 +41,21 @@
     </label>
 
     <label>
-      Due Date
+      Due date
       <input type="date" formControlName="dueDate" />
     </label>
 
+    <label>
+      Release
+      <select formControlName="releaseMode"><option value="Draft">Save as Draft</option><option value="Published">Publish now</option><option value="Scheduled">Schedule release</option></select>
+    </label>
+
+    @if (form.controls.releaseMode.value === 'Scheduled') {
+      <label>Release date and time<input type="datetime-local" formControlName="scheduledFor" /></label>
+    }
+
     <button type="submit" [disabled]="submitting()">
-      {{ submitting() ? 'Saving...' : 'Create Homework' }}
+      {{ submitting() ? 'Saving...' : form.controls.releaseMode.value === 'Published' ? 'Create and publish' : form.controls.releaseMode.value === 'Scheduled' ? 'Schedule homework' : 'Save draft' }}
     </button>
   </form>
 </section>

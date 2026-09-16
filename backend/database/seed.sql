@@ -173,6 +173,17 @@ INSERT INTO "Users" ("Id", "Username", "PasswordHash", "Role", "StudentId", "Tea
     (4, 'admin1', 'AQAAAAIAAYagAAAAEMW0cZzVj7vYgZmGyQH8eOYSgADtCkf3lTIBWPwRQtsGAB5ab1k7Pna/nLZokToH8A==', 'Admin', NULL, NULL, 1)
 ON CONFLICT ("Id") DO NOTHING;
 
+UPDATE "Activities"
+SET "OwnerUserId" = 3, "OrganizerName" = 'Ms. Sarah Wilson', "Status" = 'Open'
+WHERE "Id" IN (1, 2) AND "OwnerUserId" IS NULL;
+
+-- Give the seeded Teacher a usable class context for attendance and marks demos.
+UPDATE "Sections" SET "HomeroomTeacherId" = 1 WHERE "Id" = 1 AND "HomeroomTeacherId" IS NULL;
+INSERT INTO "TeacherSubjectAssignments" ("TeacherId", "SubjectId", "SectionId") VALUES
+    (1, 1, 1),
+    (1, 1, 2)
+ON CONFLICT ("TeacherId", "SubjectId", "SectionId") DO NOTHING;
+
 -- Backfill for an installation that was provisioned BEFORE multi-tenancy existed: its rows
 -- already exist (so the INSERTs above were no-ops for them) but their SchoolId columns were
 -- added as NULL by the ALTER TABLE statements in schema.sql. Assign them all to Demo School.
@@ -203,3 +214,4 @@ SELECT setval(pg_get_serial_sequence('"HomeworkSubmissions"', 'Id'), COALESCE((S
 SELECT setval(pg_get_serial_sequence('"Activities"', 'Id'), COALESCE((SELECT MAX("Id") FROM "Activities"), 1));
 SELECT setval(pg_get_serial_sequence('"ActivityRegistrations"', 'Id'), COALESCE((SELECT MAX("Id") FROM "ActivityRegistrations"), 1));
 SELECT setval(pg_get_serial_sequence('"Users"', 'Id'), COALESCE((SELECT MAX("Id") FROM "Users"), 1));
+SELECT setval(pg_get_serial_sequence('"TeacherSubjectAssignments"', 'Id'), COALESCE((SELECT MAX("Id") FROM "TeacherSubjectAssignments"), 1));

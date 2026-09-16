@@ -1,7 +1,28 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import {
+  lucideActivity,
+  lucideArrowRight,
+  lucideBell,
+  lucideBookOpen,
+  lucideCalendarCheck,
+  lucideChartNoAxesCombined,
+  lucideClipboardList,
+  lucideFileText,
+  lucideGraduationCap,
+  lucideHeartHandshake,
+  lucideMail,
+  lucideMegaphone,
+  lucideSchool,
+  lucideShieldCheck,
+  lucideUserRound,
+  lucideUserRoundPlus,
+  lucideUsers,
+} from '@ng-icons/lucide';
 import { catchError, forkJoin, map, of, startWith } from 'rxjs';
 import { AnalyticsOverview } from '../analytics/analytics.model';
 import { AnalyticsService } from '../analytics/analytics.service';
@@ -37,7 +58,28 @@ const STUDENT_SUMMARY_LOADING: StudentSummaryState = {
 
 @Component({
   selector: 'app-dashboard',
-  imports: [RouterLink],
+  imports: [RouterLink, NgIcon, NgTemplateOutlet],
+  providers: [
+    provideIcons({
+      lucideActivity,
+      lucideArrowRight,
+      lucideBell,
+      lucideBookOpen,
+      lucideCalendarCheck,
+      lucideChartNoAxesCombined,
+      lucideClipboardList,
+      lucideFileText,
+      lucideGraduationCap,
+      lucideHeartHandshake,
+      lucideMail,
+      lucideMegaphone,
+      lucideSchool,
+      lucideShieldCheck,
+      lucideUserRound,
+      lucideUserRoundPlus,
+      lucideUsers,
+    }),
+  ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.css',
 })
@@ -55,15 +97,32 @@ export class Dashboard {
 
   protected readonly resendSent = signal(false);
   protected readonly resendError = signal('');
+  protected readonly todayLabel = new Intl.DateTimeFormat('en', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date());
+
+  protected readonly roleDescription = computed(() => {
+    switch (this.authService.role()) {
+      case 'Admin': return 'Review school operations, academic health, and items requiring attention.';
+      case 'Teacher': return 'Move through today’s classes, grading, and teaching work.';
+      case 'Student': return 'Stay on top of attendance, results, and upcoming learning work.';
+      case 'Parent': return 'Follow each child’s attendance, progress, and school updates.';
+      default: return '';
+    }
+  });
 
   // Admin/Teacher: reuse the already-working Analytics endpoints for a real summary
   // instead of the previous plain link list.
   protected readonly overviewState = toSignal(
-    this.analyticsService.getOverview().pipe(
-      map((overview): OverviewState => ({ loading: false, error: false, overview })),
-      catchError(() => of<OverviewState>({ loading: false, error: true, overview: null })),
-      startWith(OVERVIEW_LOADING),
-    ),
+    (this.authService.role() === 'Teacher' || this.authService.role() === 'Admin'
+      ? this.analyticsService.getOverview().pipe(
+          map((overview): OverviewState => ({ loading: false, error: false, overview })),
+          catchError(() => of<OverviewState>({ loading: false, error: true, overview: null })),
+          startWith(OVERVIEW_LOADING),
+        )
+      : of<OverviewState>({ loading: false, error: false, overview: null })),
     { initialValue: OVERVIEW_LOADING },
   );
 

@@ -54,6 +54,12 @@ public class StudentCreateDto
     public DateOnly? DateOfBirth { get; set; }
     public string? Phone { get; set; }
     public string? Address { get; set; }
+    public List<int> SubjectIds { get; set; } = [];
+    public bool CreateLogin { get; set; }
+    public string? Username { get; set; }
+    public int? GuardianParentUserId { get; set; }
+    public string GuardianRelationshipType { get; set; } = "Guardian";
+    public bool GuardianIsPrimaryContact { get; set; }
 }
 
 // What Angular sends when editing a student.
@@ -74,6 +80,19 @@ public class StudentStatusUpdateDto
 {
     public string Status { get; set; } = string.Empty;
     public string? Reason { get; set; }
+}
+
+public class StudentBulkStatusUpdateDto
+{
+    public List<int> StudentIds { get; set; } = [];
+    public string Status { get; set; } = string.Empty;
+    public string? Reason { get; set; }
+}
+
+public class StudentBulkStatusResultDto
+{
+    public int Requested { get; set; }
+    public int Updated { get; set; }
 }
 
 // A single subject the student is actually enrolled in (via StudentSubjects).

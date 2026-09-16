@@ -1,17 +1,22 @@
-<section class="page page-narrow">
+<section class="page page-wide dashboard-page">
   @if (authService.currentUser(); as user) {
-    <h1>Welcome, {{ user.displayName }}!</h1>
-    <p class="role">Role: {{ user.role }}</p>
+    <header class="dashboard-header">
+      <div>
+        <p class="dashboard-date">{{ todayLabel }}</p>
+        <h1>Welcome back, {{ user.displayName }}</h1>
+        <p class="dashboard-intro">{{ roleDescription() }}</p>
+      </div>
+      <span class="dashboard-role">{{ user.role }}</span>
+    </header>
 
     @if (!user.emailVerified) {
-      <div class="notice">
+      <div class="verification-banner" role="status">
+        <ng-icon name="lucideMail" size="20" />
         @if (resendSent()) {
-          <p>A new verification email has been sent — please check your inbox.</p>
+          <p>A new verification email has been sent. Please check your inbox.</p>
         } @else {
-          <p>
-            Your email address hasn't been verified yet.
-            <button type="button" class="link-button" (click)="resendVerification()">Resend verification email</button>
-          </p>
+          <p>Your email address has not been verified yet.</p>
+          <button type="button" class="btn btn-secondary" (click)="resendVerification()">Resend email</button>
           @if (resendError()) {
             <p class="error-message">{{ resendError() }}</p>
           }
@@ -20,134 +25,141 @@
     }
 
     @if (user.role === 'Student' && user.studentId) {
-      @if (!studentSummaryState().loading && !studentSummaryState().error) {
-        <div class="summary-cards">
-          <div class="summary-card">
-            <span class="summary-value">{{ studentSummaryState().attendancePercentage ?? '—' }}%</span>
-            <span class="summary-label">Attendance</span>
-          </div>
-          <div class="summary-card">
-            <span class="summary-value">{{ studentSummaryState().marksPercentage ?? '—' }}%</span>
-            <span class="summary-label">Average Marks</span>
-          </div>
-          <div class="summary-card">
-            <span class="summary-value">{{ studentSummaryState().pendingHomeworkCount }}</span>
-            <span class="summary-label">Pending Homework</span>
-          </div>
+      @if (studentSummaryState().loading) {
+        <p class="loading" aria-live="polite">Loading your academic overview...</p>
+      } @else if (studentSummaryState().error) {
+        <p class="error-message">Your academic overview could not be loaded.</p>
+      } @else {
+        <div class="metric-grid">
+          <a class="metric-card" [routerLink]="['/students', user.studentId, 'attendance']">
+            <span class="metric-icon tone-teal"><ng-icon name="lucideCalendarCheck" size="20" /></span>
+            <span class="metric-label">Attendance</span>
+            <strong>{{ studentSummaryState().attendancePercentage ?? '—' }}%</strong>
+            <span class="metric-link">View attendance <ng-icon name="lucideArrowRight" size="15" /></span>
+          </a>
+          <a class="metric-card" [routerLink]="['/students', user.studentId, 'marks']">
+            <span class="metric-icon tone-blue"><ng-icon name="lucideFileText" size="20" /></span>
+            <span class="metric-label">Average marks</span>
+            <strong>{{ studentSummaryState().marksPercentage ?? '—' }}%</strong>
+            <span class="metric-link">View results <ng-icon name="lucideArrowRight" size="15" /></span>
+          </a>
+          <a class="metric-card" [routerLink]="['/students', user.studentId, 'homework']">
+            <span class="metric-icon tone-ochre"><ng-icon name="lucideBookOpen" size="20" /></span>
+            <span class="metric-label">Pending homework</span>
+            <strong>{{ studentSummaryState().pendingHomeworkCount }}</strong>
+            <span class="metric-link">Open homework <ng-icon name="lucideArrowRight" size="15" /></span>
+          </a>
         </div>
       }
-      <ul class="dashboard-list">
-        <li><a [routerLink]="['/students', user.studentId]">My Profile</a></li>
-        <li><a [routerLink]="['/students', user.studentId, 'attendance']">My Attendance</a></li>
-        <li><a [routerLink]="['/students', user.studentId, 'marks']">My Marks</a></li>
-        <li><a [routerLink]="['/students', user.studentId, 'homework']">My Homework</a></li>
-        <li><a [routerLink]="['/students', user.studentId, 'materials']">My Learning Materials</a></li>
-        <li><a [routerLink]="['/students', user.studentId, 'activities']">My Activities</a></li>
-      </ul>
 
-      @if (recentNotifications().length > 0) {
-        <section class="panel">
-          <h3>Recent Announcements &amp; Notifications</h3>
-          <ul class="notification-feed">
-            @for (n of recentNotifications(); track n.id) {
-              <li [class.unread]="!n.isRead">
-                <span class="notification-title">{{ n.title }}</span>
-                <span class="notification-message">{{ n.message }}</span>
-              </li>
-            }
-          </ul>
+      <div class="dashboard-columns">
+        <section class="workspace-panel">
+          <div class="panel-heading"><div><p class="panel-kicker">Learning</p><h2>Continue your work</h2></div></div>
+          <div class="action-list">
+            <a [routerLink]="['/students', user.studentId, 'homework']"><span class="action-icon"><ng-icon name="lucideBookOpen" size="18" /></span><span><strong>Homework</strong><small>Review deadlines and submissions</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+            <a [routerLink]="['/students', user.studentId, 'materials']"><span class="action-icon"><ng-icon name="lucideFileText" size="18" /></span><span><strong>Learning materials</strong><small>Open resources from your classes</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+            <a [routerLink]="['/students', user.studentId, 'activities']"><span class="action-icon"><ng-icon name="lucideActivity" size="18" /></span><span><strong>Activities</strong><small>View registrations and available events</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+            <a [routerLink]="['/students', user.studentId]"><span class="action-icon"><ng-icon name="lucideUserRound" size="18" /></span><span><strong>Student profile</strong><small>See your complete school record</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+          </div>
         </section>
-      }
+        <ng-container *ngTemplateOutlet="notificationPanel"></ng-container>
+      </div>
     } @else if (user.role === 'Teacher') {
-      @if (!overviewState().loading && !overviewState().error && overviewState().overview; as overview) {
-        <div class="summary-cards">
-          <div class="summary-card">
-            <span class="summary-value">{{ overview.totalStudents }}</span>
-            <span class="summary-label">Students</span>
-          </div>
-          <div class="summary-card">
-            <span class="summary-value">{{ overview.overallAttendancePercentage }}%</span>
-            <span class="summary-label">Overall Attendance</span>
-          </div>
-          <div class="summary-card">
-            <span class="summary-value">{{ overview.averageMarksPercentage }}%</span>
-            <span class="summary-label">Average Marks</span>
-          </div>
+      @if (overviewState().loading) {
+        <p class="loading" aria-live="polite">Loading school overview...</p>
+      } @else if (overviewState().error) {
+        <p class="error-message">The school overview could not be loaded.</p>
+      } @else if (overviewState().overview; as overview) {
+        <div class="metric-grid">
+          <a class="metric-card" routerLink="/my-classes"><span class="metric-icon tone-teal"><ng-icon name="lucideUsers" size="20" /></span><span class="metric-label">Active students</span><strong>{{ overview.totalStudents }}</strong><span class="metric-link">Open my classes <ng-icon name="lucideArrowRight" size="15" /></span></a>
+          <a class="metric-card" routerLink="/analytics"><span class="metric-icon tone-blue"><ng-icon name="lucideCalendarCheck" size="20" /></span><span class="metric-label">School attendance</span><strong>{{ overview.overallAttendancePercentage }}%</strong><span class="metric-link">View analytics <ng-icon name="lucideArrowRight" size="15" /></span></a>
+          <a class="metric-card" routerLink="/analytics"><span class="metric-icon tone-ochre"><ng-icon name="lucideFileText" size="20" /></span><span class="metric-label">School marks</span><strong>{{ overview.averageMarksPercentage }}%</strong><span class="metric-link">View analytics <ng-icon name="lucideArrowRight" size="15" /></span></a>
         </div>
       }
-      <ul class="dashboard-list">
-        <li><a routerLink="/my-classes">My Classes</a></li>
-        <li><a routerLink="/record-attendance">Manage Attendance</a></li>
-        <li><a routerLink="/enter-marks">Manage Marks</a></li>
-        <li><a routerLink="/teacher-homework">Create Homework</a></li>
-        <li><a routerLink="/teacher-materials">Manage Learning Materials</a></li>
-        <li><a routerLink="/activity-management">Manage Activities</a></li>
-        <li><a routerLink="/analytics">Analytics Dashboard</a></li>
-      </ul>
+      <div class="dashboard-columns">
+        <section class="workspace-panel">
+          <div class="panel-heading"><div><p class="panel-kicker">Today</p><h2>Teaching actions</h2></div><a routerLink="/my-classes">My classes</a></div>
+          <div class="action-list">
+            <a routerLink="/record-attendance"><span class="action-icon"><ng-icon name="lucideCalendarCheck" size="18" /></span><span><strong>Record attendance</strong><small>Choose an assigned class and date</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+            <a routerLink="/enter-marks"><span class="action-icon"><ng-icon name="lucideFileText" size="18" /></span><span><strong>Enter marks</strong><small>Update an assessment gradebook</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+            <a routerLink="/create-homework"><span class="action-icon"><ng-icon name="lucideBookOpen" size="18" /></span><span><strong>Assign homework</strong><small>Publish work to an assigned section</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+            <a routerLink="/upload-material"><span class="action-icon"><ng-icon name="lucideFileText" size="18" /></span><span><strong>Share material</strong><small>Add a resource to a class</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+          </div>
+        </section>
+        <section class="workspace-panel">
+          <div class="panel-heading"><div><p class="panel-kicker">Engagement</p><h2>Class communication</h2></div></div>
+          <div class="action-list">
+            <a routerLink="/announcements"><span class="action-icon"><ng-icon name="lucideMegaphone" size="18" /></span><span><strong>Announcements</strong><small>Send an update to an assigned section</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+            <a routerLink="/activity-management"><span class="action-icon"><ng-icon name="lucideActivity" size="18" /></span><span><strong>Activities</strong><small>Review events and registrations</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+            <a routerLink="/analytics"><span class="action-icon"><ng-icon name="lucideChartNoAxesCombined" size="18" /></span><span><strong>Student insights</strong><small>Review attendance and marks patterns</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+          </div>
+        </section>
+      </div>
     } @else if (user.role === 'Admin') {
-      @if (!overviewState().loading && !overviewState().error && overviewState().overview; as overview) {
-        <div class="summary-cards">
-          <div class="summary-card">
-            <span class="summary-value">{{ overview.totalStudents }}</span>
-            <span class="summary-label">Students</span>
-          </div>
-          <div class="summary-card">
-            <span class="summary-value">{{ overview.totalTeachers }}</span>
-            <span class="summary-label">Teachers</span>
-          </div>
-          <div class="summary-card">
-            <span class="summary-value">{{ overview.overallAttendancePercentage }}%</span>
-            <span class="summary-label">Overall Attendance</span>
-          </div>
-          <div class="summary-card">
-            <span class="summary-value">{{ overview.averageMarksPercentage }}%</span>
-            <span class="summary-label">Average Marks</span>
-          </div>
+      @if (overviewState().loading) {
+        <p class="loading" aria-live="polite">Loading school operations...</p>
+      } @else if (overviewState().error) {
+        <p class="error-message">School operations could not be loaded.</p>
+      } @else if (overviewState().overview; as overview) {
+        <div class="metric-grid metric-grid-four">
+          <a class="metric-card" routerLink="/students"><span class="metric-icon tone-teal"><ng-icon name="lucideUsers" size="20" /></span><span class="metric-label">Students</span><strong>{{ overview.totalStudents }}</strong><span class="metric-link">Manage students <ng-icon name="lucideArrowRight" size="15" /></span></a>
+          <a class="metric-card" routerLink="/manage-teachers"><span class="metric-icon tone-blue"><ng-icon name="lucideGraduationCap" size="20" /></span><span class="metric-label">Teachers</span><strong>{{ overview.totalTeachers }}</strong><span class="metric-link">Manage teachers <ng-icon name="lucideArrowRight" size="15" /></span></a>
+          <a class="metric-card" routerLink="/analytics"><span class="metric-icon tone-ochre"><ng-icon name="lucideCalendarCheck" size="20" /></span><span class="metric-label">Attendance</span><strong>{{ overview.overallAttendancePercentage }}%</strong><span class="metric-link">View trend <ng-icon name="lucideArrowRight" size="15" /></span></a>
+          <a class="metric-card" routerLink="/analytics"><span class="metric-icon tone-red"><ng-icon name="lucideChartNoAxesCombined" size="20" /></span><span class="metric-label">Average marks</span><strong>{{ overview.averageMarksPercentage }}%</strong><span class="metric-link">View insights <ng-icon name="lucideArrowRight" size="15" /></span></a>
         </div>
       }
-      <ul class="dashboard-list">
-        <li><a routerLink="/students">Manage Students</a></li>
-        <li><a routerLink="/activity-management">Manage Activities</a></li>
-        <li><a routerLink="/assessments">Manage Assessments</a></li>
-        <li><a routerLink="/teacher-homework">Manage Homework</a></li>
-        <li><a routerLink="/teacher-materials">Manage Learning Materials</a></li>
-        <li><a routerLink="/manage-parents">Manage Parent Accounts</a></li>
-        <li><a routerLink="/manage-teachers">Manage Teachers</a></li>
-        <li><a routerLink="/analytics">Analytics Dashboard</a></li>
-        <li><a routerLink="/manage-academic-structure">Academic Structure</a></li>
-        <li><a routerLink="/audit-log">Audit Log</a></li>
-        <li><a routerLink="/email-outbox">Email Outbox</a></li>
-        <li><a routerLink="/ops">Operations</a></li>
-      </ul>
+      <div class="dashboard-columns">
+        <section class="workspace-panel">
+          <div class="panel-heading"><div><p class="panel-kicker">Priority work</p><h2>School operations</h2></div></div>
+          <div class="action-list">
+            <a routerLink="/students/add"><span class="action-icon"><ng-icon name="lucideUserRoundPlus" size="18" /></span><span><strong>Enroll a student</strong><small>Create subjects and an optional login invitation</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+            <a routerLink="/manage-academic-structure"><span class="action-icon"><ng-icon name="lucideSchool" size="18" /></span><span><strong>Academic structure</strong><small>Manage years, sections, assignments, and grading</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+            <a routerLink="/announcements"><span class="action-icon"><ng-icon name="lucideMegaphone" size="18" /></span><span><strong>School announcement</strong><small>Send an update to the right audience</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+            <a routerLink="/assessments"><span class="action-icon"><ng-icon name="lucideClipboardList" size="18" /></span><span><strong>Assessments</strong><small>Review the school assessment schedule</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+          </div>
+        </section>
+        <section class="workspace-panel">
+          <div class="panel-heading"><div><p class="panel-kicker">Control</p><h2>System oversight</h2></div><a routerLink="/ops">Operations</a></div>
+          <div class="action-list">
+            <a routerLink="/audit-log"><span class="action-icon"><ng-icon name="lucideShieldCheck" size="18" /></span><span><strong>Audit log</strong><small>Review sensitive record changes</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+            <a routerLink="/email-outbox"><span class="action-icon"><ng-icon name="lucideMail" size="18" /></span><span><strong>Email delivery</strong><small>Check queued and failed messages</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+            <a routerLink="/manage-parents"><span class="action-icon"><ng-icon name="lucideHeartHandshake" size="18" /></span><span><strong>Family accounts</strong><small>Manage child access and parent links</small></span><ng-icon name="lucideArrowRight" size="17" /></a>
+          </div>
+        </section>
+      </div>
     } @else if (user.role === 'Parent') {
+      <div class="section-heading"><div><p class="panel-kicker">Family</p><h2>Linked students</h2></div></div>
       @if (user.children && user.children.length > 0) {
-        <p>Select a child to view their attendance, marks, homework, materials and activities:</p>
         <div class="parent-children-grid">
           @for (child of user.children; track child.id) {
-            <a class="card parent-child-card" [routerLink]="['/students', child.id]">
+            <a class="parent-child-card" [routerLink]="['/students', child.id]">
+              <span class="metric-icon tone-teal"><ng-icon name="lucideUserRound" size="20" /></span>
               <h3>{{ child.firstName }} {{ child.lastName }}</h3>
               <p>{{ child.gradeName }} · Section {{ child.section }}</p>
               <p class="student-id">{{ child.studentId }}</p>
+              <span class="metric-link">Open student record <ng-icon name="lucideArrowRight" size="15" /></span>
             </a>
           }
         </div>
       } @else {
-        <p>No children are linked to your account yet. Please contact the school admin.</p>
+        <div class="empty-state"><ng-icon name="lucideHeartHandshake" size="24" /><h3>No linked students</h3><p>Contact the school office to link a student to this account.</p></div>
       }
-
-      @if (recentNotifications().length > 0) {
-        <section class="panel">
-          <h3>Recent Announcements &amp; Notifications</h3>
-          <ul class="notification-feed">
-            @for (n of recentNotifications(); track n.id) {
-              <li [class.unread]="!n.isRead">
-                <span class="notification-title">{{ n.title }}</span>
-                <span class="notification-message">{{ n.message }}</span>
-              </li>
-            }
-          </ul>
-        </section>
-      }
+      <div class="dashboard-columns parent-notifications"><ng-container *ngTemplateOutlet="notificationPanel"></ng-container></div>
     }
   }
 </section>
+
+<ng-template #notificationPanel>
+  <section class="workspace-panel notification-panel-dashboard">
+    <div class="panel-heading"><div><p class="panel-kicker">Updates</p><h2>Recent notifications</h2></div><span class="panel-icon"><ng-icon name="lucideBell" size="18" /></span></div>
+    @if (recentNotifications().length > 0) {
+      <div class="notification-feed">
+        @for (notification of recentNotifications(); track notification.id) {
+          <article [class.unread]="!notification.isRead"><span class="notification-title">{{ notification.title }}</span><span class="notification-message">{{ notification.message }}</span></article>
+        }
+      </div>
+    } @else {
+      <div class="compact-empty"><p>No new notifications.</p></div>
+    }
+  </section>
+</ng-template>

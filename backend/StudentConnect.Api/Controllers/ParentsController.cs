@@ -14,7 +14,7 @@ namespace StudentConnect.Api.Controllers;
 [ApiController]
 [Route("api/parents")]
 [Authorize(Roles = "Admin")]
-public class ParentsController(UserStore users, ParentStore parents, StudentStore students, ICurrentTenantService currentTenant, IAuditService audit, ILogger<ParentsController> logger) : ControllerBase
+public class ParentsController(UserStore users, ParentStore parents, StudentStore students, ICurrentTenantService currentTenant, IAuditService audit, ILogger<ParentsController> logger, ICurrentUserService? currentUser = null) : ControllerBase
 {
     private static readonly PasswordHasher<ApplicationUser> Hasher = new();
 
@@ -28,7 +28,7 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
         }
 
         var parentUsers = await users.GetParentUsersAsync(schoolId);
-        var links = await parents.GetAllLinksAsync();
+        var links = await parents.GetAllLinksAsync(schoolId);
 
         var result = parentUsers.Select(p => ParentResponseDto.FromEntity(
             p,
@@ -41,6 +41,8 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
                      LastName = l.LastName,
                      GradeName = l.GradeName,
                      Section = l.Section,
+                     RelationshipType = l.RelationshipType,
+                     IsPrimaryContact = l.IsPrimaryContact,
                  })
                  .ToList()));
 
@@ -81,7 +83,7 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
 
         foreach (var studentId in distinctChildIds)
         {
-            await parents.LinkChildAsync(newUserId, studentId);
+            await parents.LinkChildAsync(newUserId, studentId, currentUser?.UserId);
         }
 
         logger.LogInformation("Admin created parent account {Username} linked to {Count} child(ren)", dto.Username, distinctChildIds.Count);
@@ -117,7 +119,12 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
             return Conflict(new { message = "This parent is already linked to that student." });
         }
 
-        await parents.LinkChildAsync(parentId, dto.StudentId);
+        var relationshipType = NormalizeRelationship(dto.RelationshipType);
+        if (relationshipType is null)
+            return BadRequest(new { message = "RelationshipType must be Parent, Guardian, Grandparent, or Other." });
+
+        await parents.LinkChildAsync(parentId, dto.StudentId, currentUser?.UserId, relationshipType, dto.IsPrimaryContact, dto.Reason?.Trim());
+        await users.RevokeRefreshTokensAsync(parentId);
 
         logger.LogInformation("Linked parent {ParentId} to student {StudentId}", parentId, dto.StudentId);
         await audit.LogAsync("Update", "Parent", parentId.ToString(), $"Linked to student {dto.StudentId}");
@@ -126,21 +133,38 @@ public class ParentsController(UserStore users, ParentStore parents, StudentStor
 
     // DELETE /api/parents/{parentId}/children/{studentId}
     [HttpDelete("{parentId:int}/children/{studentId:int}")]
-    public async Task<IActionResult> UnlinkChild(int parentId, int studentId)
+    public async Task<IActionResult> UnlinkChild(int parentId, int studentId, string? reason = null)
     {
         if (currentTenant.SchoolId is not { } schoolId || !await users.ParentExistsAsync(parentId, schoolId))
         {
             return NotFound();
         }
 
-        var deleted = await parents.UnlinkChildAsync(parentId, studentId);
+        var deleted = await parents.UnlinkChildAsync(parentId, studentId, currentUser?.UserId, reason?.Trim());
         if (deleted == 0)
         {
             return NotFound();
         }
 
+        await users.RevokeRefreshTokensAsync(parentId);
+
         logger.LogInformation("Unlinked parent {ParentId} from student {StudentId}", parentId, studentId);
         await audit.LogAsync("Update", "Parent", parentId.ToString(), $"Unlinked from student {studentId}");
         return NoContent();
+    }
+
+    [HttpGet("{parentId:int}/history")]
+    public async Task<ActionResult<IEnumerable<ParentStudentHistoryDto>>> GetHistory(int parentId)
+    {
+        if (currentTenant.SchoolId is not { } schoolId) return Forbid();
+        if (!await users.ParentExistsAsync(parentId, schoolId)) return NotFound();
+        return Ok(await parents.GetHistoryAsync(parentId));
+    }
+
+    private static string? NormalizeRelationship(string? value)
+    {
+        var match = new[] { "Parent", "Guardian", "Grandparent", "Other" }
+            .FirstOrDefault(item => string.Equals(item, value?.Trim(), StringComparison.OrdinalIgnoreCase));
+        return match;
     }
 }

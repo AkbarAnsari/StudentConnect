@@ -1,5 +1,6 @@
 <section class="page report-card-page">
   <a class="back-link no-print" [routerLink]="['/students', studentId]">← Back to Profile</a>
+  <div class="no-print transcript-controls">@if(auth.role()==='Teacher'||auth.role()==='Admin'){<button type="button" [disabled]="issuing()" (click)="issue()">{{issuing()?'Issuing...':'Issue transcript'}}</button>}@if(selectedIssuanceId()){<button type="button" class="btn btn-secondary" (click)="load()">View current</button>}</div>
 
   @if (state().loading) {
     <p class="loading">Loading transcript...</p>
@@ -50,5 +51,6 @@
         </table>
       }
     </div>
+    @if(history().length){<section class="no-print transcript-history"><h2>Issuance history</h2><div role="list">@for(item of history();track item.id){<button type="button" role="listitem" [class.current]="selectedIssuanceId()===item.id" (click)="load(item.id)"><strong>{{item.issuedAtUtc|date:'medium'}}</strong><span>{{item.issuedByName}}</span></button>}</div></section>}
   }
 </section>

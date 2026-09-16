@@ -61,6 +61,14 @@ public class AttendanceControllerTests(DatabaseFixture fixture)
                 p.AddWithValue("sectionId", sectionId);
             });
 
+        await db.ExecuteAsync(
+            """INSERT INTO "StudentSubjects" ("StudentId", "SubjectId") VALUES (@studentId, @subjectId)""",
+            p =>
+            {
+                p.AddWithValue("studentId", studentId);
+                p.AddWithValue("subjectId", subjectId);
+            });
+
         return (subjectId, studentId, sectionId);
     }
 
@@ -82,12 +90,13 @@ public class AttendanceControllerTests(DatabaseFixture fixture)
     [Fact]
     public async Task CreateBulkAttendance_CreatesNewRecords_AndUpdatesExistingInPlace()
     {
-        var (subjectId, studentId, _) = await SeedClassAsync();
+        var (subjectId, studentId, sectionId) = await SeedClassAsync();
         var controller = CreateController(TestCurrentUser.Admin());
         var date = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var firstSave = await controller.CreateBulkAttendance(new BulkAttendanceRequestDto
         {
+            SectionId = sectionId,
             SubjectId = subjectId,
             Date = date,
             Records = [new BulkAttendanceItemDto { StudentId = studentId, Status = "Absent" }],
@@ -101,6 +110,7 @@ public class AttendanceControllerTests(DatabaseFixture fixture)
         // Re-saving with a changed status must update the same row, not insert a duplicate.
         var secondSave = await controller.CreateBulkAttendance(new BulkAttendanceRequestDto
         {
+            SectionId = sectionId,
             SubjectId = subjectId,
             Date = date,
             Records = [new BulkAttendanceItemDto { StudentId = studentId, Status = "Present", Reason = "Corrected" }],
@@ -115,13 +125,14 @@ public class AttendanceControllerTests(DatabaseFixture fixture)
     [Fact]
     public async Task CreateBulkAttendance_TeacherOutsideAssignment_ReturnsForbidden()
     {
-        var (subjectId, studentId, _) = await SeedClassAsync();
+        var (subjectId, studentId, sectionId) = await SeedClassAsync();
         var teacherId = await SeedTeacherAsync();
         // Deliberately no TeacherSubjectAssignment row created for this teacher/subject/section.
         var controller = CreateController(TestCurrentUser.Teacher(teacherId));
 
         var result = await controller.CreateBulkAttendance(new BulkAttendanceRequestDto
         {
+            SectionId = sectionId,
             SubjectId = subjectId,
             Date = DateOnly.FromDateTime(DateTime.UtcNow),
             Records = [new BulkAttendanceItemDto { StudentId = studentId, Status = "Present" }],
@@ -140,11 +151,35 @@ public class AttendanceControllerTests(DatabaseFixture fixture)
 
         var result = await controller.CreateBulkAttendance(new BulkAttendanceRequestDto
         {
+            SectionId = sectionId,
             SubjectId = subjectId,
             Date = DateOnly.FromDateTime(DateTime.UtcNow),
             Records = [new BulkAttendanceItemDto { StudentId = studentId, Status = "Present" }],
         });
 
         Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task CreateBulkAttendance_StudentOutsideSelectedSection_ReturnsBadRequest()
+    {
+        var (subjectId, studentId, actualSectionId) = await SeedClassAsync();
+        var otherSectionId = await fixture.Database.ExecuteScalarAsync<int>(
+            """INSERT INTO "Sections" ("GradeId", "Name") SELECT "GradeId", @name FROM "Sections" WHERE "Id" = @sectionId RETURNING "Id" """,
+            p =>
+            {
+                p.AddWithValue("name", Guid.NewGuid().ToString("N")[..8]);
+                p.AddWithValue("sectionId", actualSectionId);
+            });
+
+        var result = await CreateController(TestCurrentUser.Admin()).CreateBulkAttendance(new BulkAttendanceRequestDto
+        {
+            SectionId = otherSectionId,
+            SubjectId = subjectId,
+            Date = DateOnly.FromDateTime(DateTime.UtcNow),
+            Records = [new BulkAttendanceItemDto { StudentId = studentId, Status = "Present" }],
+        });
+
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 }

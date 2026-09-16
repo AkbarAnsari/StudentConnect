@@ -1,18 +1,13 @@
 <div class="notification-bell">
-  <button type="button" class="bell-toggle" (click)="toggleOpen()" aria-label="Notifications">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6v-5a7 7 0 0 0-5.5-6.84V3a1.5 1.5 0 0 0-3 0v1.16A7 7 0 0 0 5 11v5l-1.7 1.7a1 1 0 0 0 .7 1.7h16a1 1 0 0 0 .7-1.7L19 16Z"
-        fill="currentColor"
-      />
-    </svg>
+  <button type="button" class="bell-toggle" (click)="toggleOpen()" aria-label="Notifications" aria-haspopup="dialog" [attr.aria-expanded]="open()" aria-controls="notification-popover">
+    <ng-icon name="lucideBell" size="20" />
     @if (notificationService.unreadCount() > 0) {
       <span class="badge">{{ notificationService.unreadCount() }}</span>
     }
   </button>
 
   @if (open()) {
-    <div class="notification-panel">
+    <div id="notification-popover" class="notification-panel" role="dialog" aria-label="Recent notifications">
       <div class="notification-panel-header">
         <span>Notifications</span>
         @if (notificationService.unreadCount() > 0) {
@@ -28,24 +23,25 @@
       @if (notificationService.notifications().length === 0) {
         <p class="notification-empty">No notifications yet.</p>
       } @else {
-        <ul class="notification-list">
+        <div class="notification-list" role="list">
           @for (n of notificationService.notifications(); track n.id) {
-            <li
+            <button
+              type="button"
+              role="listitem"
               class="notification-item"
               [class.unread]="!n.isRead"
-              role="button"
-              tabindex="0"
-              (click)="markAsRead(n.id)"
-              (keyup.enter)="markAsRead(n.id)"
-              (keyup.space)="markAsRead(n.id)"
+              [class.priority-important]="n.priority === 'Important'"
+              [class.priority-urgent]="n.priority === 'Urgent'"
+              (click)="openNotification(n)"
             >
               <strong>{{ n.title }}</strong>
               <p>{{ n.message }}</p>
               <span class="notification-time">{{ n.createdAtUtc | date: 'short' }}</span>
-            </li>
+            </button>
           }
-        </ul>
+        </div>
       }
+      <button type="button" class="view-all-btn" (click)="openCenter()">View all notifications</button>
     </div>
   }
 </div>

@@ -6,7 +6,7 @@ import { UserRole } from './auth.model';
 // Improves user experience (redirects to Login before a request is even made) — this is
 // NOT the real security boundary. The API enforces authorization independently and would
 // reject an unauthorized request even if a guard were bypassed or misconfigured.
-export const authGuard: CanActivateFn = () => {
+export const authGuard: CanActivateFn = (_route, state) => {
   const authService = inject(AuthService);
   const router = inject(Router);
 
@@ -14,11 +14,11 @@ export const authGuard: CanActivateFn = () => {
     return true;
   }
 
-  return router.createUrlTree(['/login']);
+  return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
 };
 
 export function roleGuard(allowedRoles: UserRole[]): CanActivateFn {
-  return () => {
+  return (_route, state) => {
     const authService = inject(AuthService);
     const router = inject(Router);
 
@@ -27,6 +27,6 @@ export function roleGuard(allowedRoles: UserRole[]): CanActivateFn {
       return true;
     }
 
-    return router.createUrlTree(['/dashboard']);
+    return router.createUrlTree(['/unauthorized'], { queryParams: { from: state.url } });
   };
 }

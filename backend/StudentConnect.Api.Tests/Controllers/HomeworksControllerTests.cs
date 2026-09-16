@@ -18,8 +18,10 @@ public class HomeworksControllerTests(DatabaseFixture fixture)
             new HomeworkSubmissionStore(fixture.Database),
             new StudentStore(fixture.Database),
             new ReferenceDataStore(fixture.Database),
+            new TeacherSubjectAssignmentStore(fixture.Database),
             new NotificationRecipientResolver(new UserStore(fixture.Database), new ParentStore(fixture.Database)),
             currentUser,
+            new FakeCurrentTenantService(),
             NullNotificationService.Instance,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<HomeworksController>.Instance);
 

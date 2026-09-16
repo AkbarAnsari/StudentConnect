@@ -7,6 +7,8 @@ import { Activity, ActivityRegistration } from '../activity.model';
 import { ActivityService } from '../activity.service';
 import { ActivityRegistrationService } from '../activity-registration.service';
 import { ConfirmDialogService } from '../../shared/confirm-dialog/confirm-dialog.service';
+import { AuthService } from '../../auth/auth.service';
+import { StudentRecordNav } from '../../students/student-record-nav/student-record-nav';
 
 interface StudentActivitiesState {
   loading: boolean;
@@ -19,7 +21,7 @@ const LOADING_STATE: StudentActivitiesState = { loading: true, error: false, act
 
 @Component({
   selector: 'app-student-activities',
-  imports: [RouterLink],
+  imports: [RouterLink, StudentRecordNav],
   templateUrl: './student-activities.html',
   styleUrl: './student-activities.css',
 })
@@ -29,10 +31,14 @@ export class StudentActivities {
   private readonly activityService = inject(ActivityService);
   private readonly registrationService = inject(ActivityRegistrationService);
   private readonly confirmDialog = inject(ConfirmDialogService);
+  private readonly authService = inject(AuthService);
 
   private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
   protected readonly studentId = Number(this.route.snapshot.paramMap.get('id'));
+  protected readonly canManageRegistration = computed(() =>
+    this.authService.role() === 'Student' && this.authService.currentUser()?.studentId === this.studentId,
+  );
 
   protected readonly state = toSignal(
     this.refresh$.pipe(
@@ -42,7 +48,12 @@ export class StudentActivities {
             combineLatest([
               this.activityService.getByGrade(student.gradeId),
               this.registrationService.getForStudent(this.studentId),
-            ]),
+            ]).pipe(
+              map(([activities, registrations]) => [
+                activities.filter((activity) => activity.sectionId === null || activity.sectionId === student.sectionId),
+                registrations,
+              ] as const),
+            ),
           ),
           map(([activities, registrations]): StudentActivitiesState => ({ loading: false, error: false, activities, registrations })),
           catchError(() => of<StudentActivitiesState>({ loading: false, error: true, activities: [], registrations: [] })),
@@ -65,17 +76,40 @@ export class StudentActivities {
     );
   }
 
-  protected isPast(activity: Activity): boolean {
-    return new Date(activity.date).getTime() < Date.now();
+  protected registrationUnavailableReason(activity: Activity): string | null {
+    const now = Date.now();
+    if (new Date(activity.date).getTime() <= now || (activity.registrationClosesAtUtc && new Date(activity.registrationClosesAtUtc).getTime() <= now)) {
+      return 'Registration closed';
+    }
+    if (activity.registrationOpensAtUtc && new Date(activity.registrationOpensAtUtc).getTime() > now) {
+      return `Opens ${new Date(activity.registrationOpensAtUtc).toLocaleString()}`;
+    }
+    return null;
   }
 
   protected readonly actionError = signal('');
+  protected readonly consentActivityIds = signal<ReadonlySet<number>>(new Set());
 
-  protected onRegister(activityId: number): void {
+  protected hasConsent(activityId: number): boolean {
+    return this.consentActivityIds().has(activityId);
+  }
+
+  protected onConsentChange(activityId: number, confirmed: boolean): void {
+    const updated = new Set(this.consentActivityIds());
+    confirmed ? updated.add(activityId) : updated.delete(activityId);
+    this.consentActivityIds.set(updated);
+  }
+
+  protected onRegister(activity: Activity): void {
+    const consentConfirmed = this.hasConsent(activity.id);
+    if (activity.consentRequired && !consentConfirmed) {
+      this.actionError.set('Confirm consent before registering for this activity.');
+      return;
+    }
     this.actionError.set('');
-    this.registrationService.register({ activityId }).subscribe({
+    this.registrationService.register({ activityId: activity.id, consentConfirmed }).subscribe({
       next: () => this.refresh$.next(),
-      error: () => this.actionError.set('Unable to register. Please check whether the StudentConnect API is running.'),
+      error: (err) => this.actionError.set(err?.error?.message ?? 'Unable to register. Please try again.'),
     });
   }
 

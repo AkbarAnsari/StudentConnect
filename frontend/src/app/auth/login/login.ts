@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, isDevMode, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../auth.service';
@@ -11,6 +11,7 @@ import { AuthService } from '../auth.service';
   styleUrl: './login.css',
 })
 export class Login {
+  protected readonly showDevelopmentAccounts = isDevMode();
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
@@ -37,7 +38,10 @@ export class Login {
     this.errorMessage.set('');
 
     this.authService.login(this.form.getRawValue()).subscribe({
-      next: () => this.router.navigate(['/dashboard']),
+      next: () => {
+        const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+        this.router.navigateByUrl(returnUrl?.startsWith('/') && !returnUrl.startsWith('//') ? returnUrl : '/dashboard');
+      },
       error: (err: HttpErrorResponse) => {
         this.submitting.set(false);
         // Deliberately generic — never reveal whether the username exists.

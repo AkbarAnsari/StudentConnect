@@ -1,7 +1,8 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
+import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { AppNotification, NotificationPreference } from './notification.model';
+import { AppNotification, NotificationHistoryResult, NotificationPreference } from './notification.model';
 
 // Polls for new notifications every 30s while the user is logged in — a lightweight
 // stand-in for push delivery, good enough for an in-app "Local" outbox (see
@@ -17,6 +18,7 @@ export class NotificationService {
   readonly notifications = signal<AppNotification[]>([]);
   readonly unreadCount = signal(0);
   readonly digestEnabled = signal(false);
+  readonly preference = signal<NotificationPreference>({ digestEnabled:false, emailChannelEnabled:true, inAppChannelEnabled:true, quietHoursStart:null, quietHoursEnd:null });
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
 
@@ -57,16 +59,34 @@ export class NotificationService {
     this.http.post<void>(`${this.baseUrl}/read-all`, {}).subscribe(() => this.refresh());
   }
 
-  private loadPreference(): void {
+  getHistory(page: number, pageSize: number, unreadOnly: boolean, type?: string): Observable<NotificationHistoryResult> {
+    const params: Record<string, string | number | boolean> = { page, pageSize, unreadOnly };
+    if (type) params['type'] = type;
+    return this.http.get<NotificationHistoryResult>(`${this.baseUrl}/history`, { params });
+  }
+
+  markAsReadRequest(id: number): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/${id}/read`, {});
+  }
+
+  markAllAsReadRequest(): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/read-all`, {});
+  }
+
+  loadPreference(): void {
     this.http.get<NotificationPreference>(this.preferenceUrl).subscribe({
-      next: (pref) => this.digestEnabled.set(pref.digestEnabled),
+      next: (pref) => { this.preference.set(pref); this.digestEnabled.set(pref.digestEnabled); },
       error: () => undefined,
     });
   }
 
   setDigestEnabled(enabled: boolean): void {
-    this.http.put<void>(this.preferenceUrl, { digestEnabled: enabled } satisfies NotificationPreference).subscribe({
-      next: () => this.digestEnabled.set(enabled),
+    this.updatePreference({ ...this.preference(), digestEnabled: enabled });
+  }
+
+  updatePreference(preference: NotificationPreference): void {
+    this.http.put<void>(this.preferenceUrl, preference).subscribe({
+      next: () => { this.preference.set(preference); this.digestEnabled.set(preference.digestEnabled); },
       error: () => undefined,
     });
   }

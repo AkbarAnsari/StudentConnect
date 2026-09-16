@@ -19,6 +19,11 @@ public class Assessment
     // existing assessments behave exactly as before (simple equal-weight average).
     public decimal Weight { get; set; } = 1.0m;
 
+    public AssessmentStatus Status { get; set; } = AssessmentStatus.Draft;
+    public DateTime? PublishedAtUtc { get; set; }
+
+    public int? TeacherSubjectAssignmentId { get; set; }
+    public TeacherSubjectAssignment? TeacherSubjectAssignment { get; set; }
     // Optional — lets an assessment be tied to a Term for locking/cumulative grading.
     public int? TermId { get; set; }
     public Term? Term { get; set; }

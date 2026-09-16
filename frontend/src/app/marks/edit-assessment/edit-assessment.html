@@ -1,0 +1,22 @@
+<section class="page page-narrow">
+  <a class="back-link" routerLink="/assessments">Back to assessments</a>
+  <header><p class="page-kicker">Gradebook</p><h1>Edit assessment</h1><p>Draft assessment details can be corrected before publication.</p></header>
+
+  @if (errorMessage()) { <p class="error-message" role="alert">{{ errorMessage() }}</p> }
+
+  @if (assessment(); as assessment) {
+    <div class="notice"><strong>{{ assessment.subjectName }}</strong> / {{ assessment.gradeName }} - Section {{ assessment.sectionName }}</div>
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <label>Title<input type="text" formControlName="title" />@if (form.controls.title.invalid && form.controls.title.touched) { <span class="field-error">Title is required.</span> }</label>
+      <label>Type<select formControlName="assessmentType">@for (type of assessmentTypes; track type) { <option [value]="type">{{ type }}</option> }</select></label>
+      <label>Date<input type="date" formControlName="date" /></label>
+      <label>Maximum marks<input type="number" formControlName="maximumMarks" min="1" />@if (form.controls.maximumMarks.invalid && form.controls.maximumMarks.touched) { <span class="field-error">Maximum marks must be greater than zero.</span> }</label>
+      <label>Description<textarea formControlName="description" rows="3"></textarea></label>
+      <label>Term<select formControlName="termId"><option [value]="0">No term</option>@for (term of terms(); track term.id) { <option [value]="term.id" [disabled]="term.isLocked && term.id !== assessment.termId">{{ term.name }} ({{ term.academicYearName }}){{ term.isLocked ? ' - locked' : '' }}</option> }</select></label>
+      <label>Weight<input type="number" formControlName="weight" min="0.1" step="0.1" /></label>
+      <div class="form-actions"><a class="btn btn-secondary" routerLink="/assessments">Cancel</a><button type="submit" [disabled]="submitting() || form.pristine">{{ submitting() ? 'Saving...' : 'Save changes' }}</button></div>
+    </form>
+  } @else {
+    <p class="loading">Loading assessment...</p>
+  }
+</section>

@@ -1,85 +1,71 @@
-<section class="page page-narrow">
-  <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
-  <h1>Announcements</h1>
+<section class="page page-wide announcements-page">
+  <header>
+    <p class="page-kicker">Communication</p>
+    <h1>Announcements</h1>
+    <p>Prepare targeted updates, preview recipients, and review delivery history.</p>
+  </header>
 
-  @if (successMessage()) {
-    <p class="success-message">{{ successMessage() }}</p>
-  }
-  @if (errorMessage()) {
-    <p class="error-message">{{ errorMessage() }}</p>
-  }
+  @if (successMessage()) { <p class="success-message" role="status">{{ successMessage() }}</p> }
+  @if (errorMessage()) { <p class="error-message" role="alert">{{ errorMessage() }}</p> }
 
-  <form [formGroup]="form" (ngSubmit)="onSubmit()">
-    <label>
-      Title
-      <input type="text" formControlName="title" />
-      @if (form.controls.title.invalid && form.controls.title.touched) {
-        <span class="field-error">Title is required.</span>
-      }
-    </label>
+  <div class="announcement-layout">
+    <section class="compose-panel" aria-labelledby="compose-title">
+      <div class="panel-heading"><p class="page-kicker">Compose</p><h2 id="compose-title">{{editingId() ? 'Edit draft' : 'New announcement'}}</h2></div>
+      <form [formGroup]="form" (ngSubmit)="onSubmit()">
+        <label>Title<input type="text" formControlName="title" placeholder="Clear, specific announcement title" />@if (form.controls.title.invalid && form.controls.title.touched) { <span class="field-error">Title is required.</span> }</label>
+        <label>Message<textarea formControlName="body" rows="5" placeholder="What recipients need to know and what they should do next"></textarea>@if (form.controls.body.invalid && form.controls.body.touched) { <span class="field-error">Message is required.</span> }</label>
+        @if(!editingId()){<label>Attachment <span class="optional">Optional</span><input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg" (change)="onAttachment($event)" />@if(attachmentError()){<span class="field-error">{{attachmentError()}}</span>}</label>}
 
-    <label>
-      Message
-      <textarea formControlName="body" rows="4"></textarea>
-      @if (form.controls.body.invalid && form.controls.body.touched) {
-        <span class="field-error">Message is required.</span>
-      }
-    </label>
-
-    <label>
-      Audience
-      <select formControlName="scopeType">
-        <option value="School">Whole School</option>
-        <option value="Grade">A Grade</option>
-        <option value="Section">A Section</option>
-      </select>
-    </label>
-
-    @if (form.controls.scopeType.value === 'Grade') {
-      <label>
-        Grade
-        <select formControlName="scopeGradeId">
-          <option [value]="0">Select a grade</option>
-          @for (grade of grades(); track grade.id) {
-            <option [value]="grade.id">{{ grade.name }}</option>
+        <div class="form-row">
+          @if (isAdmin()) {
+            <label>Audience<select formControlName="scopeType" (change)="previewAudience()"><option value="School">Whole school</option><option value="Grade">Grade</option><option value="Section">Section</option></select></label>
           }
-        </select>
-      </label>
-    }
-
-    @if (form.controls.scopeType.value === 'Section') {
-      <label>
-        Section
-        <select formControlName="scopeSectionId">
-          <option [value]="0">Select a section</option>
-          @for (section of sections(); track section.id) {
-            <option [value]="section.id">{{ section.gradeName }} - {{ section.name }}</option>
+          @if (form.controls.scopeType.value === 'Grade') {
+            <label>Grade<select formControlName="scopeGradeId" (change)="previewAudience()"><option [value]="0">Select a grade</option>@for (grade of grades(); track grade.id) { <option [value]="grade.id">{{ grade.name }}</option> }</select></label>
           }
-        </select>
-      </label>
-    }
+          @if (form.controls.scopeType.value === 'Section') {
+            <label>Assigned section<select formControlName="scopeSectionId" (change)="previewAudience()"><option [value]="0">Select a section</option>@for (section of sections(); track section.id) { <option [value]="section.id">{{ section.gradeName }} - Section {{ section.name }}</option> }</select></label>
+          }
+          <label>Priority<select formControlName="priority"><option value="Normal">Normal</option><option value="Important">Important</option><option value="Urgent">Urgent</option></select></label>
+        </div>
 
-    <button type="submit" [disabled]="submitting()">
-      {{ submitting() ? 'Sending...' : 'Send Announcement' }}
-    </button>
-  </form>
+        <div class="audience-preview" [class.preview-error]="previewError()">
+          @if (previewLoading()) { <span>Checking audience...</span> }
+          @else if (audiencePreview(); as preview) { <strong>{{ preview.recipientCount }}</strong><span>user recipients across {{ preview.studentCount }} active students</span> }
+          @else { <span>{{ previewError() || 'Select an audience to preview delivery.' }}</span> }
+        </div>
 
-  <section class="panel">
-    <h2>Recent Announcements</h2>
-    @if (recent().length === 0) {
-      <p class="empty">No announcements sent yet.</p>
-    } @else {
-      <ul class="entity-list">
-        @for (item of recent(); track item.id) {
-          <li>
-            <span>
-              <strong>{{ item.title }}</strong> — {{ item.scopeType }}{{ item.scopeName ? ' (' + item.scopeName + ')' : '' }}
-              <br />{{ item.body }}
-              <br /><small>By {{ item.authorName }} on {{ item.createdAtUtc | date: 'medium' }}</small>
-            </span>
-          </li>
-        }
-      </ul>
-    }
-  </section>
+        <div class="form-row">
+          <label>Delivery<select formControlName="deliveryMode"><option value="Draft">Save as Draft</option><option value="Sent">Send now</option><option value="Scheduled">Schedule</option></select></label>
+          @if (form.controls.deliveryMode.value === 'Scheduled') { <label>Delivery date and time<input type="datetime-local" formControlName="scheduledFor" /></label> }
+          <label>Expiry (optional)<input type="datetime-local" formControlName="expiresAt" /></label>
+        </div>
+
+        <button type="submit" [disabled]="submitting() || previewLoading()">
+          {{ submitting() ? 'Saving...' : editingId() ? 'Save draft changes' : form.controls.deliveryMode.value === 'Draft' ? 'Save draft' : form.controls.deliveryMode.value === 'Scheduled' ? 'Schedule announcement' : 'Send announcement' }}
+        </button>
+      </form>
+    </section>
+
+    <section class="history-panel" aria-labelledby="history-title">
+      <div class="history-heading"><div><p class="page-kicker">History</p><h2 id="history-title">Announcement history</h2></div><label>Status<select [value]="statusFilter()" (change)="statusFilter.set($any($event.target).value)"><option>All</option><option>Draft</option><option>Scheduled</option><option>Sent</option><option>Expired</option><option>Withdrawn</option></select></label></div>
+      @if (recentLoading()) { <p class="loading">Loading announcements...</p> }
+      @else if (recentError()) { <p class="error-message">{{ recentError() }}</p> }
+      @else if (filteredRecent().length === 0) { <p class="empty">No announcements match this status.</p> }
+      @else {
+        <div class="announcement-list" role="list">
+          @for (item of filteredRecent(); track item.id) {
+            <article role="listitem" [class.priority-important]="item.priority === 'Important'" [class.priority-urgent]="item.priority === 'Urgent'">
+              <div class="announcement-title"><div><span class="badge" [class.badge-success]="item.status === 'Sent'" [class.badge-warning]="item.status === 'Draft' || item.status === 'Scheduled'">{{ item.status }}</span><span class="priority-label">{{ item.priority }}</span></div><time>{{ item.createdAtUtc | date:'mediumDate' }}</time></div>
+              <h3>{{ item.title }}</h3><p>{{ item.body }}</p>
+              @if(item.attachmentFileName){<button type="button" class="btn btn-secondary" (click)="downloadAttachment(item)">{{item.attachmentFileName}}</button>}
+              @if(item.lastDispatchError){<p class="error-message">{{item.lastDispatchError}} · attempt {{item.dispatchAttempts}}</p>}
+              <dl><div><dt>Audience</dt><dd>{{ item.scopeType }}{{ item.scopeName ? ' / ' + item.scopeName : '' }}</dd></div><div><dt>Delivery</dt><dd>{{ item.sentAtUtc ? (item.sentAtUtc | date:'short') : item.scheduledForUtc ? (item.scheduledForUtc | date:'short') : 'Not sent' }}</dd></div><div><dt>Read</dt><dd>{{ item.readCount }} of {{ item.recipientCount }}</dd></div><div><dt>Author</dt><dd>{{ item.authorName }}</dd></div></dl>
+              <div class="history-actions">@if(item.status==='Draft'){<button type="button" class="btn btn-secondary" (click)="editDraft(item)">Edit</button>}@if (item.status === 'Draft' || item.status === 'Scheduled') { <button type="button" class="btn btn-secondary" (click)="changeLifecycle(item, 'publish')" [disabled]="actionId() === item.id">Send now</button> }@if(item.lastDispatchError){<button type="button" class="btn btn-secondary" (click)="retry(item)">Retry</button>} @if (item.status !== 'Withdrawn' && item.status !== 'Expired') { <button type="button" class="btn btn-danger" (click)="changeLifecycle(item, 'withdraw')" [disabled]="actionId() === item.id">Withdraw</button> }</div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  </div>
 </section>

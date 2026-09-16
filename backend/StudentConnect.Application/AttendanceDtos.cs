@@ -54,9 +54,21 @@ public class AttendanceSummaryDto
     public double Percentage { get; set; }
 }
 
+public class AttendanceCorrectionDto
+{
+    public int Id { get; set; }
+    public int AttendanceId { get; set; }
+    public string PreviousStatus { get; set; } = string.Empty;
+    public string NewStatus { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public DateTime ChangedAtUtc { get; set; }
+    public string ChangedByName { get; set; } = string.Empty;
+}
+
 // A teacher saving attendance for a whole class in one request.
 public class BulkAttendanceRequestDto
 {
+    public int SectionId { get; set; }
     public int SubjectId { get; set; }
     public DateOnly Date { get; set; }
     public List<BulkAttendanceItemDto> Records { get; set; } = [];

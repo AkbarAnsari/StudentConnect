@@ -47,6 +47,36 @@ public class SubjectsController(ReferenceDataStore referenceData, ICurrentTenant
         return CreatedAtAction(nameof(GetSubjects), null, created);
     }
 
+    [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<Subject>> UpdateSubject(int id, SubjectUpdateDto dto)
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await referenceData.SubjectExistsAsync(id, schoolId))
+        {
+            return NotFound();
+        }
+
+        var name = (dto.Name ?? string.Empty).Trim();
+        var code = (dto.Code ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(code))
+        {
+            return BadRequest(new { message = "Name and Code are required." });
+        }
+
+        if (await referenceData.SubjectCodeExistsAsync(code, schoolId, id))
+        {
+            return Conflict(new { message = $"Subject code '{code}' already exists." });
+        }
+
+        await referenceData.UpdateSubjectAsync(id, name, code, schoolId);
+        return Ok(await referenceData.GetSubjectByIdAsync(id, schoolId));
+    }
+
     // DELETE /api/subjects/{id}
     [HttpDelete("{id:int}")]
     [Authorize(Roles = "Admin")]

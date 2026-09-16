@@ -62,6 +62,14 @@ public class MarksControllerTests(DatabaseFixture fixture)
                 p.AddWithValue("sectionId", sectionId);
             });
 
+        await db.ExecuteAsync(
+            """INSERT INTO "StudentSubjects" ("StudentId", "SubjectId") VALUES (@studentId, @subjectId)""",
+            p =>
+            {
+                p.AddWithValue("studentId", studentId);
+                p.AddWithValue("subjectId", subjectId);
+            });
+
         return (subjectId, studentId, sectionId);
     }
 
@@ -95,12 +103,13 @@ public class MarksControllerTests(DatabaseFixture fixture)
     [Fact]
     public async Task CreateBulkMarks_CreatesNewRecords_AndUpdatesExistingInPlace()
     {
-        var (subjectId, studentId, _) = await SeedClassAsync();
+        var (subjectId, studentId, sectionId) = await SeedClassAsync();
         var assessmentId = await SeedAssessmentAsync(subjectId, maximumMarks: 100, weight: 1.0m);
         var controller = CreateController(TestCurrentUser.Admin());
 
         var firstSave = await controller.CreateBulkMarks(new BulkMarksRequestDto
         {
+            SectionId = sectionId,
             AssessmentId = assessmentId,
             Marks = [new BulkMarkItemDto { StudentId = studentId, MarksObtained = 70 }],
         });
@@ -111,6 +120,7 @@ public class MarksControllerTests(DatabaseFixture fixture)
 
         var secondSave = await controller.CreateBulkMarks(new BulkMarksRequestDto
         {
+            SectionId = sectionId,
             AssessmentId = assessmentId,
             Marks = [new BulkMarkItemDto { StudentId = studentId, MarksObtained = 85 }],
         });
@@ -123,7 +133,7 @@ public class MarksControllerTests(DatabaseFixture fixture)
     [Fact]
     public async Task GetStudentMarksSummary_ComputesWeightedAverage()
     {
-        var (subjectId, studentId, _) = await SeedClassAsync();
+        var (subjectId, studentId, sectionId) = await SeedClassAsync();
         // 50/100 (weight 1) and 100/100 (weight 3) -> weighted = (0.5*1 + 1.0*3) / 4 = 87.5% -> rounds to 88.
         var lightAssessmentId = await SeedAssessmentAsync(subjectId, maximumMarks: 100, weight: 1.0m);
         var heavyAssessmentId = await SeedAssessmentAsync(subjectId, maximumMarks: 100, weight: 3.0m);
@@ -142,17 +152,41 @@ public class MarksControllerTests(DatabaseFixture fixture)
     [Fact]
     public async Task CreateBulkMarks_TeacherOutsideAssignment_ReturnsForbidden()
     {
-        var (subjectId, studentId, _) = await SeedClassAsync();
+        var (subjectId, studentId, sectionId) = await SeedClassAsync();
         var assessmentId = await SeedAssessmentAsync(subjectId, maximumMarks: 100, weight: 1.0m);
         var teacherId = await SeedTeacherAsync();
         var controller = CreateController(TestCurrentUser.Teacher(teacherId));
 
         var result = await controller.CreateBulkMarks(new BulkMarksRequestDto
         {
+            SectionId = sectionId,
             AssessmentId = assessmentId,
             Marks = [new BulkMarkItemDto { StudentId = studentId, MarksObtained = 70 }],
         });
 
         Assert.IsType<ForbidResult>(result);
+    }
+
+    [Fact]
+    public async Task CreateBulkMarks_StudentOutsideSelectedSection_ReturnsBadRequest()
+    {
+        var (subjectId, studentId, actualSectionId) = await SeedClassAsync();
+        var assessmentId = await SeedAssessmentAsync(subjectId, maximumMarks: 100, weight: 1.0m);
+        var otherSectionId = await fixture.Database.ExecuteScalarAsync<int>(
+            """INSERT INTO "Sections" ("GradeId", "Name") SELECT "GradeId", @name FROM "Sections" WHERE "Id" = @sectionId RETURNING "Id" """,
+            p =>
+            {
+                p.AddWithValue("name", Guid.NewGuid().ToString("N")[..8]);
+                p.AddWithValue("sectionId", actualSectionId);
+            });
+
+        var result = await CreateController(TestCurrentUser.Admin()).CreateBulkMarks(new BulkMarksRequestDto
+        {
+            SectionId = otherSectionId,
+            AssessmentId = assessmentId,
+            Marks = [new BulkMarkItemDto { StudentId = studentId, MarksObtained = 70 }],
+        });
+
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 }

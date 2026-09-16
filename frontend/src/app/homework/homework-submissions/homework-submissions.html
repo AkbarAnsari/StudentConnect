@@ -1,6 +1,11 @@
 <section class="page page-wide">
   <a class="back-link" routerLink="/teacher-homework">← Back to My Homework</a>
-  <h1>Submissions</h1>
+  <div class="page-header">
+    <div>
+      <h1>Submissions</h1>
+      <p>Review class progress, submitted files, and individual feedback.</p>
+    </div>
+  </div>
 
   @if (loading()) {
     <p class="loading">Loading submissions...</p>
@@ -11,7 +16,30 @@
   } @else if (submissions().length === 0) {
     <p class="empty">No students found for this homework's grade.</p>
   } @else {
-    <table class="submissions-table">
+    <div class="submission-summary" aria-label="Submission summary">
+      <div><strong>{{ submissions().length }}</strong><span>Students</span></div>
+      <div><strong>{{ submittedCount() }}</strong><span>Submitted</span></div>
+      <div><strong>{{ pendingCount() }}</strong><span>Pending</span></div>
+    </div>
+
+    <div class="review-toolbar">
+      <label>Review view
+        <select [value]="reviewFilter()" (change)="reviewFilter.set($any($event.target).value)">
+          <option value="all">All students</option>
+          <option value="needs-review">Needs review</option>
+          <option value="reviewed">Reviewed</option>
+          <option value="pending">Pending</option>
+        </select>
+      </label>
+      <button type="button" [disabled]="submittedCount() === 0 || downloadingPackage()" (click)="downloadPackage()">
+        {{ downloadingPackage() ? 'Preparing package...' : 'Download submission package' }}
+      </button>
+    </div>
+    @if (packageError()) {
+      <p class="error-message" role="alert">Unable to download the submission package.</p>
+    }
+
+    <div class="table-shell"><table class="submissions-table">
       <thead>
         <tr>
           <th>Student</th>
@@ -23,42 +51,51 @@
         </tr>
       </thead>
       <tbody>
-        @for (row of submissions(); track row.studentId) {
+        @for (row of filteredSubmissions(); track row.studentId) {
           <tr>
-            <td>{{ row.studentName }}</td>
-            <td
+            <td data-label="Student"><strong>{{ row.studentName }}</strong></td>
+            <td data-label="Status"
               [class.status-submitted]="row.status === 'Submitted'"
               [class.status-late]="row.status === 'Late'"
               [class.status-not-submitted]="row.status === 'Not Submitted'"
             >
               {{ row.status }}
             </td>
-            <td>{{ row.submittedDate ?? '—' }}</td>
-            <td>{{ row.comments ?? '—' }}</td>
-            <td>
+            <td data-label="Submitted">{{ row.submittedDate ?? '—' }}</td>
+            <td data-label="Comments">{{ row.comments ?? '—' }}</td>
+            <td data-label="File">
               @if (row.hasFile && row.submissionId) {
                 <button type="button" class="link-button" (click)="download(row.submissionId)">Download</button>
               } @else {
                 —
               }
             </td>
-            <td>
+            <td data-label="Feedback">
               @if (row.submissionId) {
                 <textarea
+                  title="Teacher feedback"
                   rows="2"
+                  [attr.aria-label]="'Feedback for ' + row.studentName"
                   [value]="feedbackDrafts()[row.submissionId] ?? ''"
                   (input)="onFeedbackChange(row.submissionId, $any($event.target).value)"
                 ></textarea>
                 <button type="button" [disabled]="savingFeedbackFor() === row.submissionId" (click)="saveFeedback(row.submissionId)">
                   {{ savingFeedbackFor() === row.submissionId ? 'Saving...' : 'Save' }}
                 </button>
+                @if (feedbackStatus()[row.submissionId] === 'saved') {
+                  <span class="feedback-state success" role="status">Saved</span>
+                } @else if (feedbackStatus()[row.submissionId] === 'error') {
+                  <span class="feedback-state error" role="alert">Not saved. Try again.</span>
+                }
               } @else {
                 —
               }
             </td>
           </tr>
+        } @empty {
+          <tr><td colspan="6" class="empty">No students match this review view.</td></tr>
         }
       </tbody>
-    </table>
+    </table></div>
   }
 </section>

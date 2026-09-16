@@ -1,4 +1,5 @@
 export type HomeworkStatus = 'Not Submitted' | 'Submitted' | 'Late';
+export type ContentLifecycleStatus = 'Draft' | 'Scheduled' | 'Published' | 'Closed' | 'Archived';
 
 export interface StudentHomework {
   id: number;
@@ -16,10 +17,17 @@ export interface Homework {
   subjectName: string;
   gradeId: number;
   gradeName: string;
+  sectionId: number | null;
+  sectionName: string | null;
   teacherId: number;
   teacherName: string;
   createdDate: string;
   dueDate: string;
+  status: ContentLifecycleStatus;
+  scheduledForUtc: string | null;
+  publishedAtUtc: string | null;
+  closedAtUtc: string | null;
+  archivedAtUtc: string | null;
 }
 
 export interface HomeworkInput {
@@ -27,8 +35,11 @@ export interface HomeworkInput {
   description: string;
   subjectId: number;
   gradeId: number;
+  sectionId: number;
   teacherId: number;
   dueDate: string;
+  status?: 'Draft' | 'Scheduled' | 'Published';
+  scheduledForUtc?: string | null;
 }
 
 export interface HomeworkUpdateInput {

@@ -1,12 +1,13 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, computed, effect, inject, signal } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { Component, ElementRef, HostListener, computed, effect, inject, signal, viewChildren } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { map } from 'rxjs';
+import { forkJoin } from 'rxjs';
 import { AttendanceService } from '../attendance.service';
 import { AttendanceStatus, BulkAttendanceItem } from '../attendance.model';
-import { Student } from '../../students/student.model';
-import { StudentService } from '../../students/student.service';
+import { SectionStudent } from '../../academic-structure/academic-structure.model';
+import { AuthService } from '../../auth/auth.service';
+import { TeacherSubjectAssignment } from '../../teachers/teacher-subject-assignment.model';
+import { TeacherSubjectAssignmentService } from '../../teachers/teacher-subject-assignment.service';
 
 @Component({
   selector: 'app-record-attendance',
@@ -16,55 +17,120 @@ import { StudentService } from '../../students/student.service';
 })
 export class RecordAttendance {
   private readonly attendanceService = inject(AttendanceService);
-  private readonly studentService = inject(StudentService);
+  private readonly assignmentService = inject(TeacherSubjectAssignmentService);
+  private readonly authService = inject(AuthService);
 
-  protected readonly grades = toSignal(this.studentService.getGrades(), { initialValue: [] });
-  protected readonly subjects = toSignal(this.attendanceService.getSubjects(), { initialValue: [] });
-  private readonly students = toSignal(this.studentService.getStudents().pipe(map((r) => r.items)), { initialValue: [] as Student[] });
-
-  protected readonly gradeId = signal<number | null>(null);
-  protected readonly subjectId = signal<number | null>(null);
+  protected readonly assignments = signal<TeacherSubjectAssignment[]>([]);
+  protected readonly loadingAssignments = signal(true);
+  protected readonly assignmentId = signal<number | null>(null);
+  protected readonly selectedAssignment = computed(() =>
+    this.assignments().find((assignment) => assignment.id === this.assignmentId()) ?? null,
+  );
+  protected readonly classStudents = signal<SectionStudent[]>([]);
   protected readonly date = signal(new Date().toISOString().slice(0, 10));
   protected readonly correctionReason = signal('');
 
   protected readonly statusByStudentId = signal<Record<number, AttendanceStatus>>({});
+  protected readonly initialStatusByStudentId = signal<Record<number, AttendanceStatus>>({});
+  protected readonly recordedStudentIds = signal<Set<number>>(new Set());
   protected readonly loadingExisting = signal(false);
   protected readonly saving = signal(false);
   protected readonly successMessage = signal('');
   protected readonly errorMessage = signal('');
-
-  protected readonly classStudents = computed(() => {
-    const grade = this.gradeId();
-    if (grade === null) {
-      return [];
-    }
-    return this.students().filter((s) => s.gradeId === grade);
+  protected readonly focusedStudentId = signal<number | null>(null);
+  private readonly statusGroups = viewChildren<ElementRef<HTMLElement>>('statusGroup');
+  protected readonly presentCount = computed(() => this.classStudents().filter((student) => this.statusFor(student.id) === 'Present').length);
+  protected readonly absentCount = computed(() => this.classStudents().filter((student) => this.statusFor(student.id) === 'Absent').length);
+  protected readonly lateCount = computed(() => this.classStudents().filter((student) => this.statusFor(student.id) === 'Late').length);
+  protected readonly excusedCount = computed(() => this.classStudents().filter((student) => this.statusFor(student.id) === 'Excused').length);
+  protected readonly pendingStudentIds = computed(() => {
+    const original = this.initialStatusByStudentId();
+    const recorded = this.recordedStudentIds();
+    return this.classStudents()
+      .filter((student) => !recorded.has(student.id) || this.statusFor(student.id) !== original[student.id])
+      .map((student) => student.id);
   });
+  protected readonly pendingCount = computed(() => this.pendingStudentIds().length);
+  protected readonly requiresCorrectionReason = computed(() => {
+    const original = this.initialStatusByStudentId();
+    const recorded = this.recordedStudentIds();
+    return this.classStudents().some(
+      (student) => recorded.has(student.id) && this.statusFor(student.id) !== original[student.id],
+    );
+  });
+  protected readonly canSave = computed(() =>
+    this.selectedAssignment() !== null &&
+    this.classStudents().length > 0 &&
+    this.pendingCount() > 0 &&
+    !this.loadingExisting() &&
+    !this.saving() &&
+    (!this.requiresCorrectionReason() || this.correctionReason().trim().length > 0),
+  );
 
   constructor() {
-    // Prefill from whatever is already recorded for this subject+date, so re-saving (e.g. to
-    // correct one student) doesn't silently overwrite everyone else back to the "Present" default.
-    effect(() => {
-      const subjectId = this.subjectId();
+    const assignmentsRequest = this.authService.role() === 'Admin'
+      ? this.assignmentService.getAll()
+      : this.assignmentService.getMine();
+    assignmentsRequest.subscribe({
+      next: (assignments) => {
+        this.assignments.set(assignments);
+        this.loadingAssignments.set(false);
+      },
+      error: () => {
+        this.loadingAssignments.set(false);
+        this.errorMessage.set('Unable to load your class assignments.');
+      },
+    });
+
+    effect((onCleanup) => {
+      const assignment = this.selectedAssignment();
       const date = this.date();
 
-      if (subjectId === null) {
+      if (assignment === null) {
+        this.classStudents.set([]);
         this.statusByStudentId.set({});
+        this.initialStatusByStudentId.set({});
+        this.recordedStudentIds.set(new Set());
         return;
       }
 
       this.loadingExisting.set(true);
-      this.attendanceService.getBySubjectAndDate(subjectId, date).subscribe({
-        next: (records) => {
+      this.errorMessage.set('');
+      const subscription = forkJoin({
+        students: this.assignmentService.getStudents(assignment.id),
+        records: this.attendanceService.getBySubjectAndDate(assignment.subjectId, date),
+      }).subscribe({
+        next: ({ students, records }) => {
+          const existingStatuses = Object.fromEntries(records.map((record) => [record.studentId, record.status]));
           this.loadingExisting.set(false);
-          this.statusByStudentId.set(Object.fromEntries(records.map((r) => [r.studentId, r.status])));
+          this.classStudents.set(students);
+          this.statusByStudentId.set(existingStatuses);
+          this.initialStatusByStudentId.set(existingStatuses);
+          this.recordedStudentIds.set(new Set(records.map((record) => record.studentId)));
         },
         error: () => {
           this.loadingExisting.set(false);
+          this.classStudents.set([]);
           this.statusByStudentId.set({});
+          this.initialStatusByStudentId.set({});
+          this.recordedStudentIds.set(new Set());
+          this.errorMessage.set('Unable to load the class roster and existing attendance. Nothing has been changed.');
         },
       });
+      onCleanup(() => subscription.unsubscribe());
     });
+  }
+
+  protected onAssignmentChange(value: number | null): void {
+    this.assignmentId.set(value);
+    this.correctionReason.set('');
+    this.successMessage.set('');
+  }
+
+  protected onDateChange(value: string): void {
+    this.date.set(value);
+    this.correctionReason.set('');
+    this.successMessage.set('');
   }
 
   protected statusFor(studentId: number): AttendanceStatus {
@@ -73,17 +139,74 @@ export class RecordAttendance {
 
   protected onStatusChange(studentId: number, status: AttendanceStatus): void {
     this.statusByStudentId.update((current) => ({ ...current, [studentId]: status }));
+    this.successMessage.set('');
+  }
+
+  protected markAll(status: AttendanceStatus): void {
+    this.statusByStudentId.set(Object.fromEntries(this.classStudents().map((student) => [student.id, status])));
+    this.successMessage.set('');
+  }
+
+  protected onStatusKeydown(event: KeyboardEvent, rowIndex: number, studentId: number): void {
+    const key = event.key.toLowerCase();
+    if (key === 'p' || event.key === 'ArrowLeft') {
+      event.preventDefault();
+      this.onStatusChange(studentId, 'Present');
+      return;
+    }
+    if (key === 'a' || event.key === 'ArrowRight') {
+      event.preventDefault();
+      this.onStatusChange(studentId, 'Absent');
+      return;
+    }
+    if (key === 'l') {
+      event.preventDefault();
+      this.onStatusChange(studentId, 'Late');
+      return;
+    }
+    if (key === 'e') {
+      event.preventDefault();
+      this.onStatusChange(studentId, 'Excused');
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      const statuses: AttendanceStatus[] = ['Present', 'Absent', 'Late', 'Excused'];
+      this.onStatusChange(studentId, statuses[(statuses.indexOf(this.statusFor(studentId)) + 1) % statuses.length]);
+      return;
+    }
+
+    const targetIndex = event.key === 'ArrowUp'
+      ? rowIndex - 1
+      : event.key === 'ArrowDown'
+        ? rowIndex + 1
+        : event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? this.statusGroups().length - 1
+            : rowIndex;
+    if (targetIndex !== rowIndex && targetIndex >= 0 && targetIndex < this.statusGroups().length) {
+      event.preventDefault();
+      this.statusGroups()[targetIndex].nativeElement.focus();
+    }
   }
 
   protected onSave(): void {
-    const subjectId = this.subjectId();
+    const assignment = this.selectedAssignment();
     const date = this.date();
     const students = this.classStudents();
 
-    if (subjectId === null || students.length === 0) {
-      this.errorMessage.set('Select a grade and subject before saving.');
+    if (assignment === null || students.length === 0) {
+      this.errorMessage.set('Select an assigned class with active students before saving.');
       return;
     }
+
+    if (this.requiresCorrectionReason() && !this.correctionReason().trim()) {
+      this.errorMessage.set('Enter a correction reason before changing existing attendance.');
+      return;
+    }
+
+    const pendingCount = this.pendingCount();
 
     const records: BulkAttendanceItem[] = students.map((s) => ({
       studentId: s.id,
@@ -95,19 +218,33 @@ export class RecordAttendance {
     this.successMessage.set('');
     this.errorMessage.set('');
 
-    this.attendanceService.saveBulkAttendance({ subjectId, date, records }).subscribe({
+    this.attendanceService.saveBulkAttendance({
+      sectionId: assignment.sectionId,
+      subjectId: assignment.subjectId,
+      date,
+      records,
+    }).subscribe({
       next: () => {
         this.saving.set(false);
-        this.successMessage.set('Attendance saved successfully.');
+        const currentStatuses = Object.fromEntries(students.map((student) => [student.id, this.statusFor(student.id)]));
+        this.initialStatusByStudentId.set(currentStatuses);
+        this.recordedStudentIds.set(new Set(students.map((student) => student.id)));
+        this.correctionReason.set('');
+        this.successMessage.set(`Attendance saved for ${pendingCount} ${pendingCount === 1 ? 'student' : 'students'}.`);
       },
       error: (err: HttpErrorResponse) => {
         this.saving.set(false);
-        this.errorMessage.set(
-          err.status === 400
-            ? 'Some of the entered data was invalid. Please check the grade, subject, and date.'
-            : 'Unable to save attendance. Please check whether the StudentConnect API is running.',
-        );
+        this.errorMessage.set(err.error?.message ?? 'Unable to save attendance. Please try again.');
       },
     });
+  }
+
+  hasUnsavedChanges(): boolean {
+    return this.pendingCount() > 0 && !this.saving();
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  protected onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.hasUnsavedChanges()) event.preventDefault();
   }
 }

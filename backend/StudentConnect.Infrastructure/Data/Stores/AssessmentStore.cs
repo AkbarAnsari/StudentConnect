@@ -8,10 +8,16 @@ public class AssessmentStore(Database db)
 {
     private const string SelectWithSubject = """
         SELECT a."Id", a."Title", a."SubjectId", a."Date", a."MaximumMarks", a."AssessmentType", a."Description", a."TermId", a."Weight",
-               sub."Name" AS "SubjectName", term."Name" AS "TermName"
+               a."Status", a."PublishedAtUtc", a."TeacherSubjectAssignmentId",
+               sub."Name" AS "SubjectName", term."Name" AS "TermName",
+               tsa."TeacherId" AS "AssignmentTeacherId", tsa."SectionId" AS "AssignmentSectionId",
+               sec."Name" AS "SectionName", g."Id" AS "GradeId", g."Name" AS "GradeName"
         FROM "Assessments" a
         JOIN "Subjects" sub ON sub."Id" = a."SubjectId"
         LEFT JOIN "Terms" term ON term."Id" = a."TermId"
+        LEFT JOIN "TeacherSubjectAssignments" tsa ON tsa."Id" = a."TeacherSubjectAssignmentId"
+        LEFT JOIN "Sections" sec ON sec."Id" = tsa."SectionId"
+        LEFT JOIN "Grades" g ON g."Id" = sec."GradeId"
         """;
 
     private static Assessment Map(NpgsqlDataReader reader) => new()
@@ -27,6 +33,23 @@ public class AssessmentStore(Database db)
         TermId = reader.GetNullableInt32("TermId"),
         Term = reader.GetNullableInt32("TermId") is not null ? new Term { Name = reader.GetString("TermName") } : null,
         Weight = reader.GetDecimal("Weight"),
+        Status = reader.GetEnum<AssessmentStatus>("Status"),
+        PublishedAtUtc = reader.GetNullableDateTimeUtc("PublishedAtUtc"),
+        TeacherSubjectAssignmentId = reader.GetNullableInt32("TeacherSubjectAssignmentId"),
+        TeacherSubjectAssignment = reader.GetNullableInt32("TeacherSubjectAssignmentId") is { } assignmentId
+            ? new TeacherSubjectAssignment
+            {
+                Id = assignmentId,
+                TeacherId = reader.GetInt32("AssignmentTeacherId"),
+                SubjectId = reader.GetInt32("SubjectId"),
+                SectionId = reader.GetInt32("AssignmentSectionId"),
+                Section = new Section
+                {
+                    Name = reader.GetString("SectionName"),
+                    Grade = new Grade { Id = reader.GetInt32("GradeId"), Name = reader.GetString("GradeName") },
+                },
+            }
+            : null,
     };
 
     public async Task<List<Assessment>> GetAllAsync() =>
@@ -86,8 +109,8 @@ public class AssessmentStore(Database db)
     public async Task<int> CreateAsync(Assessment assessment) =>
         await db.ExecuteScalarAsync<int>(
             """
-            INSERT INTO "Assessments" ("Title", "SubjectId", "Date", "MaximumMarks", "AssessmentType", "Description", "TermId", "Weight")
-            VALUES (@title, @subjectId, @date, @maxMarks, @type, @description, @termId, @weight)
+            INSERT INTO "Assessments" ("Title", "SubjectId", "Date", "MaximumMarks", "AssessmentType", "Description", "TermId", "Weight", "Status", "PublishedAtUtc", "TeacherSubjectAssignmentId")
+            VALUES (@title, @subjectId, @date, @maxMarks, @type, @description, @termId, @weight, @status, @publishedAtUtc, @teacherSubjectAssignmentId)
             RETURNING "Id"
             """,
             p => Bind(p, assessment));
@@ -111,6 +134,23 @@ public class AssessmentStore(Database db)
     public async Task DeleteAsync(int id) =>
         await db.ExecuteAsync("""DELETE FROM "Assessments" WHERE "Id" = @id""", p => p.AddWithValue("id", id));
 
+    public async Task SetStatusAsync(int id, AssessmentStatus status) =>
+        await db.ExecuteAsync(
+            """
+            UPDATE "Assessments"
+            SET "Status" = @status,
+                "PublishedAtUtc" = CASE WHEN @status = 'Published' THEN now() ELSE NULL END
+            WHERE "Id" = @id
+            """,
+            p =>
+            {
+                p.AddWithValue("id", id);
+                p.AddWithValue("status", status.ToString());
+            });
+
+    public Task<TeacherSubjectAssignment?> GetAssignmentAsync(int id, int schoolId) =>
+        new TeacherSubjectAssignmentStore(db).GetByIdAsync(id, schoolId);
+
     private static void Bind(NpgsqlParameterCollection p, Assessment assessment)
     {
         p.AddWithValue("title", assessment.Title);
@@ -121,5 +161,8 @@ public class AssessmentStore(Database db)
         p.AddWithValue("description", assessment.Description);
         p.AddWithValue("termId", (object?)assessment.TermId ?? DBNull.Value);
         p.AddWithValue("weight", assessment.Weight);
+        p.AddWithValue("status", assessment.Status.ToString());
+        p.AddWithValue("publishedAtUtc", (object?)assessment.PublishedAtUtc ?? DBNull.Value);
+        p.AddWithValue("teacherSubjectAssignmentId", (object?)assessment.TeacherSubjectAssignmentId ?? DBNull.Value);
     }
 }

@@ -11,24 +11,21 @@
     <h1>{{ a.title }}</h1>
     <p class="description">{{ a.description }}</p>
 
-    <dl class="details">
-      <dt>Date</dt>
-      <dd>{{ a.date }}</dd>
-      <dt>Location</dt>
-      <dd>{{ a.location }}</dd>
-      <dt>Grade</dt>
-      <dd>{{ a.gradeName }}</dd>
-      <dt>Capacity</dt>
-      <dd>{{ a.capacity }}</dd>
-      <dt>Registered</dt>
-      <dd>{{ a.currentRegistrations }}</dd>
-      <dt>Available</dt>
-      <dd>{{ a.availableSeats }}</dd>
-      @if (a.currentWaitlisted > 0) {
-        <dt>Waitlisted</dt>
-        <dd>{{ a.currentWaitlisted }}</dd>
+    <div class="details" role="list">
+      <div class="detail-row" role="listitem"><span class="detail-label">Date</span><span>{{ a.date }}</span></div>
+      <div class="detail-row" role="listitem"><span class="detail-label">Location</span><span>{{ a.location }}</span></div>
+      <div class="detail-row" role="listitem"><span class="detail-label">Grade</span><span>{{ a.gradeName }}{{ a.sectionName ? ' · ' + a.sectionName : '' }}</span></div>
+      <div class="detail-row" role="listitem"><span class="detail-label">Organizer</span><span>{{ a.organizerName || 'School activity' }}</span></div>
+      @if (a.contactEmail) {
+        <div class="detail-row" role="listitem"><span class="detail-label">Contact</span><span>{{ a.contactEmail }}</span></div>
       }
-    </dl>
+      <div class="detail-row" role="listitem"><span class="detail-label">Capacity</span><span>{{ a.capacity }}</span></div>
+      <div class="detail-row" role="listitem"><span class="detail-label">Registered</span><span>{{ a.currentRegistrations }}</span></div>
+      <div class="detail-row" role="listitem"><span class="detail-label">Available</span><span>{{ a.availableSeats }}</span></div>
+      @if (a.currentWaitlisted > 0) {
+        <div class="detail-row" role="listitem"><span class="detail-label">Waitlisted</span><span>{{ a.currentWaitlisted }}</span></div>
+      }
+    </div>
 
     @if (actionError()) {
       <p class="error-message">{{ actionError() }}</p>
@@ -42,11 +39,19 @@
       } @else {
         <p class="status-registered">You are registered for this activity.</p>
       }
-      <button type="button" class="cancel-button" (click)="onCancel()">Cancel Registration</button>
-    } @else if (isPast(a)) {
-      <p class="status-closed">Registration is closed because this activity has already occurred.</p>
-    } @else {
-      <button type="button" class="register-button" (click)="onRegister()">
+      @if (canManageRegistration()) {
+        <button type="button" class="cancel-button" (click)="onCancel()">Cancel Registration</button>
+      }
+    } @else if (registrationUnavailableReason(a); as reason) {
+      <p class="status-closed">{{ reason }}</p>
+    } @else if (canManageRegistration()) {
+      @if (a.consentRequired) {
+        <label class="consent-check">
+          <input type="checkbox" [checked]="consentConfirmed()" (change)="onConsentChange($any($event.target).checked)" />
+          I confirm the required consent for this activity
+        </label>
+      }
+      <button type="button" class="register-button" [disabled]="a.consentRequired && !consentConfirmed()" (click)="onRegister()">
         {{ a.availableSeats > 0 ? 'Register' : 'Join Waitlist' }}
       </button>
     }

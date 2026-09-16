@@ -1,201 +1,47 @@
-<section class="page">
-  <a class="back-link" routerLink="/students">← Back to Students</a>
+<section class="page page-wide student-record-page">
+  <a class="back-link" [routerLink]="backRoute()"><ng-icon name="lucideArrowLeft" size="16" /> {{ backLabel() }}</a>
 
   @if (state().loading) {
     <p class="loading">Loading student...</p>
   } @else if (state().error) {
-    <p class="error-message">
-      Unable to load student. Please check whether the StudentConnect API is running.
-    </p>
+    <p class="error-message">Unable to load student. Please check your connection and try again.</p>
   } @else if (state().notFound) {
-    <p class="not-found">Student not found.</p>
-    <a class="back-link" routerLink="/students">Back to Students</a>
-  } @else if (state().student; as s) {
-    <h1>Student Profile</h1>
-    <h2>{{ s.firstName }} {{ s.lastName }}</h2>
+    <div class="record-state" role="status"><h1>Student not found</h1><p>This student record may have moved or is not available to your account.</p><a class="btn" [routerLink]="backRoute()">{{ backLabel() }}</a></div>
+  } @else if (state().student; as student) {
+    <header class="student-record-header">
+      <div class="student-identity"><span class="student-avatar" aria-hidden="true">{{ student.firstName.charAt(0) }}{{ student.lastName.charAt(0) }}</span><div><p class="page-kicker">Student record</p><h1>{{ student.firstName }} {{ student.lastName }}</h1><div class="identity-meta"><span>{{ student.studentId }}</span><span>{{ student.gradeName }} / Section {{ student.sectionName || 'Not assigned' }}</span><span class="badge" [class.badge-success]="student.status === 'Active'" [class.badge-info]="student.status === 'Graduated'" [class.badge-warning]="student.status === 'Transferred'">{{ student.status }}</span></div></div></div>
+      <div class="profile-actions">@if (canManageStudent()) { <a class="btn" [routerLink]="['/students', student.id, 'edit']">Edit student</a> }<a class="btn btn-secondary" [routerLink]="['/students', student.id, 'report-card']">Report card</a><a class="btn btn-secondary" [routerLink]="['/students', student.id, 'transcript']">Transcript</a></div>
+    </header>
 
-    <div class="profile-actions">
-      <a class="btn" [routerLink]="['/students', s.id, 'edit']">Edit</a>
-      <a class="btn" [routerLink]="['/students', s.id, 'report-card']">Report Card</a>
-      <a class="btn" [routerLink]="['/students', s.id, 'transcript']">Transcript</a>
-      <button type="button" class="btn btn-danger" (click)="onDelete(s.id)">Delete</button>
-    </div>
+    <app-student-record-nav [studentId]="student.id" />
 
-    @if (deleteError()) {
-      <p class="error-message">Unable to delete student. Please check whether the StudentConnect API is running.</p>
-    }
-
-    <dl class="profile-details">
-      <dt>Student ID</dt>
-      <dd>{{ s.studentId }}</dd>
-      <dt>Grade</dt>
-      <dd>{{ s.gradeName }}</dd>
-      <dt>Section</dt>
-      <dd>{{ s.sectionName }}</dd>
-      <dt>Email</dt>
-      <dd>{{ s.email }}</dd>
-      @if (s.dateOfBirth) {
-        <dt>Date of birth</dt>
-        <dd>{{ s.dateOfBirth }}</dd>
-      }
-      @if (s.phone) {
-        <dt>Phone</dt>
-        <dd>{{ s.phone }}</dd>
-      }
-      @if (s.address) {
-        <dt>Address</dt>
-        <dd>{{ s.address }}</dd>
-      }
-    </dl>
-
-    <div class="tab-strip" role="tablist">
-      <button type="button" class="tab" [class.active]="activeTab() === 'profile'" (click)="activeTab.set('profile')">Subjects</button>
-      <button type="button" class="tab" [class.active]="activeTab() === 'attendance'" (click)="activeTab.set('attendance')">Attendance</button>
-      <button type="button" class="tab" [class.active]="activeTab() === 'marks'" (click)="activeTab.set('marks')">Marks</button>
-      <button type="button" class="tab" [class.active]="activeTab() === 'homework'" (click)="activeTab.set('homework')">Homework</button>
-      <button type="button" class="tab" [class.active]="activeTab() === 'materials'" (click)="activeTab.set('materials')">Materials</button>
-      <button type="button" class="tab" [class.active]="activeTab() === 'activities'" (click)="activeTab.set('activities')">Activities</button>
-    </div>
-
-    @if (activeTab() === 'profile') {
-    <section class="panel">
-      <h3>My Subjects</h3>
-      @if (subjectsState().loading) {
-        <p class="loading">Loading subjects...</p>
-      } @else if (subjectsState().error) {
-        <p class="error-message">Unable to load subjects.</p>
-      } @else if (subjectsState().subjects.length === 0) {
-        <p class="coming-soon">No subjects assigned yet.</p>
-      } @else {
-        <ul>
-          @for (subject of subjectsState().subjects; track subject.id) {
-            <li>{{ subject.name }}</li>
-          }
-        </ul>
-      }
+    <section class="record-overview" aria-labelledby="record-overview-title">
+      <div class="section-heading"><div><p class="page-kicker">Profile</p><h2 id="record-overview-title">Student information</h2></div>@if (student.statusReason) { <p class="status-reason">{{ student.statusReason }}</p> }</div>
+      <div class="profile-details" role="list" aria-label="Student information">
+        <div role="listitem"><span class="detail-label">Student ID</span><span class="detail-value">{{ student.studentId }}</span></div>
+        <div role="listitem"><span class="detail-label">Grade</span><span class="detail-value">{{ student.gradeName }}</span></div>
+        <div role="listitem"><span class="detail-label">Section</span><span class="detail-value">{{ student.sectionName || 'Not assigned' }}</span></div>
+        <div role="listitem"><span class="detail-label">Email</span><span class="detail-value"><a [href]="'mailto:' + student.email">{{ student.email }}</a></span></div>
+        <div role="listitem"><span class="detail-label">Date of birth</span><span class="detail-value">{{ student.dateOfBirth || 'Not recorded' }}</span></div>
+        <div role="listitem"><span class="detail-label">Phone</span><span class="detail-value">@if (student.phone) { <a [href]="'tel:' + student.phone">{{ student.phone }}</a> } @else { Not recorded }</span></div>
+        <div role="listitem" class="detail-wide"><span class="detail-label">Address</span><span class="detail-value">{{ student.address || 'Not recorded' }}</span></div>
+      </div>
     </section>
-    }
 
-    @if (activeTab() === 'attendance') {
-    <section class="panel">
-      <h3>Attendance</h3>
-      @if (attendanceState().loading) {
-        <p class="loading">Loading attendance...</p>
-      } @else if (attendanceState().error) {
-        <p class="error-message">Unable to load attendance.</p>
-      } @else if (attendanceState().summary.length === 0) {
-        <p class="coming-soon">No attendance records yet.</p>
-      } @else {
-        <ul class="attendance-summary">
-          @for (subject of attendanceState().summary; track subject.subjectId) {
-            <li>
-              <span>{{ subject.subjectName }}</span>
-              <span class="badge" [class.status-present]="subject.percentage >= 75" [class.status-absent]="subject.percentage < 75">{{ subject.percentage }}%</span>
-            </li>
-          }
-        </ul>
-        <a class="view-link" [routerLink]="['/students', s.id, 'attendance']">View Attendance</a>
-      }
+    <section class="panel" aria-labelledby="subjects-title">
+      <div class="panel-heading"><div><p class="page-kicker">Enrollment</p><h2 id="subjects-title">Subjects</h2></div></div>
+      @if (subjectsState().loading) { <p class="loading">Loading subjects...</p> }
+      @else if (subjectsState().error) { <p class="error-message">Unable to load subjects.</p> }
+      @else if (subjectsState().subjects.length === 0) { <p class="coming-soon">No subjects assigned yet.</p> }
+      @else { <div class="subject-list" role="list">@for (subject of subjectsState().subjects; track subject.id) { <div role="listitem"><strong>{{ subject.name }}</strong><span>{{ subject.code }}</span></div> }</div> }
     </section>
-    }
 
-    @if (activeTab() === 'marks') {
-    <section class="panel">
-      <h3>Marks</h3>
-      @if (marksState().loading) {
-        <p class="loading">Loading marks...</p>
-      } @else if (marksState().error) {
-        <p class="error-message">Unable to load marks.</p>
-      } @else if (marksState().summary.length === 0) {
-        <p class="coming-soon">No marks recorded yet.</p>
-      } @else {
-        <ul class="attendance-summary">
-          @for (subject of marksState().summary; track subject.subjectId) {
-            <li>
-              <span>{{ subject.subjectName }}</span>
-              <span class="badge" [class.status-present]="subject.percentage >= 40" [class.status-absent]="subject.percentage < 40">{{ subject.percentage }}%</span>
-            </li>
-          }
-        </ul>
-        <a class="view-link" [routerLink]="['/students', s.id, 'marks']">View Marks</a>
-      }
+    <section class="history-section" aria-labelledby="student-history-title">
+      <div class="section-heading"><div><p class="page-kicker">History</p><h2 id="student-history-title">Record changes</h2></div>@if (student.statusChangedAtUtc) { <p>Current status updated {{ student.statusChangedAtUtc | date: 'medium' : 'UTC' }} UTC</p> }</div>
+      @if (historyState().loading) { <p class="loading" aria-live="polite">Loading record history...</p> }
+      @else if (historyState().error) { <p class="error-message">Record history could not be loaded.</p> }
+      @else if (historyState().entries.length === 0) { <p class="coming-soon">No audited profile or lifecycle changes yet.</p> }
+      @else { <div class="history-timeline" role="list">@for (entry of historyState().entries; track entry.id) { <article role="listitem"><span class="timeline-marker" aria-hidden="true"></span><div><strong>{{ entry.action }}</strong><span>{{ entry.timestampUtc | date: 'medium' : 'UTC' }} UTC · {{ entry.username }} ({{ entry.role }})</span>@if (entry.details) { <p>{{ entry.details }}</p> }</div></article> }</div> }
     </section>
-    }
-
-    @if (activeTab() === 'homework') {
-    <section class="panel">
-      <h3>Homework</h3>
-      @if (homeworkState().loading) {
-        <p class="loading">Loading homework...</p>
-      } @else if (homeworkState().error) {
-        <p class="error-message">Unable to load homework.</p>
-      } @else if (homeworkState().homework.length === 0) {
-        <p class="coming-soon">No homework assigned yet.</p>
-      } @else {
-        <ul class="attendance-summary">
-          @for (item of homeworkState().homework; track item.id) {
-            <li>
-              <span>{{ item.title }}</span>
-              <span
-                class="badge"
-                [class.status-submitted]="item.status === 'Submitted'"
-                [class.status-late]="item.status === 'Late'"
-                [class.status-not-submitted]="item.status === 'Not Submitted'"
-              >{{ item.status }}</span>
-            </li>
-          }
-        </ul>
-        <a class="view-link" [routerLink]="['/students', s.id, 'homework']">View Homework</a>
-      }
-    </section>
-    }
-
-    @if (activeTab() === 'materials') {
-    <section class="panel">
-      <h3>Learning Materials</h3>
-      @if (materialsState().loading) {
-        <p class="loading">Loading learning materials...</p>
-      } @else if (materialsState().error) {
-        <p class="error-message">Unable to load learning materials.</p>
-      } @else if (materialsState().materials.length === 0) {
-        <p class="coming-soon">No learning materials yet.</p>
-      } @else {
-        <ul class="attendance-summary">
-          @for (material of materialsState().materials; track material.id) {
-            <li><span>{{ material.title }}</span><span>{{ material.subjectName }}</span></li>
-          }
-        </ul>
-        <a class="view-link" [routerLink]="['/students', s.id, 'materials']">View Learning Materials</a>
-      }
-    </section>
-    }
-
-    @if (activeTab() === 'activities') {
-    <section class="panel">
-      <h3>Activities</h3>
-      @if (activitiesState().loading) {
-        <p class="loading">Loading activities...</p>
-      } @else if (activitiesState().error) {
-        <p class="error-message">Unable to load activities.</p>
-      } @else if (activitiesState().registrations.length === 0) {
-        <p class="coming-soon">No activity registrations yet.</p>
-      } @else {
-        <ul class="attendance-summary">
-          @for (registration of activitiesState().registrations; track registration.id) {
-            <li>
-              <span>{{ registration.activityTitle }}</span>
-              <span
-                class="badge"
-                [class.status-registered]="registration.status === 'Registered'"
-                [class.status-full]="registration.status === 'Waitlisted'"
-                [class.status-cancelled]="registration.status === 'Cancelled'"
-              >{{ registration.status }}</span>
-            </li>
-          }
-        </ul>
-      }
-      <a class="view-link" [routerLink]="['/students', s.id, 'activities']">View Activities</a>
-    </section>
-    }
   }
 </section>

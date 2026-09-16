@@ -1,22 +1,74 @@
 <section class="page page-wide">
-  <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
-  <h1>Manage Academic Structure</h1>
+  <a class="back-link" routerLink="/dashboard">Back to dashboard</a>
+  <header class="setup-header">
+    <div><p class="page-kicker">School configuration</p><h1>Academic setup</h1><p>Manage the calendar, curriculum, class structure, teacher access, grading, and year-end promotion.</p></div>
+    <div class="setup-progress" [attr.aria-label]="setupProgress() + ' of 6 setup areas configured'"><strong>{{ setupProgress() }}/6</strong><span>Configured</span></div>
+  </header>
 
   @if (errorMessage()) {
-    <p class="error-message">{{ errorMessage() }}</p>
+    <p class="error-message" role="alert">{{ errorMessage() }}</p>
+  }
+  @if (loading()) {
+    <div class="setup-state" aria-live="polite"><span class="loading-indicator" aria-hidden="true"></span><p>Loading academic setup...</p></div>
+  }
+  @if (loadErrors().length > 0) {
+    <div class="error-message setup-load-error" role="alert"><span>Could not load: {{ loadErrors().join(', ') }}.</span><button type="button" class="btn btn-secondary" (click)="retryLoad()">Retry</button></div>
   }
 
-  <div class="tab-strip" role="tablist">
-    <button type="button" class="tab" [class.active]="activeTab() === 'structure'" (click)="activeTab.set('structure')">Structure</button>
-    <button type="button" class="tab" [class.active]="activeTab() === 'calendar'" (click)="activeTab.set('calendar')">Calendar</button>
-    <button type="button" class="tab" [class.active]="activeTab() === 'assignments'" (click)="activeTab.set('assignments')">Assignments</button>
-    <button type="button" class="tab" [class.active]="activeTab() === 'grading'" (click)="activeTab.set('grading')">Grading</button>
-    <button type="button" class="tab" [class.active]="activeTab() === 'rollover'" (click)="activeTab.set('rollover')">Rollover</button>
-  </div>
+  <nav class="setup-nav" aria-label="Academic setup areas">
+    <a routerLink="/manage-academic-structure" [class.active]="activeTab() === 'overview'" [attr.aria-current]="activeTab() === 'overview' ? 'page' : null"><strong>Overview</strong><span>Readiness and dependencies</span></a>
+    <a routerLink="/manage-academic-structure/structure" [class.active]="activeTab() === 'structure'" [attr.aria-current]="activeTab() === 'structure' ? 'page' : null"><strong>Structure</strong><span>Grades, subjects, sections</span></a>
+    <a routerLink="/manage-academic-structure/calendar" [class.active]="activeTab() === 'calendar'" [attr.aria-current]="activeTab() === 'calendar' ? 'page' : null"><strong>Calendar</strong><span>Years and terms</span></a>
+    <a routerLink="/manage-academic-structure/assignments" [class.active]="activeTab() === 'assignments'" [attr.aria-current]="activeTab() === 'assignments' ? 'page' : null"><strong>Assignments</strong><span>Teacher class access</span></a>
+    <a routerLink="/manage-academic-structure/grading" [class.active]="activeTab() === 'grading'" [attr.aria-current]="activeTab() === 'grading' ? 'page' : null"><strong>Grading</strong><span>Result bands</span></a>
+    <a routerLink="/manage-academic-structure/rollover" [class.active]="activeTab() === 'rollover'" [attr.aria-current]="activeTab() === 'rollover' ? 'page' : null"><strong>Rollover</strong><span>Preview and promote</span></a>
+  </nav>
+
+  @if (referenceEdit(); as edit) {
+    <section class="reference-editor" aria-labelledby="reference-editor-title">
+      <div><p class="page-kicker">Edit {{ edit.kind }}</p><h2 id="reference-editor-title">{{ edit.label }}</h2></div>
+      <form [formGroup]="referenceEditForm" (ngSubmit)="saveReferenceEdit()">
+        <label>Name<input type="text" formControlName="name" /></label>
+        @if (edit.kind === 'subject') { <label>Code<input type="text" formControlName="code" /></label> }
+        @if (edit.kind === 'term') { <label>Start date<input type="date" formControlName="startDate" /></label><label>End date<input type="date" formControlName="endDate" /></label> }
+        @if (edit.kind === 'section') { <label>Homeroom teacher<select formControlName="homeroomTeacherId"><option [value]="0">None</option>@for (teacher of teachers(); track teacher.id) { <option [value]="teacher.id">{{ teacher.firstName }} {{ teacher.lastName }}</option> }</select></label> }
+        <div class="reference-editor-actions"><button type="submit" [disabled]="savingReference()">{{ savingReference() ? 'Saving...' : 'Save' }}</button><button type="button" class="btn btn-secondary" (click)="cancelReferenceEdit()">Cancel</button></div>
+      </form>
+    </section>
+  }
+
+  @if (activeTab() === 'overview' && !loading()) {
+    <div class="setup-metrics">
+      <div><span>Current year</span><strong>{{ currentYear()?.name || 'Not set' }}</strong></div>
+      <div><span>Grades / sections</span><strong>{{ grades().length }} / {{ sections().length }}</strong></div>
+      <div><span>Subjects</span><strong>{{ subjects().length }}</strong></div>
+      <div><span>Teaching assignments</span><strong>{{ assignments().length }}</strong></div>
+    </div>
+    <div class="overview-grid">
+      <section class="setup-panel" aria-labelledby="readiness-title">
+        <div class="panel-heading"><p class="page-kicker">Dependency order</p><h2 id="readiness-title">Setup readiness</h2><p>Complete foundational records before opening dependent workflows.</p></div>
+        <ol class="readiness-list">
+          <li [class.complete]="currentYear()"><span>1</span><div><strong>Current academic year</strong><small>{{ currentYear() ? currentYear()!.name + ' is active' : 'Create a year and mark it current' }}</small></div><a routerLink="/manage-academic-structure/calendar">Open calendar</a></li>
+          <li [class.complete]="grades().length > 0 && subjects().length > 0"><span>2</span><div><strong>Curriculum structure</strong><small>{{ grades().length }} grades and {{ subjects().length }} subjects configured</small></div><a routerLink="/manage-academic-structure/structure">Open structure</a></li>
+          <li [class.complete]="sections().length > 0"><span>3</span><div><strong>Class sections</strong><small>{{ sections().length }} active sections available for enrollment</small></div><a routerLink="/manage-academic-structure/structure">Open sections</a></li>
+          <li [class.complete]="assignments().length > 0"><span>4</span><div><strong>Teacher assignments</strong><small>{{ assignments().length }} subject and section assignments control workflow access</small></div><a routerLink="/manage-academic-structure/assignments">Open assignments</a></li>
+          <li [class.complete]="gradingBands().length > 0"><span>5</span><div><strong>Grading policy</strong><small>{{ gradingBands().length }} result bands configured</small></div><a routerLink="/manage-academic-structure/grading">Open grading</a></li>
+        </ol>
+      </section>
+      <aside class="setup-panel current-context" aria-labelledby="context-title">
+        <div class="panel-heading"><p class="page-kicker">Current context</p><h2 id="context-title">Operational calendar</h2></div>
+        @if (currentYear(); as year) {
+          <dl><div><dt>Academic year</dt><dd>{{ year.name }}</dd></div><div><dt>Dates</dt><dd>{{ year.startDate }} to {{ year.endDate }}</dd></div><div><dt>Terms</dt><dd>{{ terms().length }}</dd></div><div><dt>Locked terms</dt><dd>{{ terms().filter(term => term.isLocked).length }}</dd></div></dl>
+        } @else {
+          <p class="empty-inline">No current academic year is configured.</p><a class="btn" routerLink="/manage-academic-structure/calendar">Configure calendar</a>
+        }
+      </aside>
+    </div>
+  }
 
   @if (activeTab() === 'structure') {
   <div class="structure-grid">
-    <div class="card">
+    <section class="setup-panel">
       <h2>Grades</h2>
 
       <form [formGroup]="gradeForm" (ngSubmit)="createGrade()">
@@ -27,17 +79,18 @@
         <button type="submit">Add Grade</button>
       </form>
 
-      <ul class="entity-list">
+      <div class="entity-list" role="list">
         @for (grade of grades(); track grade.id) {
-          <li>
-            <span>{{ grade.name }}</span>
+          <div role="listitem">
+            <span><strong>{{ grade.name }}</strong><small>{{ dependencySummary('Grade', grade.id) }}</small></span>
+            <button type="button" class="link-button edit-button" (click)="startGradeEdit(grade)">Edit</button>
             <button type="button" class="link-button" (click)="deleteGrade(grade.id)">Delete</button>
-          </li>
+          </div>
         }
-      </ul>
-    </div>
+      </div>
+    </section>
 
-    <div class="card">
+    <section class="setup-panel">
       <h2>Subjects</h2>
 
       <form [formGroup]="subjectForm" (ngSubmit)="createSubject()">
@@ -52,21 +105,37 @@
         <button type="submit">Add Subject</button>
       </form>
 
-      <ul class="entity-list">
+      <div class="entity-list" role="list">
         @for (subject of subjects(); track subject.id) {
-          <li>
-            <span>{{ subject.name }} ({{ subject.code }})</span>
+          <div role="listitem">
+            <span><strong>{{ subject.name }} ({{ subject.code }})</strong><small>{{ dependencySummary('Subject', subject.id) }}</small></span>
+            <button type="button" class="link-button edit-button" (click)="startSubjectEdit(subject)">Edit</button>
             <button type="button" class="link-button" (click)="deleteSubject(subject.id)">Delete</button>
-          </li>
+          </div>
         }
-      </ul>
-    </div>
+      </div>
+    </section>
+
+    <section class="setup-panel">
+      <h2>Curriculum defaults</h2>
+      <p class="notice">Grade subjects apply to every section; section subjects are added for that class.</p>
+      <div class="curriculum-scope">
+        <label>Grade<select [value]="curriculumGradeId()" (change)="onCurriculumGradeChange($any($event.target).value)"><option [value]="0">Select grade</option>@for (grade of grades(); track grade.id) { <option [value]="grade.id">{{ grade.name }}</option> }</select></label>
+        <label>Section override<select [value]="curriculumSectionId()" [disabled]="!curriculumGradeId()" (change)="onCurriculumSectionChange($any($event.target).value)"><option [value]="0">Grade-wide defaults</option>@for (section of curriculumSections(); track section.id) { <option [value]="section.id">Section {{ section.name }}</option> }</select></label>
+      </div>
+      @if (curriculumError()) { <p class="error-message" role="alert">{{ curriculumError() }}</p> }
+      @if (curriculumMessage()) { <p class="success-message" role="status">{{ curriculumMessage() }}</p> }
+      @if (curriculumGradeId()) {
+        <fieldset class="curriculum-subjects"><legend>Default subjects</legend>@for (subject of subjects(); track subject.id) { <label class="checkbox-row"><input type="checkbox" [checked]="curriculumSubjectIds().includes(subject.id)" (change)="toggleCurriculumSubject(subject.id, $any($event.target).checked)" /> {{ subject.name }} ({{ subject.code }})</label> }</fieldset>
+        <button type="button" [disabled]="curriculumLoading()" (click)="saveCurriculumDefaults()">{{ curriculumLoading() ? 'Saving...' : 'Save defaults' }}</button>
+      }
+    </section>
   </div>
   }
 
   @if (activeTab() === 'calendar') {
   <div class="structure-grid">
-    <div class="card">
+    <section class="setup-panel">
       <h2>Academic Years</h2>
 
       <form [formGroup]="yearForm" (ngSubmit)="createAcademicYear()">
@@ -94,10 +163,10 @@
         Show archived years
       </label>
 
-      <ul class="entity-list">
+      <div class="entity-list" role="list">
         @for (year of academicYears(); track year.id) {
-          <li>
-            <span>{{ year.name }} ({{ year.startDate }} – {{ year.endDate }})</span>
+          <div role="listitem">
+            <span>{{ year.name }} ({{ year.startDate }} to {{ year.endDate }})</span>
             @if (year.isCurrent) {
               <span class="badge badge-success">Current</span>
             }
@@ -107,12 +176,12 @@
             } @else {
               <button type="button" class="link-button" (click)="deleteAcademicYear(year.id)">Archive</button>
             }
-          </li>
+          </div>
         }
-      </ul>
-    </div>
+      </div>
+    </section>
 
-    <div class="card">
+    <section class="setup-panel">
       <h2>Terms</h2>
 
       <form [formGroup]="termForm" (ngSubmit)="createTerm()">
@@ -140,27 +209,28 @@
         <button type="submit">Add Term</button>
       </form>
 
-      <ul class="entity-list">
+      <div class="entity-list" role="list">
         @for (term of terms(); track term.id) {
-          <li>
-            <span>{{ term.academicYearName }} · {{ term.name }} ({{ term.startDate }} – {{ term.endDate }})</span>
+          <div role="listitem">
+            <span><strong>{{ term.academicYearName }} / {{ term.name }}</strong><small>{{ term.startDate }} to {{ term.endDate }} · {{ dependencySummary('Term', term.id) }}</small></span>
             @if (term.isLocked) {
               <span class="badge">Locked</span>
               <button type="button" class="link-button" (click)="unlockTerm(term.id)">Unlock</button>
             } @else {
+              <button type="button" class="link-button edit-button" (click)="startTermEdit(term)">Edit</button>
               <button type="button" class="link-button" (click)="lockTerm(term.id)">Lock</button>
               <button type="button" class="link-button" (click)="deleteTerm(term.id)">Delete</button>
             }
-          </li>
+          </div>
         }
-      </ul>
-    </div>
+      </div>
+    </section>
   </div>
   }
 
   @if (activeTab() === 'structure') {
   <div class="structure-grid">
-    <div class="card">
+    <section class="setup-panel">
       <h2>Sections</h2>
 
       <form [formGroup]="sectionForm" (ngSubmit)="createSection()">
@@ -194,31 +264,31 @@
         Show archived sections
       </label>
 
-      <ul class="entity-list">
+      <div class="entity-list" role="list">
         @for (section of sections(); track section.id) {
-          <li>
+          <div role="listitem">
             <span>
-              {{ section.gradeName }} - Section {{ section.name }}
-              @if (section.homeroomTeacherName) {
-                <span class="badge badge-success">{{ section.homeroomTeacherName }}</span>
-              }
+              <strong>{{ section.gradeName }} - Section {{ section.name }}</strong>
+              @if (section.homeroomTeacherName) { <span class="badge badge-success">{{ section.homeroomTeacherName }}</span> }
+              <small>{{ dependencySummary('Section', section.id) }}</small>
             </span>
             @if (section.isArchived) {
               <span class="badge">Archived</span>
               <button type="button" class="link-button" (click)="restoreSection(section.id)">Restore</button>
             } @else {
+              <button type="button" class="link-button edit-button" (click)="startSectionEdit(section)">Edit</button>
               <button type="button" class="link-button" (click)="deleteSection(section.id)">Archive</button>
             }
-          </li>
+          </div>
         }
-      </ul>
-    </div>
+      </div>
+    </section>
   </div>
   }
 
   @if (activeTab() === 'assignments') {
   <div class="structure-grid">
-    <div class="card">
+    <section class="setup-panel">
       <h2>Teacher Subject Assignments</h2>
       <p class="notice">Formally record which teacher teaches which subject in which section.</p>
 
@@ -253,24 +323,24 @@
         <button type="submit">Add Assignment</button>
       </form>
 
-      <ul class="entity-list">
+      <div class="entity-list" role="list">
         @for (assignment of assignments(); track assignment.id) {
-          <li>
-            <span>{{ assignment.teacherName }} — {{ assignment.subjectName }} — {{ assignment.gradeName }} - {{ assignment.sectionName }}</span>
+          <div role="listitem">
+            <span>{{ assignment.teacherName }} / {{ assignment.subjectName }} / {{ assignment.gradeName }} - {{ assignment.sectionName }}</span>
             <button type="button" class="link-button" (click)="deleteAssignment(assignment.id)">Remove</button>
-          </li>
+          </div>
         }
-      </ul>
-    </div>
+      </div>
+    </section>
   </div>
   }
 
   @if (activeTab() === 'rollover') {
-  <div class="card">
+  <section class="setup-panel rollover-panel">
     <h2>Academic Year Rollover</h2>
     <p class="notice">
       Preview and promote every active student to the next grade/section. Preview never changes
-      data — only "Commit Rollover" does.
+      data. Only Commit rollover changes student placement.
     </p>
 
     <label>
@@ -295,7 +365,9 @@
     </button>
 
     @if (rolloverPreview(); as preview) {
+      <div class="rollover-table-region" tabindex="0" aria-label="Rollover preview">
       <table>
+        <caption>Proposed student placement changes</caption>
         <thead>
           <tr>
             <th>Student</th>
@@ -307,26 +379,34 @@
         <tbody>
           @for (row of preview; track row.studentId) {
             <tr>
-              <td>{{ row.studentName }}</td>
-              <td>{{ row.currentGradeName }}@if (row.currentSectionName) { - {{ row.currentSectionName }} }</td>
-              <td>
-                @if (row.proposedGradeName) {
-                  {{ row.proposedGradeName }}@if (row.proposedSectionName) { - {{ row.proposedSectionName }} }
+              <td data-label="Student">{{ row.studentName }}</td>
+              <td data-label="Current">{{ row.currentGradeName }}@if (row.currentSectionName) { - {{ row.currentSectionName }} }</td>
+              <td data-label="Proposed">
+                @if (!row.excluded) {
+                  <select title="Select destination grade" [attr.aria-label]="'Destination grade for ' + row.studentName" [value]="rolloverOverrides()[row.studentId].gradeId ?? 0" [disabled]="rolloverOverrides()[row.studentId].skip" (change)="onRolloverGradeChange(row, $any($event.target).value)">
+                    <option value="0">Select grade</option>
+                    @for (grade of grades(); track grade.id) { <option [value]="grade.id">{{ grade.name }}</option> }
+                  </select>
+                  <select title="Select destination section" [attr.aria-label]="'Destination section for ' + row.studentName" [value]="rolloverOverrides()[row.studentId].sectionId ?? 0" [disabled]="rolloverOverrides()[row.studentId].skip || !rolloverOverrides()[row.studentId].gradeId" (change)="onRolloverSectionChange(row.studentId, $any($event.target).value)">
+                    <option value="0">No section</option>
+                    @for (section of sectionsForRollover(row); track section.id) { <option [value]="section.id">{{ section.name }}</option> }
+                  </select>
                 } @else {
-                  —
+                  Not available
                 }
               </td>
-              <td>
+              <td data-label="Outcome">
                 @if (row.excluded) {
                   <span class="field-error">Excluded: {{ row.exclusionReason }}</span>
                 } @else {
-                  Will promote
+                  <label class="skip-control"><input type="checkbox" [checked]="rolloverOverrides()[row.studentId].skip" (change)="onRolloverSkipChange(row.studentId, $any($event.target).checked)" /> Skip</label>
                 }
               </td>
             </tr>
           }
         </tbody>
       </table>
+      </div>
 
       <label>
         <input type="checkbox" [checked]="rolloverForce()" (change)="onRolloverForceChange($any($event.target).checked)" />
@@ -337,11 +417,24 @@
         {{ rolloverLoading() ? 'Committing...' : 'Commit Rollover' }}
       </button>
     }
-  </div>
+
+    <h3>Rollover history</h3>
+    @if (rolloverRuns().length === 0) {
+      <p class="empty-inline">No rollover runs recorded yet.</p>
+    } @else {
+      <div class="rollover-table-region" tabindex="0" aria-label="Rollover run history">
+        <table><caption>Completed rollover runs</caption><thead><tr><th>Academic year</th><th>Completed</th><th>Admin</th><th>Result</th><th><span class="visually-hidden">Download</span></th></tr></thead><tbody>
+          @for (run of rolloverRuns(); track run.id) {
+            <tr><td data-label="Academic year">{{ run.academicYearName }}@if (run.isForced) { <span class="badge badge-warning">Forced</span> }</td><td data-label="Completed">{{ run.createdAtUtc }}</td><td data-label="Admin">{{ run.actorName }}</td><td data-label="Result">{{ run.promotedCount }} promoted / {{ run.skippedCount }} skipped</td><td data-label="Download"><button type="button" class="link-button" (click)="downloadRolloverRun(run)">Download CSV</button></td></tr>
+          }
+        </tbody></table>
+      </div>
+    }
+  </section>
   }
 
   @if (activeTab() === 'grading') {
-  <div class="card">
+  <section class="setup-panel grading-panel">
     <h2>Grading Bands</h2>
     <p class="notice">
       Defines the result label shown for a given marks percentage (the highest matching band wins).
@@ -354,9 +447,9 @@
       <p class="success-message">{{ gradingBandsMessage() }}</p>
     }
 
-    <ul class="entity-list">
+    <div class="entity-list" role="list">
       @for (band of gradingBands(); track $index) {
-        <li>
+        <div role="listitem">
           <input type="text" [value]="band.label" (input)="updateBandLabel($index, $any($event.target).value)" placeholder="Label" />
           <input
             type="number"
@@ -365,12 +458,12 @@
             placeholder="Min %"
           />
           <button type="button" class="link-button" (click)="removeBand($index)">Remove</button>
-        </li>
+        </div>
       }
-    </ul>
+    </div>
 
     <button type="button" (click)="addBand()">Add Band</button>
     <button type="button" (click)="saveGradingBands()">Save Grading Bands</button>
-  </div>
+  </section>
   }
 </section>

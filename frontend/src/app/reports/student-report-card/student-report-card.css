@@ -1,8 +1,86 @@
+.report-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.report-toolbar label {
+  width: min(100%, 22rem);
+}
+
 .report-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+  color: var(--color-neutral-600);
+  font-size: 0.85rem;
+}
+
+.report-status {
+  display: inline-block;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  color: var(--color-warning-700);
+  background: var(--color-warning-50);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.report-status[data-status='Issued'] {
+  color: var(--color-success-700);
+  background: var(--color-success-50);
+}
+
+.period-dates {
+  margin: 0;
+  color: var(--color-neutral-600);
+}
+
+.report-label { margin: 0; color: var(--color-secondary-600); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; }
+.report-actions { display: flex; gap: 0.65rem; flex-wrap: wrap; justify-content: flex-end; }
+.profile-details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: #fff; border: 1px solid var(--color-neutral-200); border-radius: 8px; margin: 1.25rem 0; }
+.profile-details > div { padding: 0.8rem 1rem; border-right: 1px solid var(--color-neutral-200); }
+.profile-details > div:last-child { border-right: 0; }
+.profile-details span, .profile-details strong { display: block; }
+.profile-details span { color: var(--color-neutral-600); font-size: 0.78rem; text-transform: uppercase; }
+.profile-details strong { color: var(--color-primary-700); margin-top: 0.15rem; }
+
+.issuance-note {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.7fr) minmax(0, 1.3fr);
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border-left: 4px solid var(--color-success-700);
+  background: var(--color-success-50);
+}
+
+.issuance-note strong,
+.issuance-note span {
+  display: block;
+}
+
+.issuance-note span {
+  color: var(--color-neutral-600);
+  font-size: 0.8rem;
+}
+
+.issuance-note p {
+  margin: 0;
+  white-space: pre-wrap;
 }
 
 .summary-grid {
@@ -38,6 +116,116 @@
   border-collapse: collapse;
 }
 
+.table-shell { overflow-x: auto; border: 1px solid var(--color-neutral-200); border-radius: 8px; }
+
+.report-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 0.75rem;
+  color: var(--color-neutral-500);
+  font-size: 0.75rem;
+}
+
+.issue-panel,
+.history-panel {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.issue-panel > div > p:last-child {
+  color: var(--color-neutral-600);
+}
+
+.issue-panel label span {
+  color: var(--color-neutral-500);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.issue-panel label small {
+  color: var(--color-neutral-500);
+  text-align: right;
+}
+
+.history-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.history-heading span {
+  color: var(--color-neutral-600);
+  font-size: 0.82rem;
+}
+
+.history-list {
+  border-top: 1px solid var(--color-neutral-200);
+}
+
+.history-list button {
+  width: 100%;
+  justify-content: space-between;
+  padding: 0.8rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--color-neutral-200);
+  border-radius: 0;
+  color: var(--color-primary-700);
+  background: transparent;
+  text-align: left;
+}
+
+.history-list button:hover,
+.history-list button.current {
+  background: var(--color-neutral-50);
+}
+
+.history-list strong,
+.history-list small {
+  display: block;
+}
+
+.history-list small {
+  color: var(--color-neutral-600);
+  font-weight: 400;
+}
+
+.recovery-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+@media (max-width: 720px) {
+  .report-toolbar,
+  .report-header { align-items: flex-start; flex-direction: column; }
+  .report-actions { width: 100%; justify-content: flex-start; }
+  .profile-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .profile-details > div { border-bottom: 1px solid var(--color-neutral-200); }
+  .profile-details > div:nth-child(2) { border-right: 0; }
+  .profile-details > div:nth-last-child(-n + 2) { border-bottom: 0; }
+  .table-shell { overflow: visible; border: 0; }
+  .report-table thead { display: none; }
+  .report-table,
+  .report-table tbody,
+  .report-table tr,
+  .report-table td { display: block; width: 100%; }
+  .report-table tr { background: #fff; border: 1px solid var(--color-neutral-200); border-radius: 8px; margin-bottom: 0.65rem; overflow: hidden; }
+  .report-table td { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 0.75rem; }
+  .report-table td::before { content: attr(data-label); color: var(--color-neutral-600); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+  .issuance-note { grid-template-columns: 1fr; }
+  .report-footer,
+  .history-heading,
+  .recovery-state { align-items: flex-start; flex-direction: column; }
+  .history-list button { align-items: flex-start; flex-direction: column; }
+}
+
 .report-table th,
 .report-table td {
   text-align: left;
@@ -48,5 +236,17 @@
 @media print {
   .no-print {
     display: none !important;
+  }
+
+  .report-card-page { max-width: none; padding: 0; }
+  .report-card { color: #000; }
+  .table-shell { border-color: #999; }
+  .report-card::before {
+    content: 'StudentConnect';
+    display: block;
+    margin-bottom: 1rem;
+    font-family: var(--font-heading);
+    font-size: 1.1rem;
+    font-weight: 700;
   }
 }

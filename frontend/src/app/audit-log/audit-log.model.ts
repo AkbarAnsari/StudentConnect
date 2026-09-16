@@ -8,3 +8,14 @@ export interface AuditLog {
   entityId: string;
   details: string | null;
 }
+
+export interface AuditLogFilters {
+  page: number;
+  pageSize: number;
+  entityType: string;
+  action: string;
+  username: string;
+  query: string;
+  fromUtc: string;
+  toUtc: string;
+}

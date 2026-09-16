@@ -2,11 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { LearningMaterial, LearningMaterialFilter } from './learning-material.model';
+import { LearningMaterial, LearningMaterialFilter, LearningMaterialVersion } from './learning-material.model';
 
-// LearningMaterialsComponent -> LearningMaterialsService -> HttpClient -> ASP.NET Core API
-// -> SQL Server (metadata) + local file storage (actual file). Angular never talks to
-// either store directly, and never knows whether files live on disk or, later, in Azure Blob Storage.
 @Injectable({ providedIn: 'root' })
 export class LearningMaterialsService {
   private readonly http = inject(HttpClient);
@@ -45,7 +42,39 @@ export class LearningMaterialsService {
     return this.http.post<LearningMaterial>(this.baseUrl, formData);
   }
 
+  getVersions(id: number): Observable<LearningMaterialVersion[]> {
+    return this.http.get<LearningMaterialVersion[]>(`${this.baseUrl}/${id}/versions`);
+  }
+
+  replaceFile(id: number, formData: FormData): Observable<LearningMaterial> {
+    return this.http.post<LearningMaterial>(`${this.baseUrl}/${id}/replace-file`, formData);
+  }
+
+  downloadVersion(materialId: number, versionId: number): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${materialId}/versions/${versionId}/download`, { responseType: 'blob' });
+  }
+
   delete(id: number): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  }
+
+  publish(id: number): Observable<LearningMaterial> {
+    return this.http.post<LearningMaterial>(`${this.baseUrl}/${id}/publish`, {});
+  }
+
+  schedule(id: number, scheduledForUtc: string): Observable<LearningMaterial> {
+    return this.http.post<LearningMaterial>(`${this.baseUrl}/${id}/schedule`, { scheduledForUtc });
+  }
+
+  close(id: number): Observable<LearningMaterial> {
+    return this.http.post<LearningMaterial>(`${this.baseUrl}/${id}/close`, {});
+  }
+
+  archive(id: number): Observable<LearningMaterial> {
+    return this.http.post<LearningMaterial>(`${this.baseUrl}/${id}/archive`, {});
+  }
+
+  reopen(id: number): Observable<LearningMaterial> {
+    return this.http.post<LearningMaterial>(`${this.baseUrl}/${id}/reopen`, {});
   }
 }

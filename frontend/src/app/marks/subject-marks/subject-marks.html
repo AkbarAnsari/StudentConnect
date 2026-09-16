@@ -1,5 +1,5 @@
-<section class="page">
-  <a class="back-link" [routerLink]="['/students', studentId, 'marks']">← Back to My Marks</a>
+<section class="page page-wide subject-marks-page">
+  <a class="back-link" [routerLink]="['/students', studentId, 'marks']">Back to published results</a>
 
   @if (state().loading) {
     <p class="loading">Loading marks...</p>
@@ -8,26 +8,31 @@
       Unable to load marks. Please check whether the StudentConnect API is running.
     </p>
   } @else if (state().records.length === 0) {
-    <p class="empty">No marks recorded for this subject yet.</p>
+    <p class="empty">No published results are available for this subject yet.</p>
   } @else {
-    <h1>{{ state().records[0].subjectName }} Marks</h1>
+    <header><p class="page-kicker">Published results</p><h1>{{ state().records[0].subjectName }}</h1><p>{{ state().records.length }} released {{ state().records.length === 1 ? 'assessment' : 'assessments' }}</p></header>
+    <div class="table-region" tabindex="0" aria-label="Subject assessment results">
     <table class="marks-table">
+      <caption>Published assessment scores for {{ state().records[0].subjectName }}</caption>
       <thead>
         <tr>
           <th>Assessment</th>
           <th>Date</th>
           <th>Score</th>
+          <th>Percentage</th>
         </tr>
       </thead>
       <tbody>
         @for (record of state().records; track record.id) {
           <tr>
-            <td>{{ record.assessmentTitle }}</td>
-            <td>{{ record.assessmentDate }}</td>
-            <td>{{ record.marksObtained }} / {{ record.maximumMarks }}</td>
+            <td data-label="Assessment"><strong>{{ record.assessmentTitle }}</strong></td>
+            <td data-label="Date">{{ record.assessmentDate }}</td>
+            <td data-label="Score">{{ record.marksObtained }} / {{ record.maximumMarks }}</td>
+            <td data-label="Percentage"><span class="badge" [class.badge-success]="record.marksObtained * 100 / record.maximumMarks >= 40" [class.badge-danger]="record.marksObtained * 100 / record.maximumMarks < 40">{{ record.marksObtained * 100 / record.maximumMarks | number:'1.0-0' }}%</span></td>
           </tr>
         }
       </tbody>
     </table>
+    </div>
   }
 </section>

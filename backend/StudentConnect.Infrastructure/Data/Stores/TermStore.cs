@@ -54,6 +54,12 @@ public class TermStore(Database db)
                 p.AddWithValue("schoolId", schoolId);
             });
 
+    public async Task<Term?> GetByIdAsync(int id, int schoolId) =>
+        await db.QuerySingleOrDefaultAsync(
+            $"""{SelectWithYear} WHERE t."Id" = @id AND ay."SchoolId" = @schoolId""",
+            p => { p.AddWithValue("id", id); p.AddWithValue("schoolId", schoolId); },
+            Map);
+
     public async Task<int> CreateAsync(Term term) =>
         await db.ExecuteScalarAsync<int>(
             """
@@ -71,6 +77,11 @@ public class TermStore(Database db)
 
     public async Task DeleteAsync(int id) =>
         await db.ExecuteAsync("""DELETE FROM "Terms" WHERE "Id" = @id""", p => p.AddWithValue("id", id));
+
+    public async Task UpdateAsync(int id, string name, DateOnly startDate, DateOnly endDate) =>
+        await db.ExecuteAsync(
+            """UPDATE "Terms" SET "Name" = @name, "StartDate" = @startDate, "EndDate" = @endDate WHERE "Id" = @id""",
+            p => { p.AddWithValue("id", id); p.AddWithValue("name", name); p.AddWithValue("startDate", startDate); p.AddWithValue("endDate", endDate); });
 
     public async Task<bool> IsLockedAsync(int id) =>
         await db.ExecuteScalarAsync<bool>("""SELECT "IsLocked" FROM "Terms" WHERE "Id" = @id""", p => p.AddWithValue("id", id));

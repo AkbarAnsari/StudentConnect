@@ -1,0 +1,18 @@
+<section class="page page-narrow">
+  <a class="back-link" routerLink="/teacher-homework">Back to homework</a>
+  <header><p class="page-kicker">Teaching content</p><h1>Edit homework</h1><p>Draft details can be corrected before learners receive the work.</p></header>
+
+  @if (errorMessage()) { <p class="error-message" role="alert">{{ errorMessage() }}</p> }
+
+  @if (homework(); as homework) {
+    <div class="notice"><strong>{{ homework.subjectName }}</strong> / {{ homework.gradeName }} - Section {{ homework.sectionName || 'All' }}</div>
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <label>Title<input type="text" formControlName="title" />@if (form.controls.title.invalid && form.controls.title.touched) { <span class="field-error">Title is required.</span> }</label>
+      <label>Description<textarea formControlName="description" rows="4"></textarea>@if (form.controls.description.invalid && form.controls.description.touched) { <span class="field-error">Description is required.</span> }</label>
+      <label>Due date<input type="date" formControlName="dueDate" /></label>
+      <div class="form-actions"><a class="btn btn-secondary" routerLink="/teacher-homework">Cancel</a><button type="submit" [disabled]="submitting() || form.pristine">{{ submitting() ? 'Saving...' : 'Save changes' }}</button></div>
+    </form>
+  } @else {
+    <p class="loading">Loading homework...</p>
+  }
+</section>

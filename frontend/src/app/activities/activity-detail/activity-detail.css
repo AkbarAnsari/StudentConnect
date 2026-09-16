@@ -16,9 +16,6 @@ h1 {
 }
 
 .details {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.35rem 1rem;
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -26,13 +23,16 @@ h1 {
   margin: 1rem 0 1.5rem;
 }
 
-.details dt {
-  font-weight: 600;
-  color: #6b7280;
+.detail-row {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  gap: 1rem;
+  padding: 0.25rem 0;
 }
 
-.details dd {
-  margin: 0;
+.detail-label {
+  font-weight: 600;
+  color: #6b7280;
 }
 
 .register-button {
@@ -49,6 +49,10 @@ h1 {
 .register-button:hover {
   background: #1d4ed8;
 }
+
+.register-button:disabled { opacity: 0.55; cursor: not-allowed; }
+.consent-check { display: flex; align-items: center; gap: 0.5rem; color: #475569; font-weight: 600; margin-bottom: 0.8rem; }
+.consent-check input { width: 1rem; height: 1rem; }
 
 .cancel-button {
   background: #fff;

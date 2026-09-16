@@ -1,10 +1,11 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, map, of, startWith } from 'rxjs';
 import { triggerBlobDownload } from '../../shared/download.util';
+import { AuthService } from '../../auth/auth.service';
 import { Homework, HomeworkSubmission } from '../homework.model';
 import { HomeworkService, HomeworkSubmissionService } from '../homework.service';
 
@@ -27,10 +28,10 @@ export class HomeworkDetail {
   private readonly fb = inject(FormBuilder);
   private readonly homeworkService = inject(HomeworkService);
   private readonly submissionService = inject(HomeworkSubmissionService);
+  private readonly authService = inject(AuthService);
 
   protected readonly studentId = Number(this.route.snapshot.paramMap.get('id'));
   protected readonly homeworkId = Number(this.route.snapshot.paramMap.get('homeworkId'));
-
   protected readonly state = toSignal(
     this.homeworkService.getHomeworkById(this.homeworkId).pipe(
       map((homework): HomeworkDetailState => ({ loading: false, error: false, homework })),
@@ -38,6 +39,11 @@ export class HomeworkDetail {
       startWith(LOADING_STATE),
     ),
     { initialValue: LOADING_STATE },
+  );
+  protected readonly canSubmit = computed(() =>
+    this.authService.role() === 'Student' &&
+    this.authService.currentUser()?.studentId === this.studentId &&
+    this.state().homework?.status !== 'Closed',
   );
 
   protected readonly existingSubmission = signal<HomeworkSubmission | null>(null);

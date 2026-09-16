@@ -1,6 +1,6 @@
 <section class="page page-narrow">
-  <a class="back-link" routerLink="/teacher-materials">← Back to Learning Materials</a>
-  <h1>Upload Learning Material</h1>
+  <a class="back-link" routerLink="/teacher-materials">Back to learning materials</a>
+  <header><p class="page-kicker">Teaching content</p><h1>Upload learning material</h1><p>Share a class resource now, schedule it, or keep it in Draft.</p></header>
 
   @if (errorMessage()) {
     <p class="error-message">{{ errorMessage() }}</p>
@@ -8,44 +8,20 @@
 
   <form [formGroup]="form" (ngSubmit)="onSubmit()">
     <label>
-      Subject
-      <select formControlName="subjectId">
-        <option [value]="0">Select a subject</option>
-        @for (subject of subjects(); track subject.id) {
-          <option [value]="subject.id">{{ subject.name }}</option>
+      Assigned class
+      <select formControlName="assignmentId" [disabled]="loadingAssignments()">
+        <option [value]="0">Select a class</option>
+        @for (assignment of assignments(); track assignment.id) {
+          <option [value]="assignment.id">{{ assignment.subjectName }} / {{ assignment.gradeName }} - Section {{ assignment.sectionName }}</option>
         }
       </select>
-      @if (form.controls.subjectId.invalid && form.controls.subjectId.touched) {
-        <span class="field-error">Subject is required.</span>
+      @if (form.controls.assignmentId.invalid && form.controls.assignmentId.touched) {
+        <span class="field-error">Assigned class is required.</span>
       }
     </label>
 
-    <label>
-      Grade
-      <select formControlName="gradeId">
-        <option [value]="0">Select a grade</option>
-        @for (grade of grades(); track grade.id) {
-          <option [value]="grade.id">{{ grade.name }}</option>
-        }
-      </select>
-      @if (form.controls.gradeId.invalid && form.controls.gradeId.touched) {
-        <span class="field-error">Grade is required.</span>
-      }
-    </label>
-
-    @if (authService.role() === 'Admin') {
-      <label>
-        Teacher
-        <select formControlName="teacherId">
-          <option [value]="0">Select a teacher</option>
-          @for (teacher of teachers(); track teacher.id) {
-            <option [value]="teacher.id">{{ teacher.firstName }} {{ teacher.lastName }}</option>
-          }
-        </select>
-        @if (form.controls.teacherId.invalid && form.controls.teacherId.touched) {
-          <span class="field-error">Teacher is required.</span>
-        }
-      </label>
+    @if (!loadingAssignments() && assignments().length === 0) {
+      <p class="notice">No class assignments are configured. Create a Teacher Subject Assignment before uploading material.</p>
     }
 
     <label>
@@ -65,6 +41,14 @@
     </label>
 
     <label>
+      Topic
+      <input type="text" formControlName="topic" placeholder="e.g. Linear equations" />
+      @if (form.controls.topic.invalid && form.controls.topic.touched) {
+        <span class="field-error">Topic is required.</span>
+      }
+    </label>
+
+    <label>
       File
       <input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg" (change)="onFileSelected($event)" />
       @if (fileError()) {
@@ -72,8 +56,15 @@
       }
     </label>
 
+    @if (selectedFile(); as file) {
+      <div class="file-summary"><strong>{{ file.name }}</strong><span>{{ (file.size / 1024 / 1024).toFixed(1) }} MB</span></div>
+    }
+
+    <label>Release<select formControlName="releaseMode"><option value="Draft">Save as Draft</option><option value="Published">Publish now</option><option value="Scheduled">Schedule release</option></select></label>
+    @if (form.controls.releaseMode.value === 'Scheduled') { <label>Release date and time<input type="datetime-local" formControlName="scheduledFor" /></label> }
+
     <button type="submit" [disabled]="submitting()">
-      {{ submitting() ? 'Uploading...' : 'Upload' }}
+      {{ submitting() ? 'Uploading...' : form.controls.releaseMode.value === 'Published' ? 'Upload and publish' : form.controls.releaseMode.value === 'Scheduled' ? 'Upload and schedule' : 'Upload draft' }}
     </button>
   </form>
 </section>

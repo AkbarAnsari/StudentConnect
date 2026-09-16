@@ -17,4 +17,15 @@ public class ActivityRegistration
     // Set by the server at registration time — never trusted from the client.
     public DateTime RegistrationDate { get; set; }
     public ActivityRegistrationStatus Status { get; set; }
+    public bool ConsentConfirmed { get; set; }
+    public DateTime? CheckedInAtUtc { get; set; }
+    public int? CheckedInByUserId { get; set; }
+    public string FeeStatus { get; set; } = "NotApplicable";
+    public DateTime? PaidAtUtc { get; set; }
+    public string? PaymentReference { get; set; }
+    public string? ConsentDocumentFileName { get; set; }
+    public string? ConsentDocumentStoredFileName { get; set; }
+    public string? ConsentDocumentContentType { get; set; }
+    public long? ConsentDocumentSize { get; set; }
+    public DateTime? ConsentDocumentUploadedAtUtc { get; set; }
 }

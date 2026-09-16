@@ -1,47 +1,54 @@
-<section class="page page-wide">
+<section class="page page-wide audit-page">
   <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
-  <h1>Audit Log</h1>
-
-  <div class="card">
-    <label>
-      Entity Type
-      <select (change)="onFilterChange($any($event.target).value)">
-        <option value="">All</option>
-        @for (type of entityTypes; track type) {
-          <option [value]="type">{{ type }}</option>
-        }
-      </select>
-    </label>
-
-    @if (loadError()) {
-      <p class="error-message">Unable to load audit log entries. Please check whether the StudentConnect API is running.</p>
-    } @else if (logs().length === 0) {
-      <p>No audit log entries yet.</p>
-    } @else {
-      <table class="audit-table">
-        <thead>
-          <tr>
-            <th>Time (UTC)</th>
-            <th>User</th>
-            <th>Role</th>
-            <th>Action</th>
-            <th>Entity</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (log of logs(); track log.id) {
-            <tr>
-              <td>{{ log.timestampUtc | date: 'yyyy-MM-dd HH:mm:ss' }}</td>
-              <td>{{ log.username }}</td>
-              <td>{{ log.role }}</td>
-              <td>{{ log.action }}</td>
-              <td>{{ log.entityType }} #{{ log.entityId }}</td>
-              <td>{{ log.details }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    }
+  <div class="page-header">
+    <div><p class="eyebrow">System record</p><h1>Audit Log</h1><p>Search immutable records of important school operations.</p></div>
+    <button type="button" class="btn btn-secondary" (click)="exportCsv()">Export CSV</button>
   </div>
+
+  @if (exportError()) { <p class="error-message" role="alert">{{ exportError() }}</p> }
+
+  <form class="filter-band" (ngSubmit)="applyFilters()">
+    <label>Entity type<select name="entityType" [ngModel]="entityType()" (ngModelChange)="entityType.set($event)"><option value="">All entities</option>@for (type of entityTypes; track type) { <option [value]="type">{{ type }}</option> }</select></label>
+    <label>Action<select name="action" [ngModel]="action()" (ngModelChange)="action.set($event)"><option value="">All actions</option>@for (item of actions; track item) { <option [value]="item">{{ item }}</option> }</select></label>
+    <label>User<input type="search" name="username" [ngModel]="username()" (ngModelChange)="username.set($event)" placeholder="Username contains" /></label>
+    <label>Entity ID or details<input type="search" name="query" [ngModel]="query()" (ngModelChange)="query.set($event)" placeholder="Search audit details" /></label>
+    <label>From (UTC)<input type="date" name="fromDate" [ngModel]="fromDate()" (ngModelChange)="fromDate.set($event)" /></label>
+    <label>To (UTC)<input type="date" name="toDate" [ngModel]="toDate()" (ngModelChange)="toDate.set($event)" /></label>
+    <div class="filter-actions"><button type="button" class="btn btn-secondary" (click)="resetFilters()">Reset</button><button type="submit">Apply filters</button></div>
+  </form>
+
+  @if (loading()) {
+    <p class="loading" aria-live="polite">Loading audit entries...</p>
+  } @else if (loadError()) {
+    <div class="error-message recovery-state" role="alert"><span>{{ loadError() }}</span><button type="button" class="btn btn-secondary" (click)="reload()">Retry</button></div>
+  } @else {
+    <div class="result-bar"><p>Showing {{ resultStart() }}–{{ resultEnd() }} of {{ totalCount() }} entries</p><label>Rows<select [ngModel]="pageSize()" (ngModelChange)="pageSize.set($event); applyFilters()"><option [ngValue]="25">25</option><option [ngValue]="50">50</option><option [ngValue]="100">100</option></select></label></div>
+    @if (logs().length === 0) {
+      <p class="empty">No audit entries match these filters.</p>
+    } @else {
+      <div class="table-shell"><table class="audit-table">
+        <thead><tr><th>Time (UTC)</th><th>User</th><th>Action</th><th>Entity</th><th>Details</th><th><span class="visually-hidden">Open</span></th></tr></thead>
+        <tbody>@for (log of logs(); track log.id) {
+          <tr>
+            <td data-label="Time (UTC)">{{ log.timestampUtc | date: 'yyyy-MM-dd HH:mm:ss' : 'UTC' }}</td>
+            <td data-label="User"><strong>{{ log.username }}</strong><span>{{ log.role }}</span></td>
+            <td data-label="Action"><span class="action-badge">{{ log.action }}</span></td>
+            <td data-label="Entity"><strong>{{ log.entityType }}</strong><span>#{{ log.entityId }}</span></td>
+            <td data-label="Details" class="details-cell">{{ log.details || 'No additional details' }}</td>
+            <td data-label="Open"><button type="button" class="btn btn-secondary compact" [disabled]="detailLoading()" (click)="openDetail(log.id)">View</button></td>
+          </tr>
+        }</tbody>
+      </table></div>
+      <nav class="pagination" aria-label="Audit log pages"><button type="button" class="btn btn-secondary" [disabled]="page() === 1" (click)="goToPage(page() - 1)">Previous</button><span>Page {{ page() }} of {{ totalPages() }}</span><button type="button" class="btn btn-secondary" [disabled]="page() === totalPages()" (click)="goToPage(page() + 1)">Next</button></nav>
+    }
+  }
 </section>
+
+@if (selected(); as item) {
+  <button type="button" class="drawer-backdrop" aria-label="Close audit detail" (click)="closeDetail()"></button>
+  <aside class="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="audit-detail-title">
+    <div class="drawer-header"><div><p class="eyebrow">Immutable event</p><h2 id="audit-detail-title">{{ item.action }} {{ item.entityType }}</h2></div><button type="button" class="close-button" aria-label="Close audit detail" (click)="closeDetail()">×</button></div>
+    <dl><div><dt>Time</dt><dd>{{ item.timestampUtc | date: 'medium' : 'UTC' }} UTC</dd></div><div><dt>User</dt><dd>{{ item.username }} ({{ item.role }})</dd></div><div><dt>Entity</dt><dd>{{ item.entityType }} #{{ item.entityId }}</dd></div><div><dt>Action</dt><dd>{{ item.action }}</dd></div></dl>
+    <section class="detail-content"><h3>Details</h3><pre>{{ item.details || 'No additional details were recorded.' }}</pre></section>
+  </aside>
+}

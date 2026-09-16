@@ -16,6 +16,12 @@ public class AssessmentDto
     public int? TermId { get; set; }
     public string? TermName { get; set; }
     public decimal Weight { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public DateTime? PublishedAtUtc { get; set; }
+    public int? TeacherSubjectAssignmentId { get; set; }
+    public int? SectionId { get; set; }
+    public string? SectionName { get; set; }
+    public string? GradeName { get; set; }
 
     public static AssessmentDto FromEntity(Assessment assessment) => new()
     {
@@ -30,6 +36,12 @@ public class AssessmentDto
         TermId = assessment.TermId,
         TermName = assessment.Term?.Name,
         Weight = assessment.Weight,
+        Status = assessment.Status.ToString(),
+        PublishedAtUtc = assessment.PublishedAtUtc,
+        TeacherSubjectAssignmentId = assessment.TeacherSubjectAssignmentId,
+        SectionId = assessment.TeacherSubjectAssignment?.SectionId,
+        SectionName = assessment.TeacherSubjectAssignment?.Section?.Name,
+        GradeName = assessment.TeacherSubjectAssignment?.Section?.Grade?.Name,
     };
 }
 
@@ -43,6 +55,8 @@ public class AssessmentCreateDto
     public string Description { get; set; } = string.Empty;
     public int? TermId { get; set; }
     public decimal Weight { get; set; } = 1.0m;
+    public bool Publish { get; set; }
+    public int? TeacherSubjectAssignmentId { get; set; }
 }
 
 public class AssessmentUpdateDto

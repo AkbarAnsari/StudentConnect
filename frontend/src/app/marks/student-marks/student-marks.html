@@ -1,6 +1,7 @@
-<section class="page">
-  <a class="back-link" [routerLink]="['/students', studentId]">← Back to Profile</a>
-  <h1>My Marks</h1>
+<section class="page page-wide marks-page">
+  <a class="back-link" [routerLink]="['/students', studentId]">Back to student record</a>
+  <app-student-record-nav [studentId]="studentId" />
+  <header><p class="page-kicker">Academic record</p><h1>Published results</h1><p>Review released marks and open subject-level results.</p></header>
 
   @if (state().loading) {
     <p class="loading">Loading marks...</p>
@@ -9,9 +10,12 @@
       Unable to load marks. Please check whether the StudentConnect API is running.
     </p>
   } @else if (state().summary.length === 0) {
-    <p class="empty">No marks recorded yet.</p>
+    <p class="empty">No published results are available yet.</p>
   } @else {
+    <div class="metric-grid"><div><span>Overall result</span><strong>{{ overallPercentage(state().summary) }}%</strong></div><div><span>Subjects</span><strong>{{ state().summary.length }}</strong></div><div><span>Published assessments</span><strong>{{ totalAssessments(state().summary) }}</strong></div></div>
+    <div class="table-region" tabindex="0" aria-label="Published results by subject">
     <table class="marks-table">
+      <caption>Published assessment results by subject</caption>
       <thead>
         <tr>
           <th>Subject</th>
@@ -23,23 +27,16 @@
       <tbody>
         @for (subject of state().summary; track subject.subjectId) {
           <tr>
-            <td>
+            <td data-label="Subject">
               <a [routerLink]="['/students', studentId, 'marks', subject.subjectId]">{{ subject.subjectName }}</a>
             </td>
-            <td>{{ subject.assessments }}</td>
-            <td>{{ subject.percentage }}%</td>
-            <td>{{ subject.resultCategory }}</td>
+            <td data-label="Assessments">{{ subject.assessments }}</td>
+            <td data-label="Average"><strong>{{ subject.percentage }}%</strong></td>
+            <td data-label="Result"><span class="badge" [class.badge-success]="subject.percentage >= 40" [class.badge-danger]="subject.percentage < 40">{{ subject.resultCategory }}</span></td>
           </tr>
         }
       </tbody>
-      <tfoot>
-        <tr>
-          <td>Overall</td>
-          <td></td>
-          <td>{{ overallPercentage(state().summary) }}%</td>
-          <td></td>
-        </tr>
-      </tfoot>
     </table>
+    </div>
   }
 </section>

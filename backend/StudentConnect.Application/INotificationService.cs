@@ -11,4 +11,24 @@ public interface INotificationService
     Task NotifyAsync(int userId, string title, string message, NotificationType type);
 
     Task NotifyManyAsync(IEnumerable<int> userIds, string title, string message, NotificationType type);
+
+    Task NotifyTrackedAsync(int userId, string title, string message, NotificationType type, string? actionUrl, string priority, int? announcementId) =>
+        NotifyAsync(userId, title, message, type);
+
+    Task NotifyManyTrackedAsync(IEnumerable<int> userIds, string title, string message, NotificationType type, string? actionUrl, string priority, int? announcementId) =>
+        NotifyManyAsync(userIds, title, message, type);
+
+    async Task<IReadOnlyList<int>> NotifyManyForHomeworkAsync(IEnumerable<int> userIds, string title, string message, NotificationType type, string actionUrl, int homeworkId)
+    {
+        var ids = userIds.Distinct().ToList();
+        await NotifyManyAsync(ids, title, message, type);
+        return ids;
+    }
+
+    async Task<IReadOnlyList<int>> NotifyManyForLearningMaterialAsync(IEnumerable<int> userIds, string title, string message, NotificationType type, string actionUrl, int learningMaterialId)
+    {
+        var ids = userIds.Distinct().ToList();
+        await NotifyManyAsync(ids, title, message, type);
+        return ids;
+    }
 }

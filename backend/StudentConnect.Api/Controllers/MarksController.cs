@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
+using System.Data;
+using System.Text;
 using StudentConnect.Application;
 using StudentConnect.Domain;
 using StudentConnect.Infrastructure.Data;
@@ -40,7 +42,7 @@ public class MarksController(
             return NotFound(new { message = "Student not found." });
         }
 
-        var studentMarks = await marks.GetByStudentAsync(studentId);
+        var studentMarks = await marks.GetByStudentAsync(studentId, publishedOnly: !currentUser.IsTeacherOrAdmin);
         return Ok(studentMarks.Select(MarkRecordDto.FromEntity));
     }
 
@@ -58,7 +60,7 @@ public class MarksController(
             return NotFound(new { message = "Student not found." });
         }
 
-        var studentMarks = await marks.GetByStudentAndSubjectAsync(studentId, subjectId);
+        var studentMarks = await marks.GetByStudentAndSubjectAsync(studentId, subjectId, publishedOnly: !currentUser.IsTeacherOrAdmin);
         return Ok(studentMarks.Select(MarkRecordDto.FromEntity));
     }
 
@@ -77,7 +79,7 @@ public class MarksController(
         }
 
         // Percentage and result category are calculated here, on the backend — never in Angular.
-        var summary = await marks.GetSummaryAsync(studentId);
+        var summary = await marks.GetSummaryAsync(studentId, publishedOnly: !currentUser.IsTeacherOrAdmin);
         var bands = await gradingBands.GetForSchoolAsync(schoolId);
         foreach (var item in summary)
         {
@@ -91,10 +93,11 @@ public class MarksController(
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<IEnumerable<AssessmentResultDto>>> GetAssessmentResults(int assessmentId)
     {
-        if (currentTenant.SchoolId is not { } schoolId || !await assessments.ExistsAsync(assessmentId, schoolId))
+        if (currentTenant.SchoolId is not { } schoolId || await assessments.GetByIdAsync(assessmentId, schoolId) is not { } assessment)
         {
             return NotFound(new { message = "Assessment not found." });
         }
+        if (!CanManageAssessment(assessment)) return Forbid();
 
         var results = await marks.GetAssessmentResultsAsync(assessmentId);
         return Ok(results);
@@ -109,6 +112,8 @@ public class MarksController(
         {
             return Forbid();
         }
+        if (currentUser.UserId is not { } changedByUserId) return Forbid();
+        if (dto.Comment?.Length > 1000) return BadRequest(new { message = "Comment cannot exceed 1000 characters." });
 
         if (!await students.ExistsAsync(dto.StudentId, schoolId))
         {
@@ -119,6 +124,20 @@ public class MarksController(
         if (assessment is null)
         {
             return BadRequest(new { message = "Assessment does not exist." });
+        }
+        if (!CanManageAssessment(assessment)) return Forbid();
+
+        if (assessment.Status == AssessmentStatus.Published)
+        {
+            return Conflict(new { message = "Reopen this assessment to Draft before changing marks." });
+        }
+
+        var sectionIds = await students.GetSectionIdsAsync([dto.StudentId]);
+        if (!sectionIds.TryGetValue(dto.StudentId, out var sectionId) || sectionId is null ||
+            (assessment.TeacherSubjectAssignment?.SectionId is { } assessmentSectionId && sectionId != assessmentSectionId) ||
+            !await students.AreActiveStudentsEnrolledInClassAsync([dto.StudentId], sectionId.Value, assessment.SubjectId, schoolId))
+        {
+            return BadRequest(new { message = "Student is not actively enrolled in this assessment's subject and section." });
         }
 
         if (dto.MarksObtained < 0 || dto.MarksObtained > assessment.MaximumMarks)
@@ -144,22 +163,12 @@ public class MarksController(
         int newId;
         try
         {
-            newId = await marks.CreateAsync(dto.StudentId, dto.AssessmentId, dto.MarksObtained);
+            newId = await marks.CreateAsync(dto.StudentId, dto.AssessmentId, dto.MarksObtained, NormalizeComment(dto.Comment), changedByUserId);
         }
         catch (PostgresException ex)
         {
             logger.LogError(ex, "Failed to save mark for student {StudentId}", dto.StudentId);
             return StatusCode(500, new { message = "Unable to save the mark. Please try again." });
-        }
-
-        var recipientUserIds = await recipients.ForStudentAsync(dto.StudentId);
-        if (recipientUserIds.Count > 0)
-        {
-            await notifications.NotifyManyAsync(
-                recipientUserIds,
-                "New mark recorded",
-                $"{assessment.Subject!.Name}: {dto.MarksObtained}/{assessment.MaximumMarks}",
-                NotificationType.MarkRecorded);
         }
 
         var created = await marks.GetByIdAsync(newId);
@@ -183,12 +192,22 @@ public class MarksController(
         {
             return Forbid();
         }
+        if (currentUser.UserId is not { } changedByUserId) return Forbid();
 
         var assessment = await assessments.GetByIdAsync(dto.AssessmentId, schoolId);
         if (assessment is null)
         {
             return BadRequest(new { message = "Assessment does not exist." });
         }
+        if (!CanManageAssessment(assessment)) return Forbid();
+
+        if (assessment.Status == AssessmentStatus.Published)
+        {
+            return Conflict(new { message = "Reopen this assessment to Draft before changing marks." });
+        }
+
+        if (assessment.TeacherSubjectAssignment?.SectionId is { } assessmentSectionId && dto.SectionId != assessmentSectionId)
+            return BadRequest(new { message = "The submitted section does not match this assessment's assigned class." });
 
         if (assessment.TermId is not null && await terms.IsLockedAsync(assessment.TermId.Value))
         {
@@ -209,6 +228,11 @@ public class MarksController(
             return BadRequest(new { message = $"Unknown student id(s): {string.Join(", ", missingStudentIds)}" });
         }
 
+        if (!await students.AreActiveStudentsEnrolledInClassAsync(studentIds, dto.SectionId, assessment.SubjectId, schoolId))
+        {
+            return BadRequest(new { message = "Every student must be actively enrolled in the selected section and assessment subject." });
+        }
+
         if (!await IsAssignedToTeachAsync(assessment.SubjectId, studentIds))
         {
             return Forbid();
@@ -220,9 +244,11 @@ public class MarksController(
             {
                 return BadRequest(new { message = $"MarksObtained for student {item.StudentId} must be between 0 and {assessment.MaximumMarks}." });
             }
+            if (item.Comment?.Length > 1000)
+                return BadRequest(new { message = $"Comment for student {item.StudentId} cannot exceed 1000 characters." });
         }
 
-        var existingByStudent = await marks.GetExistingIdsForAssessmentAsync(dto.AssessmentId, studentIds);
+        var existingByStudent = await marks.GetExistingForAssessmentAsync(dto.AssessmentId, studentIds);
 
         try
         {
@@ -230,18 +256,29 @@ public class MarksController(
             {
                 foreach (var item in dto.Marks)
                 {
-                    if (existingByStudent.TryGetValue(item.StudentId, out var markId))
+                    var comment = NormalizeComment(item.Comment);
+                    if (existingByStudent.TryGetValue(item.StudentId, out var previous))
                     {
-                        await marks.UpdateMarksObtainedInTxAsync(connection, tx, markId, item.MarksObtained);
+                        if (item.ExpectedVersion is null || item.ExpectedVersion != previous.Version)
+                            throw new DBConcurrencyException();
+                        if (item.MarksObtained != previous.MarksObtained || comment != previous.Comment)
+                        {
+                            if (!await marks.UpdateWithHistoryInTxAsync(connection, tx, previous, item.MarksObtained, comment, item.ExpectedVersion.Value, changedByUserId))
+                                throw new DBConcurrencyException();
+                        }
                     }
                     else
                     {
-                        await marks.CreateInTxAsync(connection, tx, item.StudentId, dto.AssessmentId, item.MarksObtained);
+                        await marks.CreateInTxAsync(connection, tx, item.StudentId, dto.AssessmentId, item.MarksObtained, comment, changedByUserId);
                     }
                 }
 
                 return true;
             });
+        }
+        catch (DBConcurrencyException)
+        {
+            return Conflict(new { message = "Marks changed after this gradebook was loaded. Reload the assessment before saving again." });
         }
         catch (PostgresException ex)
         {
@@ -251,6 +288,54 @@ public class MarksController(
 
         await audit.LogAsync("Update", "Mark", $"assessment:{dto.AssessmentId}", $"Bulk save for {dto.Marks.Count} student(s)");
         return Ok(new { message = "Marks saved successfully.", count = dto.Marks.Count });
+    }
+
+    [HttpPost("assessment/{assessmentId:int}/import")]
+    [Authorize(Roles = "Teacher,Admin")]
+    [RequestSizeLimit(2 * 1024 * 1024)]
+    public async Task<IActionResult> ImportAssessmentResults(int assessmentId, [FromForm] int sectionId, IFormFile file)
+    {
+        if (currentTenant.SchoolId is not { } schoolId) return Forbid();
+        if (file is not { Length: > 0 }) return BadRequest(new { message = "Select a CSV file." });
+        if (!string.Equals(Path.GetExtension(file.FileName), ".csv", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { message = "Only CSV files are supported." });
+        var assessment = await assessments.GetByIdAsync(assessmentId, schoolId);
+        if (assessment is null) return NotFound(new { message = "Assessment not found." });
+        if (!CanManageAssessment(assessment)) return Forbid();
+        if (assessment.TeacherSubjectAssignment?.SectionId is { } assessmentSectionId && sectionId != assessmentSectionId)
+            return BadRequest(new { message = "The selected section does not match this assessment's assigned class." });
+
+        string[] lines;
+        using (var reader = new StreamReader(file.OpenReadStream()))
+            lines = (await reader.ReadToEndAsync()).Split('\n').Select(line => line.TrimEnd('\r')).Where(line => line.Length > 0).ToArray();
+        if (lines.Length < 2) return BadRequest(new { message = "The CSV must contain a header and at least one mark row." });
+
+        var headers = ParseCsvLine(lines[0]).Select(NormalizeHeader).ToList();
+        var studentCodeColumn = headers.IndexOf("studentid");
+        var marksColumn = headers.IndexOf("marks");
+        var commentColumn = headers.IndexOf("comment");
+        var versionColumn = headers.IndexOf("version");
+        if (studentCodeColumn < 0 || marksColumn < 0)
+            return BadRequest(new { message = "CSV headers must include Student ID and Marks. Export this gradebook to get the supported format." });
+
+        var roster = await students.GetActiveBySectionAndSubjectAsync(sectionId, assessment.SubjectId, schoolId);
+        var byCode = roster.ToDictionary(student => student.StudentId, StringComparer.OrdinalIgnoreCase);
+        var seenCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var imported = new List<BulkMarkItemDto>();
+        for (var index = 1; index < lines.Length; index++)
+        {
+            var fields = ParseCsvLine(lines[index]);
+            string Get(int column) => column >= 0 && column < fields.Count ? fields[column].Trim() : string.Empty;
+            var code = Get(studentCodeColumn);
+            if (!seenCodes.Add(code)) return BadRequest(new { message = $"Row {index + 1}: duplicate Student ID '{code}'." });
+            if (!byCode.TryGetValue(code, out var student)) return BadRequest(new { message = $"Row {index + 1}: Student ID '{code}' is not active in this class and subject." });
+            if (!int.TryParse(Get(marksColumn), out var mark)) return BadRequest(new { message = $"Row {index + 1}: Marks must be a whole number." });
+            int? expectedVersion = null;
+            if (versionColumn >= 0 && int.TryParse(Get(versionColumn), out var version)) expectedVersion = version;
+            imported.Add(new BulkMarkItemDto { StudentId = student.Id, MarksObtained = mark, Comment = Get(commentColumn), ExpectedVersion = expectedVersion });
+        }
+
+        return await CreateBulkMarks(new BulkMarksRequestDto { SectionId = sectionId, AssessmentId = assessmentId, Marks = imported });
     }
 
     // PUT /api/marks/{id}
@@ -264,25 +349,36 @@ public class MarksController(
         {
             return NotFound();
         }
+        if (mark.Assessment is not { } assessment) return NotFound();
+        if (currentUser.UserId is not { } changedByUserId) return Forbid();
+        if (dto.ExpectedVersion <= 0) return BadRequest(new { message = "ExpectedVersion is required." });
+        if (dto.Comment?.Length > 1000) return BadRequest(new { message = "Comment cannot exceed 1000 characters." });
+        if (!CanManageAssessment(assessment)) return Forbid();
+
+        if (assessment.Status == AssessmentStatus.Published)
+        {
+            return Conflict(new { message = "Reopen this assessment to Draft before changing marks." });
+        }
 
         if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(mark.StudentId, schoolId))
         {
             return NotFound();
         }
 
-        if (dto.MarksObtained < 0 || dto.MarksObtained > mark.Assessment!.MaximumMarks)
+        if (dto.MarksObtained < 0 || dto.MarksObtained > assessment.MaximumMarks)
         {
-            return BadRequest(new { message = $"MarksObtained must be between 0 and {mark.Assessment.MaximumMarks}." });
+            return BadRequest(new { message = $"MarksObtained must be between 0 and {assessment.MaximumMarks}." });
         }
 
-        if (mark.Assessment.TermId is not null && await terms.IsLockedAsync(mark.Assessment.TermId.Value))
+        if (assessment.TermId is not null && await terms.IsLockedAsync(assessment.TermId.Value))
         {
             return Conflict(new { message = "This mark's term is locked and can no longer be modified." });
         }
 
         try
         {
-            await marks.UpdateMarksObtainedAsync(id, dto.MarksObtained);
+            var updated = await marks.UpdateWithHistoryAsync(new MarkSnapshot(mark.Id, mark.MarksObtained, mark.Comment, mark.Version), dto.MarksObtained, NormalizeComment(dto.Comment), dto.ExpectedVersion, changedByUserId);
+            if (!updated) return Conflict(new { message = "This mark changed after it was loaded. Reload before saving again." });
         }
         catch (PostgresException ex)
         {
@@ -292,7 +388,34 @@ public class MarksController(
 
         await audit.LogAsync("Update", "Mark", id.ToString(), $"MarksObtained: {mark.MarksObtained} -> {dto.MarksObtained}");
         mark.MarksObtained = dto.MarksObtained;
+        mark.Comment = NormalizeComment(dto.Comment);
+        mark.Version++;
         return Ok(MarkRecordDto.FromEntity(mark));
+    }
+
+    [HttpGet("{id:int}/history")]
+    [Authorize(Roles = "Teacher,Admin")]
+    public async Task<ActionResult<IEnumerable<MarkHistoryDto>>> GetMarkHistory(int id)
+    {
+        if (currentTenant.SchoolId is not { } schoolId) return Forbid();
+        var mark = await marks.GetByIdAsync(id);
+        if (mark is null || !await students.ExistsAsync(mark.StudentId, schoolId)) return NotFound();
+        if (!CanManageAssessment(mark.Assessment!)) return Forbid();
+        return Ok(await marks.GetHistoryAsync(id, schoolId));
+    }
+
+    [HttpGet("assessment/{assessmentId:int}/export")]
+    [Authorize(Roles = "Teacher,Admin")]
+    public async Task<IActionResult> ExportAssessmentResults(int assessmentId)
+    {
+        if (currentTenant.SchoolId is not { } schoolId || await assessments.GetByIdAsync(assessmentId, schoolId) is not { } assessment)
+            return NotFound();
+        if (!CanManageAssessment(assessment)) return Forbid();
+        var results = await marks.GetAssessmentResultsAsync(assessmentId);
+        var csv = new StringBuilder("Student ID,Student,Marks,Maximum,Comment,Version,Updated at UTC\r\n");
+        foreach (var item in results)
+            csv.AppendLine($"{Csv(item.StudentCode)},{Csv(item.StudentName)},{item.MarksObtained},{item.MaximumMarks},{Csv(item.Comment ?? string.Empty)},{item.Version},{item.UpdatedAtUtc:O}");
+        return File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", $"assessment-{assessmentId}-marks.csv");
     }
 
     // DELETE /api/marks/{id}
@@ -305,6 +428,12 @@ public class MarksController(
         {
             return NotFound();
         }
+
+        if (mark.Assessment?.Status == AssessmentStatus.Published)
+        {
+            return Conflict(new { message = "Reopen this assessment to Draft before changing marks." });
+        }
+        if (!CanManageAssessment(mark.Assessment!)) return Forbid();
 
         if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(mark.StudentId, schoolId))
         {
@@ -350,12 +479,42 @@ public class MarksController(
 
         foreach (var sectionId in sectionIds)
         {
-            if (!await teacherSubjectAssignments.ExistsAsync(teacherId, subjectId, sectionId))
+            if (currentTenant.SchoolId is not { } schoolId || !await teacherSubjectAssignments.ExistsAsync(teacherId, subjectId, sectionId, schoolId))
             {
                 return false;
             }
         }
 
         return true;
+    }
+
+    private bool CanManageAssessment(Assessment assessment) =>
+        currentUser.Role == "Admin" ||
+        (currentUser.TeacherId is { } teacherId && assessment.TeacherSubjectAssignment?.TeacherId == teacherId);
+
+    private static string? NormalizeComment(string? comment) => string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+
+    private static string Csv(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
+
+    private static string NormalizeHeader(string value) => new(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+
+    private static List<string> ParseCsvLine(string line)
+    {
+        var fields = new List<string>();
+        var current = new StringBuilder();
+        var inQuotes = false;
+        for (var index = 0; index < line.Length; index++)
+        {
+            var character = line[index];
+            if (character == '"')
+            {
+                if (inQuotes && index + 1 < line.Length && line[index + 1] == '"') { current.Append('"'); index++; }
+                else inQuotes = !inQuotes;
+            }
+            else if (character == ',' && !inQuotes) { fields.Add(current.ToString()); current.Clear(); }
+            else current.Append(character);
+        }
+        fields.Add(current.ToString());
+        return fields;
     }
 }

@@ -1,70 +1,124 @@
 <section class="page report-card-page">
   <a class="back-link no-print" [routerLink]="['/students', studentId]">← Back to Profile</a>
 
+  <div class="report-toolbar no-print">
+    <label>
+      Reporting period
+      <select [ngModel]="selectedTermId()" (ngModelChange)="onPeriodChange($event)">
+        @if (!canIssue()) { <option [ngValue]="null">Latest issued report</option> }
+        @for (period of periods(); track period.id) {
+          <option [ngValue]="period.id">{{ period.label }}</option>
+        }
+      </select>
+    </label>
+    @if (selectedIssuanceId() && canIssue()) {
+      <button type="button" class="btn btn-secondary" (click)="viewDraft()">Return to current draft</button>
+    }
+  </div>
+
   @if (state().loading) {
-    <p class="loading">Loading report card...</p>
+    <p class="loading" aria-live="polite">Loading report card...</p>
   } @else if (state().error) {
-    <p class="error-message">Unable to load the report card. Please check whether the StudentConnect API is running.</p>
+    <div class="error-message recovery-state" role="alert">
+      <span>{{ state().error }}</span>
+      <button type="button" class="btn btn-secondary" (click)="retry()">Retry</button>
+    </div>
   } @else if (state().reportCard; as card) {
-    <div class="report-card">
-      <div class="report-header">
-        <h1>Report Card</h1>
-        <button type="button" class="btn no-print" (click)="print()">Print / Save as PDF</button>
-        <button type="button" class="btn no-print" (click)="downloadCsv()">Download CSV</button>
+    <article class="report-card">
+      <header class="report-header">
+        <div>
+          <div class="status-line">
+            <span class="report-status" [attr.data-status]="card.reportStatus">{{ card.reportStatus }}</span>
+            <span>{{ card.periodLabel }}</span>
+          </div>
+          <p class="report-label">Academic report</p>
+          @if(card.headerText){<p>{{card.headerText}}</p>}
+          <h1>Report Card</h1>
+          <p class="period-dates">{{ card.periodStartDate }} to {{ card.periodEndDate }}</p>
+        </div>
+        <div class="report-actions no-print">
+          <button type="button" class="btn" (click)="print()">Print / Save as PDF</button>
+          <button type="button" class="btn btn-secondary" (click)="downloadCsv()">Download CSV</button>
+        </div>
+      </header>
+
+      @if (exportError()) { <p class="error-message no-print" role="alert">{{ exportError() }}</p> }
+
+      <div class="profile-details" role="list" aria-label="Student details">
+        <div role="listitem"><span>Name</span><strong>{{ card.fullName }}</strong></div>
+        <div role="listitem"><span>Student ID</span><strong>{{ card.studentCode }}</strong></div>
+        <div role="listitem"><span>Grade</span><strong>{{ card.gradeName }}</strong></div>
+        <div role="listitem"><span>Section</span><strong>{{ card.sectionName }}</strong></div>
       </div>
 
-      <dl class="profile-details">
-        <dt>Name</dt>
-        <dd>{{ card.fullName }}</dd>
-        <dt>Student ID</dt>
-        <dd>{{ card.studentCode }}</dd>
-        <dt>Grade</dt>
-        <dd>{{ card.gradeName }}</dd>
-        <dt>Section</dt>
-        <dd>{{ card.sectionName }}</dd>
-      </dl>
+      @if (card.reportStatus === 'Issued') {
+        <section class="issuance-note" aria-label="Issuance details">
+          <div><strong>Finalized report</strong><span>Issued {{ card.issuedAtUtc | date: 'medium' : 'UTC' }} UTC</span></div>
+          @if (card.comments) { <p>{{ card.comments }}</p> }
+        </section>
+      }
 
       <div class="summary-grid">
-        <div class="summary-card">
-          <span class="summary-label">Overall Attendance</span>
-          <span class="summary-value">{{ card.overallAttendancePercentage }}%</span>
-        </div>
-        <div class="summary-card">
-          <span class="summary-label">Overall Marks</span>
-          <span class="summary-value">{{ card.overallMarksPercentage }}%</span>
-          <span class="badge">{{ card.overallResultCategory }}</span>
-        </div>
-        <div class="summary-card">
-          <span class="summary-label">Rank in Grade</span>
-          <span class="summary-value">{{ card.rankInGrade }} / {{ card.totalStudentsInGrade }}</span>
-        </div>
-        <div class="summary-card">
-          <span class="summary-label">Homework Completion</span>
-          <span class="summary-value">{{ card.homeworkCompletionRate }}%</span>
-        </div>
+        <div class="summary-card"><span class="summary-label">Overall Attendance</span><span class="summary-value">{{ card.overallAttendancePercentage }}%</span></div>
+        <div class="summary-card"><span class="summary-label">Published Results</span><span class="summary-value">{{ card.overallMarksPercentage }}%</span><span class="badge">{{ card.overallResultCategory }}</span></div>
+        <div class="summary-card"><span class="summary-label">Rank in Grade</span><span class="summary-value">{{ card.rankInGrade }} / {{ card.totalStudentsInGrade }}</span></div>
+        <div class="summary-card"><span class="summary-label">Homework Completion</span><span class="summary-value">{{ card.homeworkCompletionRate }}%</span></div>
       </div>
 
       <h2>Subject Breakdown</h2>
-      <table class="report-table">
-        <thead>
-          <tr>
-            <th>Subject</th>
-            <th>Attendance</th>
-            <th>Marks</th>
-            <th>Result</th>
-          </tr>
-        </thead>
+      <div class="table-shell"><table class="report-table">
+        <thead><tr><th>Subject</th><th>Attendance</th><th>Published results</th><th>Result</th></tr></thead>
         <tbody>
           @for (subject of card.subjects; track subject.subjectId) {
             <tr>
-              <td>{{ subject.subjectName }}</td>
-              <td>{{ subject.attendancePercentage }}%</td>
-              <td>{{ subject.marksPercentage }}%</td>
-              <td>{{ subject.resultCategory }}</td>
+              <td data-label="Subject"><strong>{{ subject.subjectName }}</strong></td>
+              <td data-label="Attendance">{{ subject.attendancePercentage }}%</td>
+              <td data-label="Published results">{{ subject.marksPercentage }}%</td>
+              <td data-label="Result">{{ subject.resultCategory }}</td>
             </tr>
           }
         </tbody>
-      </table>
-    </div>
+      </table></div>
+
+      <footer class="report-footer">
+        <span>Generated {{ card.generatedAtUtc | date: 'medium' : 'UTC' }} UTC</span>
+        <span>{{ card.reportStatus === 'Issued' ? 'Immutable issued snapshot' : 'Live draft · values may change' }}</span>
+        @if(card.footerText){<span>{{card.footerText}}</span>}
+      </footer>
+    </article>
+
+    @if (canIssue() && card.reportStatus === 'Draft') {
+      <section class="issue-panel no-print" aria-labelledby="issue-title">
+        <div>
+          <p class="report-label">Finalization</p>
+          <h2 id="issue-title">Issue this report</h2>
+          <p>Create an immutable snapshot visible to the learner and linked family accounts.</p>
+        </div>
+        <label>
+          Report comments <span>Optional</span>
+          <textarea rows="3" maxlength="2000" [ngModel]="comments()" (ngModelChange)="comments.set($event)" placeholder="Summarize progress, strengths, or next steps"></textarea>
+          <small>{{ comments().length }} / 2000</small>
+        </label>
+        @if(authService.role()==='Admin'){<label>Template<select [ngModel]="selectedTemplateId()" (ngModelChange)="selectedTemplateId.set($event)"><option [ngValue]="null">Standard report</option>@for(template of templates();track template.id){<option [ngValue]="template.id">{{template.name}}</option>}</select></label>}
+        @if (issueError()) { <p class="error-message" role="alert">{{ issueError() }}</p> }
+        <button type="button" [disabled]="issuing() || !selectedTermId()" (click)="issue()">{{ issuing() ? 'Issuing...' : 'Issue final report' }}</button>
+      </section>
+    }
+
+    @if(authService.role()==='Admin'&&selectedIssuanceId()){<section class="issue-panel no-print"><h2>Sign issued report</h2><label>Signature label<input type="text" [ngModel]="signatureLabel()" (ngModelChange)="signatureLabel.set($event)" /></label><label>Signed name<input type="text" [ngModel]="signedName()" (ngModelChange)="signedName.set($event)" /></label><button type="button" (click)="sign()">Record signature</button></section>}
+
+    @if (history().length > 0) {
+      <section class="history-panel no-print" aria-labelledby="history-title">
+        <div class="history-heading"><h2 id="history-title">Issue history</h2><span>{{ history().length }} issued {{ history().length === 1 ? 'version' : 'versions' }}</span></div>
+        <div class="history-list" role="list">
+          @for (item of history(); track item.id) {
+            <button type="button" role="listitem" [class.current]="selectedIssuanceId() === item.id" (click)="viewIssuance(item)">
+              <span><strong>{{ item.periodLabel }}{{item.templateName?' · '+item.templateName:''}}</strong><small>Issued {{ item.issuedAtUtc | date: 'medium' : 'UTC' }} UTC by {{ item.issuedByName }} · {{item.signatureCount}} signature(s) · {{item.lastDownloadedAtUtc ? 'downloaded '+(item.lastDownloadedAtUtc|date:'short') : 'not downloaded'}}</small></span>
+              <span>View snapshot</span>
+            </button>
+          }
+        </div>
+      </section>
+    }
   }
 </section>

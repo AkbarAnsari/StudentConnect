@@ -7,7 +7,8 @@ namespace StudentConnect.Infrastructure.Data.Stores;
 public class ActivityRegistrationStore(Database db)
 {
     private const string SelectWithNames = """
-        SELECT r."Id", r."StudentId", r."ActivityId", r."RegistrationDate", r."Status",
+         SELECT r."Id", r."StudentId", r."ActivityId", r."RegistrationDate", r."Status", r."ConsentConfirmed", r."CheckedInAtUtc", r."CheckedInByUserId",
+             r."FeeStatus", r."PaidAtUtc", r."PaymentReference", r."ConsentDocumentFileName", r."ConsentDocumentStoredFileName", r."ConsentDocumentContentType", r."ConsentDocumentSize", r."ConsentDocumentUploadedAtUtc",
                st."FirstName" AS "StudentFirstName", st."LastName" AS "StudentLastName",
                act."Title" AS "ActivityTitle", act."Date" AS "ActivityDate", act."Location" AS "ActivityLocation"
         FROM "ActivityRegistrations" r
@@ -29,6 +30,17 @@ public class ActivityRegistrationStore(Database db)
         },
         RegistrationDate = reader.GetDateTimeUtc("RegistrationDate"),
         Status = reader.GetEnum<ActivityRegistrationStatus>("Status"),
+        ConsentConfirmed = reader.GetBoolean("ConsentConfirmed"),
+        CheckedInAtUtc = reader.GetNullableDateTimeUtc("CheckedInAtUtc"),
+        CheckedInByUserId = reader.GetNullableInt32("CheckedInByUserId"),
+        FeeStatus = reader.GetString("FeeStatus"),
+        PaidAtUtc = reader.GetNullableDateTimeUtc("PaidAtUtc"),
+        PaymentReference = reader.GetNullableString("PaymentReference"),
+        ConsentDocumentFileName = reader.GetNullableString("ConsentDocumentFileName"),
+        ConsentDocumentStoredFileName = reader.GetNullableString("ConsentDocumentStoredFileName"),
+        ConsentDocumentContentType = reader.GetNullableString("ConsentDocumentContentType"),
+        ConsentDocumentSize = reader.GetNullableInt64("ConsentDocumentSize"),
+        ConsentDocumentUploadedAtUtc = reader.GetNullableDateTimeUtc("ConsentDocumentUploadedAtUtc"),
     };
 
     public async Task<List<ActivityRegistration>> GetByStudentAsync(int studentId) =>
@@ -106,13 +118,14 @@ public class ActivityRegistrationStore(Database db)
     }
 
     // Returns null (instead of inserting) when the activity doesn't belong to schoolId.
-    public async Task<int?> InsertInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int studentId, int activityId, DateTime registrationDate, ActivityRegistrationStatus status, int schoolId)
+    public async Task<int?> InsertInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int studentId, int activityId, DateTime registrationDate, ActivityRegistrationStatus status, int schoolId, bool consentConfirmed = false)
     {
         await using var command = new NpgsqlCommand(
             $"""
-            INSERT INTO "ActivityRegistrations" ("StudentId", "ActivityId", "RegistrationDate", "Status")
-            SELECT @studentId, @activityId, @registrationDate, @status
-            WHERE {ActivityBelongsToSchool}
+            INSERT INTO "ActivityRegistrations" ("StudentId", "ActivityId", "RegistrationDate", "Status", "ConsentConfirmed", "FeeStatus")
+            SELECT @studentId, @activityId, @registrationDate, @status, @consentConfirmed, CASE WHEN a."FeeAmount" > 0 THEN 'Pending' ELSE 'NotApplicable' END
+            FROM "Activities" a
+            WHERE a."Id" = @activityId AND {ActivityBelongsToSchool}
             RETURNING "Id"
             """,
             connection, tx);
@@ -120,19 +133,21 @@ public class ActivityRegistrationStore(Database db)
         command.Parameters.AddWithValue("activityId", activityId);
         command.Parameters.AddWithValue("registrationDate", registrationDate);
         command.Parameters.AddWithValue("status", status.ToString());
+        command.Parameters.AddWithValue("consentConfirmed", consentConfirmed);
         command.Parameters.AddWithValue("schoolId", schoolId);
         var result = await command.ExecuteScalarAsync();
         return result is null ? null : (int)result;
     }
 
-    public async Task ReactivateInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int id, DateTime registrationDate, ActivityRegistrationStatus status, int schoolId)
+    public async Task ReactivateInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int id, DateTime registrationDate, ActivityRegistrationStatus status, int schoolId, bool consentConfirmed = false)
     {
         await using var command = new NpgsqlCommand(
-            $"""UPDATE "ActivityRegistrations" r SET "Status" = @status, "RegistrationDate" = @registrationDate WHERE r."Id" = @id AND {RegistrationBelongsToSchool}""",
+            $"""UPDATE "ActivityRegistrations" r SET "Status" = @status, "RegistrationDate" = @registrationDate, "ConsentConfirmed" = @consentConfirmed, "CheckedInAtUtc" = NULL, "CheckedInByUserId" = NULL WHERE r."Id" = @id AND {RegistrationBelongsToSchool}""",
             connection, tx);
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("registrationDate", registrationDate);
         command.Parameters.AddWithValue("status", status.ToString());
+        command.Parameters.AddWithValue("consentConfirmed", consentConfirmed);
         command.Parameters.AddWithValue("schoolId", schoolId);
         await command.ExecuteNonQueryAsync();
     }
@@ -173,4 +188,19 @@ public class ActivityRegistrationStore(Database db)
         command.Parameters.AddWithValue("schoolId", schoolId);
         await command.ExecuteNonQueryAsync();
     }
+
+    public async Task SetCheckInAsync(int id, bool checkedIn, int userId, int schoolId) =>
+        await db.ExecuteAsync(
+            $"""UPDATE "ActivityRegistrations" r SET "CheckedInAtUtc" = CASE WHEN @checkedIn THEN now() ELSE NULL END, "CheckedInByUserId" = CASE WHEN @checkedIn THEN @userId ELSE NULL END WHERE r."Id" = @id AND {RegistrationBelongsToSchool}""",
+            p => { p.AddWithValue("id", id); p.AddWithValue("checkedIn", checkedIn); p.AddWithValue("userId", userId); p.AddWithValue("schoolId", schoolId); });
+
+    public async Task SetPaidAsync(int id, string paymentReference, int schoolId) =>
+        await db.ExecuteAsync(
+            $"""UPDATE "ActivityRegistrations" r SET "FeeStatus" = 'Paid', "PaidAtUtc" = now(), "PaymentReference" = @paymentReference WHERE r."Id" = @id AND "FeeStatus" = 'Pending' AND {RegistrationBelongsToSchool}""",
+            p => { p.AddWithValue("id", id); p.AddWithValue("paymentReference", paymentReference); p.AddWithValue("schoolId", schoolId); });
+
+    public async Task SetConsentDocumentAsync(int id, string fileName, string storedFileName, string contentType, long size, int schoolId) =>
+        await db.ExecuteAsync(
+            $"""UPDATE "ActivityRegistrations" r SET "ConsentConfirmed" = true, "ConsentDocumentFileName" = @fileName, "ConsentDocumentStoredFileName" = @storedFileName, "ConsentDocumentContentType" = @contentType, "ConsentDocumentSize" = @size, "ConsentDocumentUploadedAtUtc" = now() WHERE r."Id" = @id AND {RegistrationBelongsToSchool}""",
+            p => { p.AddWithValue("id", id); p.AddWithValue("fileName", fileName); p.AddWithValue("storedFileName", storedFileName); p.AddWithValue("contentType", contentType); p.AddWithValue("size", size); p.AddWithValue("schoolId", schoolId); });
 }

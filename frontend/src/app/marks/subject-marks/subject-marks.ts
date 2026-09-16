@@ -1,3 +1,4 @@
+import { DecimalPipe } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -15,7 +16,7 @@ const LOADING_STATE: SubjectMarksState = { loading: true, error: false, records:
 
 @Component({
   selector: 'app-subject-marks',
-  imports: [RouterLink],
+  imports: [RouterLink, DecimalPipe],
   templateUrl: './subject-marks.html',
   styleUrl: './subject-marks.css',
 })

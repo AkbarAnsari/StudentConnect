@@ -1,122 +1,177 @@
-<section class="page page-wide">
+<section class="page page-wide analytics-page">
   <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
-  <h1>Analytics Dashboard</h1>
 
-  @if (overview(); as stats) {
-    <div class="stat-grid">
-      <div class="card stat-card">
-        <span class="stat-value">{{ stats.totalStudents }}</span>
-        <span class="stat-label">Students</span>
-      </div>
-      <div class="card stat-card">
-        <span class="stat-value">{{ stats.totalTeachers }}</span>
-        <span class="stat-label">Teachers</span>
-      </div>
-      <div class="card stat-card">
-        <span class="stat-value">{{ stats.totalSubjects }}</span>
-        <span class="stat-label">Subjects</span>
-      </div>
-      <div class="card stat-card">
-        <span class="stat-value">{{ stats.overallAttendancePercentage }}%</span>
-        <span class="stat-label">Overall Attendance</span>
-      </div>
-      <div class="card stat-card">
-        <span class="stat-value">{{ stats.averageMarksPercentage }}%</span>
-        <span class="stat-label">Average Marks</span>
+  <div class="page-header analytics-header">
+    <div>
+      <p class="eyebrow">Operational insight</p>
+      <h1>School Analytics</h1>
+      @if (state().data; as data) {
+        <p>{{ data.scopeLabel }} · {{ data.dateFrom }} to {{ data.dateTo }}</p>
+      } @else {
+        <p>Attendance, released results, and learners needing follow-up.</p>
+      }
+    </div>
+    <button type="button" class="btn btn-secondary" [disabled]="!state().data" (click)="exportCsv()">Download CSV</button>
+  </div>
+
+  @if (exportError()) { <p class="error-message" role="alert">{{ exportError() }}</p> }
+
+  <form class="filter-band" (ngSubmit)="applyFilters()">
+    <div class="period-control" aria-label="Date presets">
+      <span>Period</span>
+      <div class="segmented-control">
+        <button type="button" (click)="setPeriod(30)">30 days</button>
+        <button type="button" (click)="setPeriod(90)">90 days</button>
+        <button type="button" (click)="setPeriod(365)">1 year</button>
       </div>
     </div>
+
+    <label class="class-filter">
+      Class and subject
+      <select name="assignmentId" [ngModel]="assignmentId()" (ngModelChange)="assignmentId.set($event)">
+        <option [ngValue]="null">{{ authService.role() === 'Teacher' ? 'All my assigned classes' : 'Whole school' }}</option>
+        @for (assignment of assignments(); track assignment.id) {
+          <option [ngValue]="assignment.id">{{ assignmentLabel(assignment.id) }}</option>
+        }
+      </select>
+    </label>
+
+    <label>
+      From
+      <input type="date" name="dateFrom" [ngModel]="dateFrom()" (ngModelChange)="dateFrom.set($event)" />
+    </label>
+
+    <label>
+      To
+      <input type="date" name="dateTo" [ngModel]="dateTo()" (ngModelChange)="dateTo.set($event)" />
+    </label>
+
+    <label>
+      Attendance alert below
+      <span class="number-input"><input type="number" min="0" max="100" name="attendanceThreshold" [ngModel]="attendanceThreshold()" (ngModelChange)="attendanceThreshold.set($event)" /><span>%</span></span>
+    </label>
+
+    <label>
+      Marks alert below
+      <span class="number-input"><input type="number" min="0" max="100" name="marksThreshold" [ngModel]="marksThreshold()" (ngModelChange)="marksThreshold.set($event)" /><span>%</span></span>
+    </label>
+
+    <div class="filter-actions">
+      <button type="button" class="btn btn-secondary" (click)="resetFilters()">Reset</button>
+      <button type="submit" [disabled]="filterInvalid() || state().loading">Apply filters</button>
+    </div>
+  </form>
+
+  @if (filterInvalid()) {
+    <p class="field-error" role="alert">Choose a valid date range and thresholds between 0 and 100.</p>
   }
 
-  <div class="analytics-grid">
-    <div class="card">
-      <h2>Attendance by Grade</h2>
-      @if (attendanceByGrade().length === 0) {
-        <p>No attendance data yet.</p>
-      }
-      @for (row of attendanceByGrade(); track row.gradeId) {
-        <div class="bar-row">
-          <span class="bar-label">{{ row.gradeName }}</span>
-          <div class="bar-track">
-            <div class="bar-fill" [style.width.%]="row.attendancePercentage"></div>
-          </div>
-          <span class="bar-value">{{ row.attendancePercentage }}%</span>
-        </div>
-      }
+  @if (state().loading) {
+    <div class="loading-state" aria-live="polite">
+      <span class="loading-line"></span><span class="loading-line"></span><span class="loading-line"></span>
+      <p>Calculating scoped analytics...</p>
+    </div>
+  } @else if (state().error) {
+    <div class="error-message recovery-state" role="alert">
+      <span>{{ state().error }}</span>
+      <button type="button" class="btn btn-secondary" (click)="retry()">Retry</button>
+    </div>
+  } @else if (state().data; as data) {
+    <div class="stat-grid" aria-label="Analytics summary">
+      <div class="stat-card"><span class="stat-value">{{ data.overview.totalStudents }}</span><span class="stat-label">Active students in scope</span></div>
+      <div class="stat-card"><span class="stat-value">{{ data.overview.totalTeachers }}</span><span class="stat-label">Teachers</span></div>
+      <div class="stat-card"><span class="stat-value">{{ data.overview.totalSubjects }}</span><span class="stat-label">Subjects</span></div>
+      <div class="stat-card"><span class="stat-value">{{ data.overview.overallAttendancePercentage }}%</span><span class="stat-label">Attendance</span></div>
+      <div class="stat-card"><span class="stat-value">{{ data.overview.averageMarksPercentage }}%</span><span class="stat-label">Published results</span></div>
     </div>
 
-    <div class="card">
-      <h2>Average Marks by Grade</h2>
-      @if (marksByGrade().length === 0) {
-        <p>No marks data yet.</p>
+    <section class="analytics-section" aria-labelledby="grade-performance-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">Comparison</p><h2 id="grade-performance-title">Performance by grade</h2></div>
+        <p>Only activity recorded inside the selected period is included.</p>
+      </div>
+      @if (data.attendanceByGrade.length === 0 && data.marksByGrade.length === 0) {
+        <p class="empty">No attendance or published results were recorded in this period.</p>
+      } @else {
+        <div class="table-shell"><table class="performance-table">
+          <thead><tr><th>Grade</th><th>Attendance</th><th>Records</th><th>Published results</th><th>Result</th></tr></thead>
+          <tbody>
+            @for (row of gradeRows(); track row.gradeId) {
+              <tr>
+                <td data-label="Grade"><strong>{{ row.gradeName }}</strong></td>
+                <td data-label="Attendance">
+                  @if (row.attendancePercentage === null) { No data }
+                  @else { <span class="metric-bar"><span [style.width.%]="row.attendancePercentage"></span></span><strong>{{ row.attendancePercentage }}%</strong> }
+                </td>
+                <td data-label="Records">{{ row.totalRecords }}</td>
+                <td data-label="Published results">{{ row.marksPercentage === null ? 'No data' : row.marksPercentage + '%' }}</td>
+                <td data-label="Result">{{ row.resultCategory }}</td>
+              </tr>
+            }
+          </tbody>
+        </table></div>
       }
-      @for (row of marksByGrade(); track row.gradeId) {
-        <div class="bar-row">
-          <span class="bar-label">{{ row.gradeName }}</span>
-          <div class="bar-track">
-            <div class="bar-fill" [style.width.%]="row.averageMarksPercentage"></div>
-          </div>
-          <span class="bar-value">{{ row.averageMarksPercentage }}%</span>
-          <span class="badge" [class]="resultBadgeClass(row.resultCategory)">{{ row.resultCategory }}</span>
+    </section>
+
+    <section class="analytics-section" aria-labelledby="trend-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">Time series</p><h2 id="trend-title">Attendance and results trend</h2></div>
+        <div class="legend" aria-label="Trend legend"><span><i class="attendance-key"></i>Attendance</span><span><i class="marks-key"></i>Published results</span></div>
+      </div>
+      @if (data.trend.length === 0) {
+        <p class="empty">Not enough recorded data to show a trend for this period.</p>
+      } @else {
+        <div class="trend-plot" aria-hidden="true">
+          @for (row of data.trend; track row.month) {
+            <div class="trend-row">
+              <strong>{{ row.month }}</strong>
+              <div><span class="trend-bar attendance" [style.width.%]="row.attendancePercentage"></span><small>{{ row.attendancePercentage }}%</small></div>
+              <div><span class="trend-bar marks" [style.width.%]="row.marksPercentage"></span><small>{{ row.marksPercentage }}%</small></div>
+            </div>
+          }
+        </div>
+        <div class="table-shell trend-table-shell"><table class="trend-table">
+          <caption>Tabular alternative for attendance and published-results trend</caption>
+          <thead><tr><th>Month</th><th>Attendance</th><th>Published results</th></tr></thead>
+          <tbody>@for (row of data.trend; track row.month) { <tr><td>{{ row.month }}</td><td>{{ row.attendancePercentage }}%</td><td>{{ row.marksPercentage }}%</td></tr> }</tbody>
+        </table></div>
+      }
+    </section>
+
+    <section class="analytics-section" aria-labelledby="follow-up-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">Follow-up queue</p><h2 id="follow-up-title">Learners needing attention</h2></div>
+        <p>{{ data.atRiskStudents.length }} flagged by the selected thresholds</p>
+      </div>
+      @if (data.atRiskStudents.length === 0) {
+        <p class="empty">No learners are below the selected thresholds.</p>
+      } @else {
+        <div class="risk-list" role="list">
+          @for (student of data.atRiskStudents; track student.id) {
+            <article class="risk-record" role="listitem">
+              <div class="risk-identity">
+                <span class="risk-level" [attr.data-level]="student.riskLevel">{{ student.riskLevel }} priority</span>
+                <h3>{{ student.fullName }}</h3>
+                <p>{{ student.studentId }} · {{ student.gradeName }} {{ student.sectionName }}</p>
+              </div>
+              <div class="risk-metrics">
+                <span><small>Attendance</small><strong>{{ student.attendancePercentage === null ? 'No data' : student.attendancePercentage + '%' }}</strong></span>
+                <span><small>Published results</small><strong>{{ student.averageMarksPercentage === null ? 'No data' : student.averageMarksPercentage + '%' }}</strong></span>
+              </div>
+              <div class="reason-list" role="list" aria-label="Risk reasons">
+                @for (reason of student.reasons; track reason) { <span role="listitem">{{ reason }}</span> }
+              </div>
+              <div class="record-actions">
+                <a class="btn btn-secondary" [routerLink]="['/students', student.id]">View student</a>
+                <a [routerLink]="['/students', student.id, 'attendance']">Attendance</a>
+                <a [routerLink]="['/students', student.id, 'marks']">Results</a>
+              </div>
+            </article>
+          }
         </div>
       }
-    </div>
-  </div>
+    </section>
 
-  <div class="card">
-    <h2>Trend Over Time</h2>
-    <p class="hint">Monthly attendance and marks rollup for this school, oldest first.</p>
-
-    @if (trend().length === 0) {
-      <p>Not enough recorded data yet to show a trend.</p>
-    } @else {
-      <table>
-        <thead>
-          <tr>
-            <th>Month</th>
-            <th>Attendance</th>
-            <th>Marks</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (row of trend(); track row.month) {
-            <tr>
-              <td>{{ row.month }}</td>
-              <td>{{ row.attendancePercentage }}%</td>
-              <td>{{ row.marksPercentage }}%</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    }
-  </div>
-
-  <div class="card">
-    <h2>At-Risk Students</h2>
-    <p class="hint">Attendance below 75% or average marks below 40%.</p>
-
-    @if (atRiskStudents().length === 0) {
-      <p>No students currently flagged as at-risk. 🎉</p>
-    } @else {
-      <table>
-        <thead>
-          <tr>
-            <th>Student</th>
-            <th>Grade</th>
-            <th>Attendance</th>
-            <th>Average Marks</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (student of atRiskStudents(); track student.id) {
-            <tr>
-              <td>{{ student.fullName }} ({{ student.studentId }})</td>
-              <td>{{ student.gradeName }}</td>
-              <td>{{ student.attendancePercentage !== null ? student.attendancePercentage + '%' : '—' }}</td>
-              <td>{{ student.averageMarksPercentage !== null ? student.averageMarksPercentage + '%' : '—' }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    }
-  </div>
+    <p class="generated-at">Generated {{ data.generatedAtUtc }}. Refresh or apply filters for current values.</p>
+  }
 </section>

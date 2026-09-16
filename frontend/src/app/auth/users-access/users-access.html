@@ -1,0 +1,69 @@
+<section class="page page-wide access-page">
+  <header>
+    <p class="page-kicker">Identity administration</p>
+    <h1>Users and access</h1>
+    <p>Review school accounts, invitations, verification, and access status.</p>
+  </header>
+
+  <section class="access-editor">
+    <h2>Invite account</h2>
+    <div class="invite-grid">
+      <label>Role<select [ngModel]="inviteRole()" (ngModelChange)="inviteRole.set($event)"><option>Parent</option><option>Student</option><option>Teacher</option><option>Coordinator</option><option>Admin</option></select></label>
+      <label>Username<input type="text" [ngModel]="inviteUsername()" (ngModelChange)="inviteUsername.set($event)" /></label>
+      <label>Email<input type="email" [ngModel]="inviteEmail()" (ngModelChange)="inviteEmail.set($event)" /></label>
+      @if (inviteRole() === 'Student') { <label>Student<select [ngModel]="inviteStudentId()" (ngModelChange)="inviteStudentId.set(+$event)"><option [value]="0">Select student</option>@for (student of availableStudents(); track student.id) { <option [value]="student.id">{{ student.firstName }} {{ student.lastName }} ({{ student.studentId }})</option> }</select></label> }
+      @if (inviteRole() === 'Teacher') { <label>Teacher<select [ngModel]="inviteTeacherId()" (ngModelChange)="inviteTeacherId.set(+$event)"><option [value]="0">Select teacher</option>@for (teacher of availableTeachers(); track teacher.id) { <option [value]="teacher.id">{{ teacher.firstName }} {{ teacher.lastName }} ({{ teacher.teacherId }})</option> }</select></label> }
+      <button type="button" [disabled]="actionId() === 0" (click)="createInvitation()">{{ actionId() === 0 ? 'Sending...' : 'Create and invite' }}</button>
+    </div>
+  </section>
+
+  <div class="controls access-filters">
+    <label><span>Search</span><input type="search" placeholder="Name, username, or email" [ngModel]="query()" (ngModelChange)="query.set($event)" /></label>
+    <label><span>Role</span><select [ngModel]="roleFilter()" (ngModelChange)="roleFilter.set($event)"><option>All</option><option>Admin</option><option>Teacher</option><option>Student</option><option>Parent</option></select></label>
+    <label><span>Status</span><select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"><option>All</option><option>Active</option><option>Deactivated</option></select></label>
+  </div>
+
+  @if (error()) { <p class="error-message" role="alert">{{ error() }}</p> }
+  @if (message()) { <p class="success-message" role="status">{{ message() }}</p> }
+  @if (loading()) {
+    <p class="loading">Loading users...</p>
+  } @else {
+    <div class="result-count"><strong>{{ filteredUsers().length }}</strong> accounts</div>
+    <div class="access-table-region" tabindex="0" aria-label="Users and access table">
+      <table>
+        <caption>School user accounts and access status</caption>
+        <thead><tr><th>User</th><th>Role</th><th>Contact</th><th>Verification</th><th>Last sign in</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+        <tbody>
+          @for (user of filteredUsers(); track user.id) {
+            <tr>
+              <td data-label="User"><strong>{{ user.displayName }}</strong><span>{{ user.username }}</span></td>
+              <td data-label="Role">{{ user.role }}</td>
+              <td data-label="Contact">@if (editingContactId() === user.id) { <input type="email" aria-label="Managed email" [ngModel]="contactEmail()" (ngModelChange)="contactEmail.set($event)" /><button type="button" (click)="saveContact(user)">Save</button><button type="button" (click)="editingContactId.set(null)">Cancel</button> } @else { {{ user.email || 'No email' }} <button type="button" (click)="startContactEdit(user)">Edit</button> }</td>
+              <td data-label="Verification">{{ user.emailVerified ? 'Verified' : 'Pending' }}</td>
+              <td data-label="Last sign in">{{ user.lastLoginAtUtc ? (user.lastLoginAtUtc | date:'short') : 'Never' }}</td>
+              <td data-label="Status"><span class="badge" [class.badge-success]="user.status === 'Active'">{{ user.status }}</span></td>
+              <td data-label="Actions" class="row-actions">
+                <button type="button" (click)="sendInvitation(user)" [disabled]="actionId() === user.id || !user.email">Send invitation</button>
+                <button type="button" (click)="openSessions(user)">Sessions</button>
+                @if (user.status === 'Active' && !isCurrentUser(user)) {
+                  <button type="button" class="danger-action" (click)="setStatus(user, 'Deactivated')" [disabled]="actionId() === user.id">Deactivate</button>
+                } @else if (user.status === 'Deactivated') {
+                  <button type="button" (click)="setStatus(user, 'Active')" [disabled]="actionId() === user.id">Reactivate</button>
+                } @else {
+                  <span>Current session</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    @if (sessionUser(); as user) {
+      <section class="session-panel"><h2>Active sessions · {{ user.displayName }}</h2>
+        @if (sessionsLoading()) { <p class="loading">Loading sessions...</p> }
+        @else if (sessions().length === 0) { <p class="empty">No active refresh sessions.</p> }
+        @else { <div role="list">@for (session of sessions(); track session.sessionId) { <div role="listitem"><span><strong>{{ session.ipAddress }}</strong>{{ session.userAgent }}<small>Started {{ session.createdAtUtc | date:'short' }} · expires {{ session.expiresAtUtc | date:'short' }}</small></span><button type="button" class="btn btn-danger" (click)="revokeSession(session.sessionId)">Sign out</button></div> }</div> }
+      </section>
+    }
+  }
+</section>

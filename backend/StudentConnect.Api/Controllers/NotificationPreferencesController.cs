@@ -21,8 +21,7 @@ public class NotificationPreferencesController(UserStore users, ICurrentUserServ
             return Unauthorized();
         }
 
-        var enabled = await users.GetNotificationDigestEnabledAsync(userId);
-        return Ok(new NotificationPreferenceDto { DigestEnabled = enabled });
+        return Ok(await users.GetNotificationPreferencesAsync(userId));
     }
 
     // PUT /api/notification-preferences
@@ -34,7 +33,7 @@ public class NotificationPreferencesController(UserStore users, ICurrentUserServ
             return Unauthorized();
         }
 
-        await users.SetNotificationDigestPreferenceAsync(userId, dto.DigestEnabled);
+        await users.SetNotificationPreferencesAsync(userId, dto);
         return NoContent();
     }
 }

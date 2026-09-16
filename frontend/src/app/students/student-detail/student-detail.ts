@@ -1,213 +1,70 @@
+import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { NgIcon } from '@ng-icons/core';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
-import { AttendanceSummary } from '../../attendance/attendance.model';
-import { AttendanceService } from '../../attendance/attendance.service';
-import { MarksSummary } from '../../marks/marks.model';
-import { MarksService } from '../../marks/marks.service';
-import { StudentHomework } from '../../homework/homework.model';
-import { HomeworkService } from '../../homework/homework.service';
-import { LearningMaterial } from '../../learning-materials/learning-material.model';
-import { LearningMaterialsService } from '../../learning-materials/learning-materials.service';
-import { ActivityRegistration } from '../../activities/activity.model';
-import { ActivityRegistrationService } from '../../activities/activity-registration.service';
-import { ConfirmDialogService } from '../../shared/confirm-dialog/confirm-dialog.service';
-import { Student, StudentSubject } from '../student.model';
+import { AuthService } from '../../auth/auth.service';
+import { Student, StudentHistoryEntry, StudentSubject } from '../student.model';
+import { StudentRecordNav } from '../student-record-nav/student-record-nav';
 import { StudentService } from '../student.service';
 
-interface StudentDetailState {  loading: boolean;
-  notFound: boolean;
-  error: boolean;
-  student: Student | null;
-}
+interface StudentDetailState { loading: boolean; notFound: boolean; error: boolean; student: Student | null; }
+interface SubjectsState { loading: boolean; error: boolean; subjects: StudentSubject[]; }
+interface HistoryState { loading: boolean; error: boolean; entries: StudentHistoryEntry[]; }
 
 const LOADING_STATE: StudentDetailState = { loading: true, notFound: false, error: false, student: null };
-
-interface SubjectsState {
-  loading: boolean;
-  error: boolean;
-  subjects: StudentSubject[];
-}
-
 const SUBJECTS_LOADING_STATE: SubjectsState = { loading: true, error: false, subjects: [] };
-
-interface AttendanceSummaryState {
-  loading: boolean;
-  error: boolean;
-  summary: AttendanceSummary[];
-}
-
-const ATTENDANCE_LOADING_STATE: AttendanceSummaryState = { loading: true, error: false, summary: [] };
-
-interface MarksSummaryState {
-  loading: boolean;
-  error: boolean;
-  summary: MarksSummary[];
-}
-
-const MARKS_LOADING_STATE: MarksSummaryState = { loading: true, error: false, summary: [] };
-
-interface HomeworkSummaryState {
-  loading: boolean;
-  error: boolean;
-  homework: StudentHomework[];
-}
-
-const HOMEWORK_LOADING_STATE: HomeworkSummaryState = { loading: true, error: false, homework: [] };
-
-interface MaterialsState {
-  loading: boolean;
-  error: boolean;
-  materials: LearningMaterial[];
-}
-
-const MATERIALS_LOADING_STATE: MaterialsState = { loading: true, error: false, materials: [] };
-
-interface ActivitiesState {
-  loading: boolean;
-  error: boolean;
-  registrations: ActivityRegistration[];
-}
-
-const ACTIVITIES_LOADING_STATE: ActivitiesState = { loading: true, error: false, registrations: [] };
+const HISTORY_LOADING_STATE: HistoryState = { loading: true, error: false, entries: [] };
 
 @Component({
   selector: 'app-student-detail',
-  imports: [RouterLink],
+  imports: [RouterLink, NgIcon, DatePipe, StudentRecordNav],
   templateUrl: './student-detail.html',
   styleUrl: './student-detail.css',
 })
 export class StudentDetail {
   private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
   private readonly studentService = inject(StudentService);
-  private readonly attendanceService = inject(AttendanceService);
-  private readonly marksService = inject(MarksService);
-  private readonly homeworkService = inject(HomeworkService);
-  private readonly materialsService = inject(LearningMaterialsService);
-  private readonly activityRegistrationService = inject(ActivityRegistrationService);
-  private readonly confirmDialog = inject(ConfirmDialogService);
+  protected readonly authService = inject(AuthService);
+  protected readonly canManageStudent = computed(() => this.authService.role() === 'Admin');
+  protected readonly backRoute = computed(() => this.authService.role() === 'Admin' || this.authService.role() === 'Teacher' ? '/students' : '/dashboard');
+  protected readonly backLabel = computed(() => this.authService.role() === 'Admin' || this.authService.role() === 'Teacher' ? 'Back to Students' : 'Back to Dashboard');
 
   protected readonly state = toSignal(
     this.route.paramMap.pipe(
       map((params) => Number(params.get('id'))),
-      switchMap((id) =>
-        this.studentService.getStudentById(id).pipe(
-          map((student): StudentDetailState => ({ loading: false, notFound: false, error: false, student })),
-          catchError((err: HttpErrorResponse) =>
-            of<StudentDetailState>({
-              loading: false,
-              notFound: err.status === 404,
-              error: err.status !== 404,
-              student: null,
-            }),
-          ),
-          startWith(LOADING_STATE),
-        ),
-      ),
+      switchMap((id) => this.studentService.getStudentById(id).pipe(
+        map((student): StudentDetailState => ({ loading: false, notFound: false, error: false, student })),
+        catchError((err: HttpErrorResponse) => of<StudentDetailState>({ loading: false, notFound: err.status === 404, error: err.status !== 404, student: null })),
+        startWith(LOADING_STATE),
+      )),
     ),
     { initialValue: LOADING_STATE },
-  );
-
-  protected readonly attendanceState = toSignal(
-    this.route.paramMap.pipe(
-      map((params) => Number(params.get('id'))),
-      switchMap((id) =>
-        this.attendanceService.getStudentAttendanceSummary(id).pipe(
-          map((summary): AttendanceSummaryState => ({ loading: false, error: false, summary })),
-          catchError(() => of<AttendanceSummaryState>({ loading: false, error: true, summary: [] })),
-          startWith(ATTENDANCE_LOADING_STATE),
-        ),
-      ),
-    ),
-    { initialValue: ATTENDANCE_LOADING_STATE },
   );
 
   protected readonly subjectsState = toSignal(
     this.route.paramMap.pipe(
       map((params) => Number(params.get('id'))),
-      switchMap((id) =>
-        this.studentService.getStudentSubjects(id).pipe(
-          map((subjects): SubjectsState => ({ loading: false, error: false, subjects })),
-          catchError(() => of<SubjectsState>({ loading: false, error: true, subjects: [] })),
-          startWith(SUBJECTS_LOADING_STATE),
-        ),
-      ),
+      switchMap((id) => this.studentService.getStudentSubjects(id).pipe(
+        map((subjects): SubjectsState => ({ loading: false, error: false, subjects })),
+        catchError(() => of<SubjectsState>({ loading: false, error: true, subjects: [] })),
+        startWith(SUBJECTS_LOADING_STATE),
+      )),
     ),
     { initialValue: SUBJECTS_LOADING_STATE },
   );
 
-  protected readonly marksState = toSignal(
+  protected readonly historyState = toSignal(
     this.route.paramMap.pipe(
       map((params) => Number(params.get('id'))),
-      switchMap((id) =>
-        this.marksService.getStudentMarksSummary(id).pipe(
-          map((summary): MarksSummaryState => ({ loading: false, error: false, summary })),
-          catchError(() => of<MarksSummaryState>({ loading: false, error: true, summary: [] })),
-          startWith(MARKS_LOADING_STATE),
-        ),
-      ),
+      switchMap((id) => this.studentService.getStudentHistory(id).pipe(
+        map((entries): HistoryState => ({ loading: false, error: false, entries })),
+        catchError(() => of<HistoryState>({ loading: false, error: true, entries: [] })),
+        startWith(HISTORY_LOADING_STATE),
+      )),
     ),
-    { initialValue: MARKS_LOADING_STATE },
+    { initialValue: HISTORY_LOADING_STATE },
   );
-
-  protected readonly homeworkState = toSignal(
-    this.route.paramMap.pipe(
-      map((params) => Number(params.get('id'))),
-      switchMap((id) =>
-        this.homeworkService.getStudentHomework(id).pipe(
-          map((homework): HomeworkSummaryState => ({ loading: false, error: false, homework })),
-          catchError(() => of<HomeworkSummaryState>({ loading: false, error: true, homework: [] })),
-          startWith(HOMEWORK_LOADING_STATE),
-        ),
-      ),
-    ),
-    { initialValue: HOMEWORK_LOADING_STATE },
-  );
-
-  protected readonly materialsState = toSignal(
-    this.route.paramMap.pipe(
-      map((params) => Number(params.get('id'))),
-      switchMap((id) =>
-        this.materialsService.getForStudent(id).pipe(
-          map((materials): MaterialsState => ({ loading: false, error: false, materials })),
-          catchError(() => of<MaterialsState>({ loading: false, error: true, materials: [] })),
-          startWith(MATERIALS_LOADING_STATE),
-        ),
-      ),
-    ),
-    { initialValue: MATERIALS_LOADING_STATE },
-  );
-
-  protected readonly activitiesState = toSignal(
-    this.route.paramMap.pipe(
-      map((params) => Number(params.get('id'))),
-      switchMap((id) =>
-        this.activityRegistrationService.getForStudent(id).pipe(
-          map((registrations): ActivitiesState => ({ loading: false, error: false, registrations })),
-          catchError(() => of<ActivitiesState>({ loading: false, error: true, registrations: [] })),
-          startWith(ACTIVITIES_LOADING_STATE),
-        ),
-      ),
-    ),
-    { initialValue: ACTIVITIES_LOADING_STATE },
-  );
-
-  protected readonly deleteError = signal(false);
-
-  protected readonly activeTab = signal<'profile' | 'attendance' | 'marks' | 'homework' | 'materials' | 'activities'>('profile');
-
-  protected async onDelete(id: number): Promise<void> {
-    if (!(await this.confirmDialog.confirm('Are you sure you want to delete this student?'))) {
-      return;
-    }
-
-    this.deleteError.set(false);
-    this.studentService.deleteStudent(id).subscribe({
-      next: () => this.router.navigate(['/students']),
-      error: () => this.deleteError.set(true),
-    });
-  }
 }

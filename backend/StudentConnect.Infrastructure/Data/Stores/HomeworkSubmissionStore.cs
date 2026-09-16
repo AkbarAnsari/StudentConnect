@@ -43,6 +43,12 @@ public class HomeworkSubmissionStore(Database db)
             p => p.AddWithValue("studentId", studentId),
             Map);
 
+    public async Task<List<HomeworkSubmission>> GetByHomeworkAsync(int homeworkId) =>
+        await db.QueryAsync(
+            $"""{SelectWithNames} WHERE s."HomeworkId" = @homeworkId ORDER BY st."LastName", st."FirstName" """,
+            p => p.AddWithValue("homeworkId", homeworkId),
+            Map);
+
     // Used by the student homework list to derive per-homework status without a full join.
     public async Task<List<HomeworkSubmission>> GetByStudentForHomeworkIdsAsync(int studentId, IReadOnlyCollection<int> homeworkIds)
     {

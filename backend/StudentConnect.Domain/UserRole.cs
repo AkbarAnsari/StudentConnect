@@ -6,4 +6,5 @@ public enum UserRole
     Teacher,
     Admin,
     Parent,
+    Coordinator,
 }

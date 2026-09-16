@@ -90,6 +90,41 @@ public class TermsController(TermStore terms, AcademicYearStore academicYears, I
         return CreatedAtAction(nameof(GetTerms), null, TermDto.FromEntity(created));
     }
 
+    [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<TermDto>> UpdateTerm(int id, TermUpdateDto dto)
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var term = await terms.GetByIdAsync(id, schoolId);
+        if (term is null)
+        {
+            return NotFound();
+        }
+
+        if (term.IsLocked)
+        {
+            return Conflict(new { message = "Unlock this term before editing it." });
+        }
+
+        var name = (dto.Name ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return BadRequest(new { message = "Name is required." });
+        }
+
+        if (dto.EndDate <= dto.StartDate)
+        {
+            return BadRequest(new { message = "EndDate must be after StartDate." });
+        }
+
+        await terms.UpdateAsync(id, name, dto.StartDate, dto.EndDate);
+        return Ok(TermDto.FromEntity((await terms.GetByIdAsync(id, schoolId))!));
+    }
+
     // DELETE /api/terms/{id}
     [HttpDelete("{id:int}")]
     [Authorize(Roles = "Admin")]

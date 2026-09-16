@@ -1,13 +1,11 @@
 <section class="page page-wide">
-  <div class="page-header">
-    <h1>Learning Materials (Teacher)</h1>
-    <a class="add-link" routerLink="/upload-material">+ Upload Material</a>
-  </div>
+  <header class="page-header content-header"><div><p class="page-kicker">Teaching content</p><h1>Learning materials</h1><p>Prepare, release, close, and archive class resources.</p></div><a class="btn" routerLink="/upload-material">Upload material</a></header>
 
   @if (deleteError()) {
     <p class="error-message">Unable to delete learning material. Please check whether the StudentConnect API is running.</p>
   }
 
+  <div class="controls content-filters">
   @if (authService.role() === 'Admin') {
     <label class="teacher-picker">
       Teacher
@@ -19,6 +17,9 @@
       </select>
     </label>
   }
+  <label><span>Status</span><select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"><option value="All">All statuses</option><option value="Draft">Draft</option><option value="Scheduled">Scheduled</option><option value="Published">Published</option><option value="Closed">Closed</option><option value="Archived">Archived</option></select></label>
+  </div>
+  @if (actionError()) { <p class="error-message" role="alert">{{ actionError() }}</p> }
 
   @if (selectedTeacherId() === null) {
     <p class="empty">Select a teacher to view their learning materials.</p>
@@ -30,21 +31,23 @@
     </p>
   } @else if (state().materials.length === 0) {
     <p class="empty">No learning materials uploaded yet.</p>
+  } @else if (filteredMaterials().length === 0) {
+    <p class="empty">No materials match this status.</p>
   } @else {
-    <ul class="material-list">
-      @for (material of state().materials; track material.id) {
-        <li class="material-card">
-          <div class="material-info">
-            <span class="subject">{{ material.subjectName }} — {{ material.gradeName }}</span>
-            <span class="title">{{ material.title }}</span>
-            <span class="meta">{{ material.fileName }} — {{ formatSize(material.fileSize) }}</span>
-          </div>
-          <div class="actions">
-            <button type="button" class="download-link" (click)="download(material)">Download</button>
-            <button type="button" class="delete-button" (click)="onDelete(material.id)">Delete</button>
-          </div>
-        </li>
-      }
-    </ul>
+    <div class="content-table-region" tabindex="0" aria-label="Learning material management table"><table><caption>Learning materials and release status</caption><thead><tr><th>Material</th><th>Class</th><th>File</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
+      @for (material of filteredMaterials(); track material.id) { <tr><td data-label="Material"><strong class="title">{{ material.title }}</strong><span class="meta">{{ material.subjectName }} · {{ material.topic || 'No topic' }}</span></td><td data-label="Class">{{ material.gradeName }} / Section {{ material.sectionName || 'All' }}</td><td data-label="File">{{ material.fileName }}<span class="meta">Version {{ material.version }} · {{ formatSize(material.fileSize) }}</span></td><td data-label="Status"><span class="badge" [class.badge-success]="material.status === 'Published'" [class.badge-warning]="material.status === 'Draft' || material.status === 'Scheduled'">{{ material.status }}</span></td><td data-label="Actions" class="row-actions"><button type="button" (click)="download(material)">Download</button><button type="button" (click)="openVersions(material)">Versions</button>@if (material.status === 'Draft' || material.status === 'Scheduled') { <button type="button" (click)="changeLifecycle(material,'publish')" [disabled]="actionId()===material.id">Publish</button> } @if (material.status === 'Published') { <button type="button" (click)="changeLifecycle(material,'close')" [disabled]="actionId()===material.id">Close</button> } @if (material.status !== 'Draft' && material.status !== 'Archived') { <button type="button" (click)="changeLifecycle(material,'reopen')" [disabled]="actionId()===material.id">Draft</button> } @if (material.status !== 'Archived') { <button type="button" class="danger-action" (click)="changeLifecycle(material,'archive')" [disabled]="actionId()===material.id">Archive</button> } @else { <button type="button" (click)="changeLifecycle(material,'reopen')" [disabled]="actionId()===material.id">Restore draft</button> }</td></tr> }
+    </tbody></table></div>
+
+    @if (selectedMaterial(); as material) {
+      <section class="version-panel">
+        <div><p class="page-kicker">File history</p><h2>{{ material.title }}</h2></div>
+        @if (replacementError()) { <p class="error-message" role="alert">{{ replacementError() }}</p> }
+        @if (versionsLoading()) { <p class="loading">Loading versions...</p> }
+        @else { <div class="version-list" role="list">@for (version of versions(); track version.id) { <div role="listitem"><span><strong>Version {{ version.version }}</strong> · {{ version.fileName }} · {{ formatSize(version.fileSize) }}<small>{{ version.uploadedAtUtc | date:'medium' }} · {{ version.uploadedByName || 'System' }} · {{ version.changeReason || 'No reason recorded' }}</small></span><button type="button" class="btn btn-secondary" (click)="downloadVersion(material.id, version)">Download</button></div> }</div> }
+        @if (material.status === 'Draft') {
+          <div class="replacement-form"><label>Replacement file<input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg" (change)="onReplacementFile($event)" /></label><label>Change reason<input type="text" [ngModel]="replacementReason()" (ngModelChange)="replacementReason.set($event)" /></label><button type="button" [disabled]="actionId() === material.id" (click)="replaceFile(material)">Replace file</button></div>
+        } @else { <p class="notice">Return this material to Draft before replacing its file.</p> }
+      </section>
+    }
   }
 </section>

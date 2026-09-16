@@ -13,4 +13,7 @@ public class EmailOutboxEntry
     public DateTime? SentAtUtc { get; set; }
     public int Attempts { get; set; }
     public string? LastError { get; set; }
+    public int? DeadLetterOwnerUserId { get; set; }
+    public DateTime? DeadLetterAssignedAtUtc { get; set; }
+    public string? ResolutionNotes { get; set; }
 }

@@ -1,4 +1,4 @@
-export type AttendanceStatus = 'Present' | 'Absent';
+export type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Excused';
 
 export interface AttendanceRecord {
   id: number;
@@ -18,6 +18,16 @@ export interface AttendanceSummary {
   present: number;
   absent: number;
   percentage: number;
+}
+
+export interface AttendanceCorrection {
+  id: number;
+  attendanceId: number;
+  previousStatus: AttendanceStatus;
+  newStatus: AttendanceStatus;
+  reason: string;
+  changedAtUtc: string;
+  changedByName: string;
 }
 
 export interface Subject {
@@ -40,6 +50,7 @@ export interface BulkAttendanceItem {
 }
 
 export interface BulkAttendanceInput {
+  sectionId: number;
   subjectId: number;
   date: string;
   records: BulkAttendanceItem[];

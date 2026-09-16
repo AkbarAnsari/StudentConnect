@@ -1,32 +1,29 @@
 <section class="page page-wide">
-  <h1>Enter Marks</h1>
+  <header class="gradebook-header"><p class="page-kicker">Gradebook</p><h1>Enter marks</h1><p>Select an assigned class and a Draft assessment. Published results must be reopened before editing.</p></header>
 
-  <div class="controls">
+  <div class="controls gradebook-controls">
     <label>
-      Subject
-      <select [ngModel]="subjectId()" (ngModelChange)="onSubjectChange($event)">
-        <option [ngValue]="null">Select a subject</option>
-        @for (subject of subjects(); track subject.id) {
-          <option [ngValue]="subject.id">{{ subject.name }}</option>
+      <span>Assigned class</span>
+      <select [ngModel]="assignmentId()" (ngModelChange)="onAssignmentChange($event)" [disabled]="loadingAssignments()">
+        <option [ngValue]="null">Select a class</option>
+        @for (assignment of assignments(); track assignment.id) {
+          <option [ngValue]="assignment.id">{{ assignment.subjectName }} / {{ assignment.gradeName }} - Section {{ assignment.sectionName }}</option>
         }
       </select>
     </label>
 
     <label>
-      Assessment
-      <select [ngModel]="assessmentId()" (ngModelChange)="assessmentId.set($event)">
-        <option [ngValue]="null">Select an assessment</option>
-        @for (assessment of assessments(); track assessment.id) {
-          <option [ngValue]="assessment.id">{{ assessment.title }}</option>
+      <span>Draft assessment</span>
+      <select [ngModel]="assessmentId()" (ngModelChange)="onAssessmentChange($event)" [disabled]="loadingClass()">
+        <option [ngValue]="null">Select a Draft assessment</option>
+        @for (assessment of draftAssessments(); track assessment.id) {
+          <option [ngValue]="assessment.id">{{ assessment.title }} / {{ assessment.maximumMarks }} marks</option>
         }
       </select>
     </label>
 
     @if (selectedAssessment(); as a) {
-      <label>
-        Maximum Marks
-        <input type="number" [value]="a.maximumMarks" disabled />
-      </label>
+      <div class="assessment-context"><span>Maximum marks</span><strong>{{ a.maximumMarks }}</strong></div>
     }
   </div>
 
@@ -39,37 +36,63 @@
   @if (loadingExisting()) {
     <p class="notice">Loading any marks already recorded for this assessment...</p>
   }
+  @if (loadingAssignments() || loadingClass()) {
+    <p class="loading">Loading class assignments and roster...</p>
+  } @else if (assignments().length === 0) {
+    <p class="notice">No class assignments are configured for this account. Ask an administrator to assign a subject and section before entering marks.</p>
+  }
+
+  @if (assignmentId() !== null && !loadingClass() && draftAssessments().length === 0) {
+    <div class="notice">No Draft assessments are available for this subject. <a routerLink="/assessments">Reopen or create an assessment</a>.</div>
+  }
 
   @if (selectedAssessment(); as a) {
+    <div class="gradebook-toolbar"><div class="gradebook-summary"><div><strong>{{ students().length }}</strong><span>Students</span></div><div><strong>{{ enteredCount() }}</strong><span>Marks entered</span></div><div><strong>{{ classAverage() }}%</strong><span>Class average</span></div><div [class.has-errors]="invalidCount() > 0"><strong>{{ invalidCount() }}</strong><span>Needs attention</span></div></div><div class="gradebook-file-actions"><button type="button" class="btn btn-secondary" [disabled]="exporting()" (click)="exportCsv()">{{ exporting() ? 'Exporting...' : 'Export CSV' }}</button><label class="import-control"><span>Import exported CSV</span><input type="file" accept=".csv,text/csv" (change)="onImportFile($event)" /></label><button type="button" [disabled]="!importFile() || importing()" (click)="importCsv()">{{ importing() ? 'Importing...' : 'Import CSV' }}</button></div></div>
+    <div class="gradebook-table-region" tabindex="0" aria-label="Class gradebook">
     <table class="roster-table">
+      <caption>Marks for {{ a.title }}</caption>
       <thead>
         <tr>
-          <th>Student</th>
-          <th>Marks</th>
+          <th scope="col">Student ID</th><th scope="col">Student</th><th scope="col">Marks</th><th scope="col">Percentage</th><th scope="col">Comment</th><th scope="col"><span class="visually-hidden">History</span></th>
         </tr>
       </thead>
       <tbody>
-        @for (student of students(); track student.id) {
-          <tr>
-            <td>{{ student.firstName }} {{ student.lastName }}</td>
-            <td>
+        @for (student of students(); track student.id; let rowIndex = $index) {
+          <tr [class.changed-row]="pendingStudentIds().includes(student.id)">
+            <td data-label="Student ID"><span class="student-id">{{ student.studentId }}</span></td>
+            <td data-label="Student"><strong>{{ student.firstName }} {{ student.lastName }}</strong></td>
+            <td data-label="Marks">
               <input
+                #markInput
                 type="number"
                 min="0"
                 [max]="a.maximumMarks"
+                [attr.aria-label]="'Marks for ' + student.firstName + ' ' + student.lastName"
+                title="Enter marks"
                 [ngModel]="markFor(student.id)"
                 (ngModelChange)="onMarkChange(student.id, $event)"
+                (keydown)="onMarkKeydown($event, rowIndex)"
               />
             </td>
+            <td data-label="Percentage" [class.invalid-value]="isMarkInvalid(student.id)">{{ markFor(student.id) === null ? '-' : isMarkInvalid(student.id) ? 'Invalid' : ((markFor(student.id)! * 100 / a.maximumMarks) | number:'1.0-0') + '%' }}</td>
+            <td data-label="Comment"><textarea rows="2" maxlength="1000" title="Mark comment" [attr.aria-label]="'Comment for ' + student.firstName + ' ' + student.lastName" [value]="commentFor(student.id)" [disabled]="markFor(student.id) === null" (input)="onCommentChange(student.id, $any($event.target).value)"></textarea>@if (versionsByStudentId()[student.id]) { <small>Version {{ versionsByStudentId()[student.id] }}</small> }</td>
+            <td data-label="History">@if (markIdsByStudentId()[student.id]) { <button type="button" class="btn btn-secondary history-button" [disabled]="historyLoading()" (click)="openHistory(student)">History</button> } @else { <span>New</span> }</td>
           </tr>
         }
       </tbody>
     </table>
-
-    <button type="button" [disabled]="saving()" (click)="onSave()">
-      {{ saving() ? 'Saving...' : 'Save Marks' }}
-    </button>
+    </div>
+    <div class="save-bar"><p><strong>{{ pendingCount() }}</strong> {{ pendingCount() === 1 ? 'mark needs' : 'marks need' }} saving</p><button type="button" [disabled]="!canSave()" (click)="onSave()">{{ saving() ? 'Saving...' : 'Save marks' }}</button></div>
   } @else {
-    <p class="empty">Select a subject and assessment to enter marks.</p>
+    <p class="empty">Select an assigned class and assessment to enter marks.</p>
   }
 </section>
+
+@if (selectedHistory(); as history) {
+  <button type="button" class="drawer-backdrop" aria-label="Close mark history" (click)="closeHistory()"></button>
+  <aside class="history-drawer" role="dialog" aria-modal="true" aria-labelledby="mark-history-title">
+    <div class="drawer-header"><div><p class="page-kicker">Change history</p><h2 id="mark-history-title">{{ history.studentName }}</h2></div><button type="button" class="close-button" aria-label="Close mark history" (click)="closeHistory()">×</button></div>
+    @if (history.entries.length === 0) { <p class="empty">No changes have been recorded for this mark.</p> }
+    @else { <div class="history-list" role="list">@for (entry of history.entries; track entry.id) { <article role="listitem"><span class="version-badge">v{{ entry.version }}</span><div><strong>{{ entry.previousMarks }} → {{ entry.newMarks }}</strong><small>{{ entry.changedAtUtc | date: 'medium' : 'UTC' }} UTC · {{ entry.changedByName }}</small>@if (entry.previousComment !== entry.newComment) { <p><span>{{ entry.previousComment || 'No comment' }}</span><strong>→</strong><span>{{ entry.newComment || 'No comment' }}</span></p> }</div></article> }</div> }
+  </aside>
+}

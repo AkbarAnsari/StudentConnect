@@ -13,6 +13,13 @@ public class ActivityRegistrationDto
     public string Location { get; set; } = string.Empty;
     public DateTime RegistrationDate { get; set; }
     public string Status { get; set; } = string.Empty;
+    public bool ConsentConfirmed { get; set; }
+    public DateTime? CheckedInAtUtc { get; set; }
+    public string FeeStatus { get; set; } = string.Empty;
+    public DateTime? PaidAtUtc { get; set; }
+    public string? PaymentReference { get; set; }
+    public string? ConsentDocumentFileName { get; set; }
+    public DateTime? ConsentDocumentUploadedAtUtc { get; set; }
 
     public static ActivityRegistrationDto FromEntity(ActivityRegistration registration) => new()
     {
@@ -25,6 +32,13 @@ public class ActivityRegistrationDto
         Location = registration.Activity?.Location ?? string.Empty,
         RegistrationDate = registration.RegistrationDate,
         Status = registration.Status.ToString(),
+        ConsentConfirmed = registration.ConsentConfirmed,
+        CheckedInAtUtc = registration.CheckedInAtUtc,
+        FeeStatus = registration.FeeStatus,
+        PaidAtUtc = registration.PaidAtUtc,
+        PaymentReference = registration.PaymentReference,
+        ConsentDocumentFileName = registration.ConsentDocumentFileName,
+        ConsentDocumentUploadedAtUtc = registration.ConsentDocumentUploadedAtUtc,
     };
 }
 
@@ -34,4 +48,23 @@ public class ActivityRegistrationDto
 public class ActivityRegistrationCreateDto
 {
     public int ActivityId { get; set; }
+    public bool ConsentConfirmed { get; set; }
+}
+
+public class ActivityCheckInDto
+{
+    public bool CheckedIn { get; set; }
+}
+
+public class ActivityPaymentDto
+{
+    public string PaymentReference { get; set; } = string.Empty;
+}
+
+public class ActivityParticipantMessageDto
+{
+    public string Title { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public string Priority { get; set; } = "Normal";
+    public string RegistrationStatus { get; set; } = "Registered";
 }

@@ -17,10 +17,10 @@ public class AnalyticsStore(Database db)
                 (SELECT COUNT(*) FROM "Subjects" WHERE "SchoolId" = @schoolId) AS "TotalSubjects",
                 (SELECT COUNT(*) FROM "Attendance" a JOIN "Students" s ON s."Id" = a."StudentId" WHERE s."SchoolId" = @schoolId) AS "AttendanceTotal",
                 (SELECT COUNT(*) FROM "Attendance" a JOIN "Students" s ON s."Id" = a."StudentId" WHERE s."SchoolId" = @schoolId AND a."Status" = 'Present') AS "AttendancePresent",
-                (SELECT COUNT(*) FROM "Marks" m JOIN "Students" s ON s."Id" = m."StudentId" WHERE s."SchoolId" = @schoolId) AS "MarksCount",
+                (SELECT COUNT(*) FROM "Marks" m JOIN "Assessments" a ON a."Id" = m."AssessmentId" JOIN "Students" s ON s."Id" = m."StudentId" WHERE s."SchoolId" = @schoolId AND a."Status" = 'Published') AS "MarksCount",
                 (SELECT COALESCE(SUM(m."MarksObtained" * 100.0 / a."MaximumMarks"), 0)::double precision
                    FROM "Marks" m JOIN "Assessments" a ON a."Id" = m."AssessmentId" JOIN "Students" s ON s."Id" = m."StudentId"
-                   WHERE s."SchoolId" = @schoolId) AS "MarksPercentageSum"
+                   WHERE s."SchoolId" = @schoolId AND a."Status" = 'Published') AS "MarksPercentageSum"
             """;
 
         var row = await db.QuerySingleOrDefaultAsync(
@@ -81,7 +81,7 @@ public class AnalyticsStore(Database db)
             JOIN "Students" s ON s."Id" = m."StudentId"
             JOIN "Assessments" a ON a."Id" = m."AssessmentId"
             JOIN "Grades" g ON g."Id" = s."GradeId"
-            WHERE s."SchoolId" = @schoolId
+            WHERE s."SchoolId" = @schoolId AND a."Status" = 'Published'
             GROUP BY s."GradeId", g."Name"
             ORDER BY g."Name"
             """,
@@ -113,6 +113,7 @@ public class AnalyticsStore(Database db)
                 SELECT m."StudentId", AVG(m."MarksObtained" * 100.0 / a."MaximumMarks") AS avg_pct
                 FROM "Marks" m
                 JOIN "Assessments" a ON a."Id" = m."AssessmentId"
+                WHERE a."Status" = 'Published'
                 GROUP BY m."StudentId"
             )
             SELECT
@@ -167,7 +168,7 @@ public class AnalyticsStore(Database db)
                 FROM "Marks" m
                 JOIN "Assessments" asm ON asm."Id" = m."AssessmentId"
                 JOIN "Students" st ON st."Id" = m."StudentId"
-                WHERE st."SchoolId" = @schoolId AND asm."Date" >= @sinceDate
+                WHERE st."SchoolId" = @schoolId AND asm."Date" >= @sinceDate AND asm."Status" = 'Published'
                 GROUP BY month
             )
             SELECT COALESCE(am.month, mm.month) AS "Month",

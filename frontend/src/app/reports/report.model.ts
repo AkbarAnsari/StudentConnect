@@ -19,9 +19,56 @@ export interface StudentReportCard {
   totalStudentsInGrade: number;
   homeworkCompletionRate: number;
   subjects: SubjectReportRow[];
+  periodId: number | null;
+  periodLabel: string;
+  periodStartDate: string | null;
+  periodEndDate: string | null;
+  reportStatus: 'Draft' | 'Issued';
+  issuanceId: number | null;
+  issuedAtUtc: string | null;
+  comments: string | null;
+  templateName: string | null;
+  headerText: string | null;
+  footerText: string | null;
+  signatureLabels: string[];
+  generatedAtUtc: string;
 }
 
+export interface ReportPeriod {
+  id: number;
+  academicYearId: number;
+  academicYearName: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  isLocked: boolean;
+  isCurrent: boolean;
+  label: string;
+}
+
+export interface ReportIssuanceSummary {
+  id: number;
+  studentId: number;
+  termId: number;
+  periodLabel: string;
+  periodStartDate: string;
+  periodEndDate: string;
+  comments: string | null;
+  issuedByUserId: number;
+  issuedByName: string;
+  issuedAtUtc: string;
+  templateName: string | null;
+  signatureCount: number;
+  lastDownloadedAtUtc: string | null;
+}
+
+export interface ReportTemplate { id:number;name:string;headerText:string;footerText:string;primarySignatureLabel:string;secondarySignatureLabel:string|null;isDefault:boolean; }
+export interface TranscriptIssuanceSummary { id:number;studentId:number;issuedByName:string;issuedAtUtc:string; }
+
 export interface SectionClassReport {
+  assignmentId: number;
+  subjectId: number;
+  subjectName: string;
   sectionId: number;
   gradeName: string;
   sectionName: string;

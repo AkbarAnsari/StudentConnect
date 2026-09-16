@@ -1,14 +1,11 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { Component, HostListener, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { map } from 'rxjs';
-import { AttendanceService } from '../../attendance/attendance.service';
 import { AuthService } from '../../auth/auth.service';
-import { StudentService } from '../../students/student.service';
-import { TeacherService } from '../../teachers/teacher.service';
 import { validateFile } from '../../shared/file-validation.util';
+import { TeacherSubjectAssignment } from '../../teachers/teacher-subject-assignment.model';
+import { TeacherSubjectAssignmentService } from '../../teachers/teacher-subject-assignment.service';
 import { LearningMaterialsService } from '../learning-materials.service';
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.png', '.jpg', '.jpeg'];
@@ -23,28 +20,41 @@ const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 export class UploadMaterial {
   private readonly fb = inject(FormBuilder);
   private readonly materialsService = inject(LearningMaterialsService);
-  private readonly attendanceService = inject(AttendanceService);
-  private readonly studentService = inject(StudentService);
-  private readonly teacherService = inject(TeacherService);
+  private readonly assignmentService = inject(TeacherSubjectAssignmentService);
   protected readonly authService = inject(AuthService);
   private readonly router = inject(Router);
 
-  protected readonly subjects = toSignal(this.attendanceService.getSubjects(), { initialValue: [] });
-  protected readonly grades = toSignal(this.studentService.getGrades(), { initialValue: [] });
-  protected readonly teachers = toSignal(this.teacherService.getTeachers().pipe(map((r) => r.items)), { initialValue: [] });
+  protected readonly assignments = signal<TeacherSubjectAssignment[]>([]);
+  protected readonly loadingAssignments = signal(true);
 
   protected readonly selectedFile = signal<File | null>(null);
   protected readonly fileError = signal('');
   protected readonly submitting = signal(false);
   protected readonly errorMessage = signal('');
+  private saved = false;
 
   protected readonly form = this.fb.nonNullable.group({
     title: ['', Validators.required],
     description: ['', Validators.required],
-    subjectId: [0, [Validators.required, Validators.min(1)]],
-    gradeId: [0, [Validators.required, Validators.min(1)]],
-    teacherId: [this.authService.currentUser()?.teacherId ?? 0, [Validators.required, Validators.min(1)]],
+    topic: ['', Validators.required],
+    assignmentId: [0, [Validators.required, Validators.min(1)]],
+    releaseMode: ['Draft' as 'Draft' | 'Published' | 'Scheduled'],
+    scheduledFor: [''],
   });
+
+  constructor() {
+    const request = this.authService.role() === 'Admin' ? this.assignmentService.getAll() : this.assignmentService.getMine();
+    request.subscribe({
+      next: (assignments) => {
+        this.assignments.set(assignments);
+        this.loadingAssignments.set(false);
+      },
+      error: () => {
+        this.loadingAssignments.set(false);
+        this.errorMessage.set('Unable to load class assignments.');
+      },
+    });
+  }
 
   protected onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -70,28 +80,49 @@ export class UploadMaterial {
       return;
     }
 
-    const { title, description, subjectId, gradeId, teacherId } = this.form.getRawValue();
+    const { title, description, topic, assignmentId, releaseMode, scheduledFor } = this.form.getRawValue();
+    const assignment = this.assignments().find((item) => item.id === assignmentId);
+    if (!assignment) {
+      this.errorMessage.set('Select an assigned class.');
+      return;
+    }
+    if (releaseMode === 'Scheduled' && !scheduledFor) {
+      this.errorMessage.set('Choose a future release date and time.');
+      return;
+    }
     const formData = new FormData();
     formData.append('title', title);
     formData.append('description', description);
-    formData.append('subjectId', String(subjectId));
-    formData.append('gradeId', String(gradeId));
-    formData.append('teacherId', String(teacherId));
+    formData.append('topic', topic);
+    formData.append('subjectId', String(assignment.subjectId));
+    formData.append('gradeId', String(assignment.gradeId));
+    formData.append('sectionId', String(assignment.sectionId));
+    formData.append('teacherId', String(assignment.teacherId));
+    formData.append('status', releaseMode);
+    if (releaseMode === 'Scheduled') formData.append('scheduledForUtc', new Date(scheduledFor).toISOString());
     formData.append('file', file);
 
     this.submitting.set(true);
     this.errorMessage.set('');
 
     this.materialsService.upload(formData).subscribe({
-      next: () => this.router.navigate(['/teacher-materials']),
+      next: () => {
+        this.saved = true;
+        this.router.navigate(['/teacher-materials']);
+      },
       error: (err: HttpErrorResponse) => {
         this.submitting.set(false);
-        this.errorMessage.set(
-          err.status === 400
-            ? (err.error?.message ?? 'Some of the entered data was invalid.')
-            : 'Unable to upload learning material. Please check whether the StudentConnect API is running.',
-        );
+        this.errorMessage.set(err.error?.message ?? 'Unable to upload learning material. Please try again.');
       },
     });
+  }
+
+  hasUnsavedChanges(): boolean {
+    return (this.form.dirty || this.selectedFile() !== null) && !this.saved && !this.submitting();
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  protected onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.hasUnsavedChanges()) event.preventDefault();
   }
 }

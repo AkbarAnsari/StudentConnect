@@ -1,5 +1,5 @@
 # Runtime-only image: expects `dotnet publish StudentConnect.Api.csproj -c Release -o
-# ../publish` to have already been run on the host (see docs/README docker section) —
+# ../publish` to have already been run on the host (see the root README Docker section) —
 # NuGet restore doesn't happen inside this build because this network's proxy blocks
 # nuget.org from containers. Build context is the "backend/" folder, one level up from
 # this Dockerfile — e.g. docker build -f StudentConnect.Api/Dockerfile -t studentconnect-api .

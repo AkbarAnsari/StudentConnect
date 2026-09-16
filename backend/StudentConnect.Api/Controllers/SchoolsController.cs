@@ -15,8 +15,8 @@ namespace StudentConnect.Api.Controllers;
 
 // Public, unauthenticated self-service tenant onboarding — creates a brand-new School and its
 // first Admin user account in one call, and logs that admin in immediately. The admin's email
-// is captured and a verification email is enqueued (see docs/solution-architecture-multi-tenancy.md
-// for what's still deliberately deferred: platform-admin console, billing, RLS, etc.).
+// is captured and a verification email is enqueued. Platform administration and billing
+// remain outside this school-scoped onboarding flow.
 [ApiController]
 [Route("api/schools")]
 [AllowAnonymous]

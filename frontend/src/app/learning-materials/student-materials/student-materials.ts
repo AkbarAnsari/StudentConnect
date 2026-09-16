@@ -5,6 +5,7 @@ import { catchError, map, of, startWith } from 'rxjs';
 import { triggerBlobDownload } from '../../shared/download.util';
 import { LearningMaterial } from '../learning-material.model';
 import { LearningMaterialsService } from '../learning-materials.service';
+import { StudentRecordNav } from '../../students/student-record-nav/student-record-nav';
 
 interface StudentMaterialsState {
   loading: boolean;
@@ -16,7 +17,7 @@ const LOADING_STATE: StudentMaterialsState = { loading: true, error: false, mate
 
 @Component({
   selector: 'app-student-materials',
-  imports: [RouterLink],
+  imports: [RouterLink, StudentRecordNav],
   templateUrl: './student-materials.html',
   styleUrl: './student-materials.css',
 })

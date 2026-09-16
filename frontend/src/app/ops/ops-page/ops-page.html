@@ -1,41 +1,63 @@
-<section class="page page-wide">
+<section class="page page-wide ops-page">
   <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
-  <h1>Operations</h1>
+  <div class="page-header">
+    <div><p class="eyebrow">System health</p><h1>Operations</h1><p>Live dependency status and recovery paths for school services.</p></div>
+    <button type="button" class="btn btn-secondary" [disabled]="loading()" (click)="reload()">{{ loading() ? 'Refreshing...' : 'Refresh status' }}</button>
+  </div>
 
-  @if (errorMessage()) {
-    <p class="error-message">{{ errorMessage() }}</p>
+  @if (loading() && !info()) {
+    <p class="loading" aria-live="polite">Checking service health...</p>
+  } @else if (errorMessage()) {
+    <div class="error-message recovery-state" role="alert"><span>{{ errorMessage() }}</span><button type="button" class="btn btn-secondary" (click)="reload()">Retry</button></div>
   }
+  @if(actionMessage()){<p class="success-message">{{actionMessage()}}</p>}
 
   @if (info(); as info) {
-    <div class="summary-grid">
-      <div class="summary-card">
-        <span class="summary-label">Environment</span>
-        <span class="summary-value">{{ info.environmentName }}</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Version</span>
-        <span class="summary-value">{{ info.version }}</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Uptime</span>
-        <span class="summary-value">{{ formatUptime(info.uptimeSeconds) }}</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Database</span>
-        <span class="badge" [class.badge-success]="info.databaseHealthy" [class.badge-danger]="!info.databaseHealthy">
-          {{ info.databaseHealthy ? 'Healthy' : 'Unreachable' }}
-        </span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Pending Emails</span>
-        <span class="summary-value">{{ info.pendingEmailCount }}</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Failed Emails</span>
-        <span class="summary-value" [class.text-danger]="info.failedEmailCount > 0">{{ info.failedEmailCount }}</span>
-      </div>
+    <section class="status-banner" [attr.data-status]="info.overallStatus" aria-labelledby="overall-status-title">
+      <div><span class="status-dot"></span><div><p class="eyebrow">Current state</p><h2 id="overall-status-title">{{ info.overallStatus }}</h2></div></div>
+      <p>Server time {{ info.serverTimeUtc | date: 'medium' : 'UTC' }} UTC</p>
+      @if(info.runbookUrl){<a class="btn btn-secondary" [href]="info.runbookUrl" target="_blank" rel="noopener">Open runbook</a>}
+    </section>
+
+    <div class="summary-grid" aria-label="Runtime summary">
+      <div class="summary-card"><span class="summary-label">Environment</span><span class="summary-value">{{ info.environmentName }}</span></div>
+      <div class="summary-card"><span class="summary-label">Version</span><span class="summary-value">{{ info.version }}</span></div>
+      <div class="summary-card"><span class="summary-label">API uptime</span><span class="summary-value">{{ formatUptime(info.uptimeSeconds) }}</span></div>
+      <div class="summary-card"><span class="summary-label">Sent in 24 hours</span><span class="summary-value">{{ info.sentEmailCountLast24Hours }}</span></div>
     </div>
 
-    <button type="button" class="btn" (click)="reload()">Refresh</button>
+    <section class="dependency-section" aria-labelledby="dependencies-title">
+      <div class="section-heading"><div><p class="eyebrow">Dependencies</p><h2 id="dependencies-title">Service status</h2></div><p>Each row identifies the current state and next recovery action.</p></div>
+      <div class="dependency-list" role="list">
+        <article class="dependency-row" role="listitem">
+          <div class="dependency-name"><span class="dependency-icon">DB</span><div><h3>PostgreSQL database</h3><p>Primary application data store</p></div></div>
+          <div><span class="health-badge" [attr.data-health]="info.databaseHealthy ? 'healthy' : 'failed'">{{ info.databaseHealthy ? 'Healthy' : 'Unreachable' }}</span></div>
+          <dl><div><dt>Response</dt><dd>{{ info.databaseResponseMilliseconds }} ms</dd></div><div><dt>Checked</dt><dd>{{ lastRefreshedAt() | date: 'mediumTime' }}</dd></div></dl>
+          <a class="btn btn-secondary" routerLink="/audit-log">Review audit activity</a>
+        </article>
+
+        <article class="dependency-row" role="listitem">
+          <div class="dependency-name"><span class="dependency-icon">EM</span><div><h3>Email delivery</h3><p>Asynchronous notification outbox</p></div></div>
+          <div><span class="health-badge" [attr.data-health]="info.failedEmailCount > 0 ? 'failed' : info.pendingEmailCount > 0 ? 'processing' : 'healthy'">{{ info.failedEmailCount > 0 ? 'Attention' : info.pendingEmailCount > 0 ? 'Processing' : 'Healthy' }}</span></div>
+          <dl><div><dt>Pending</dt><dd>{{ info.pendingEmailCount }}</dd></div><div><dt>Failed</dt><dd [class.text-danger]="info.failedEmailCount > 0">{{ info.failedEmailCount }}</dd></div><div><dt>Oldest pending</dt><dd>{{ pendingAge(info.oldestPendingEmailAtUtc) }}</dd></div></dl>
+          <a class="btn btn-secondary" routerLink="/email-outbox">Open delivery queue</a>
+        </article>
+      </div>
+    </section>
+
+    <section class="freshness-section" aria-labelledby="freshness-title">
+      <div><p class="eyebrow">Freshness</p><h2 id="freshness-title">Delivery timeline</h2></div>
+      <div class="freshness-grid">
+        <div><span>Last successful delivery</span><strong>{{ info.lastEmailSentAtUtc ? (info.lastEmailSentAtUtc | date: 'medium' : 'UTC') + ' UTC' : 'No recorded delivery' }}</strong></div>
+        <div><span>Last failed delivery</span><strong>{{ info.lastEmailFailureAtUtc ? (info.lastEmailFailureAtUtc | date: 'medium' : 'UTC') + ' UTC' : 'No current failure' }}</strong></div>
+        <div><span>Status refreshed</span><strong>{{ lastRefreshedAt() | date: 'medium' }}</strong></div>
+      </div>
+    </section>
+
+    <section class="guidance-section" aria-labelledby="guidance-title">
+      <h2 id="guidance-title">Recovery guidance</h2>
+      <ol><li>Open Email delivery and inspect the latest failure before retrying.</li><li>Retry only failed messages after the underlying SMTP or recipient issue is resolved.</li><li>Use Audit Log to confirm who initiated sensitive recovery actions.</li></ol>
+    </section>
+    <section class="ops-settings"><h2>Governance and alerts</h2><div class="settings-grid"><label>Alert email<input type="email" [ngModel]="settings().alertEmail" (ngModelChange)="updateSetting('alertEmail',$event||null)" /></label><label>Webhook URL<input type="url" [ngModel]="settings().alertWebhookUrl" (ngModelChange)="updateSetting('alertWebhookUrl',$event||null)" /></label><label>Failure threshold<input type="number" min="1" [ngModel]="settings().failedEmailThreshold" (ngModelChange)="updateSetting('failedEmailThreshold',+$event)" /></label><label>Audit retention days<input type="number" min="30" [ngModel]="settings().auditRetentionDays" (ngModelChange)="updateSetting('auditRetentionDays',+$event)" /></label><label>Notification retention days<input type="number" min="30" [ngModel]="settings().notificationRetentionDays" (ngModelChange)="updateSetting('notificationRetentionDays',+$event)" /></label><label>Runbook URL<input type="url" [ngModel]="settings().runbookUrl" (ngModelChange)="updateSetting('runbookUrl',$event||null)" /></label><label><input type="checkbox" [ngModel]="settings().redactAuditDetails" (ngModelChange)="updateSetting('redactAuditDetails',$event)" /> Redact old audit details instead of deleting</label></div><div class="settings-actions"><button type="button" (click)="saveSettings()">Save settings</button><button type="button" class="btn btn-secondary" (click)="testAlert()">Test destinations</button><button type="button" class="btn btn-secondary" (click)="applyRetention()">Apply retention now</button></div></section>
   }
 </section>

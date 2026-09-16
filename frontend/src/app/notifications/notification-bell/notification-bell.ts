@@ -1,15 +1,19 @@
 import { DatePipe } from '@angular/common';
 import { Component, HostListener, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import { NgIcon } from '@ng-icons/core';
+import { AppNotification } from '../notification.model';
 import { NotificationService } from '../notification.service';
 
 @Component({
   selector: 'app-notification-bell',
-  imports: [DatePipe],
+  imports: [DatePipe, NgIcon],
   templateUrl: './notification-bell.html',
   styleUrl: './notification-bell.css',
 })
 export class NotificationBell implements OnInit, OnDestroy {
   protected readonly notificationService = inject(NotificationService);
+  private readonly router = inject(Router);
   protected readonly open = signal(false);
 
   ngOnInit(): void {
@@ -28,6 +32,17 @@ export class NotificationBell implements OnInit, OnDestroy {
     this.notificationService.markAsRead(id);
   }
 
+  protected openNotification(notification: AppNotification): void {
+    this.markAsRead(notification.id);
+    this.open.set(false);
+    if (notification.actionUrl) this.router.navigateByUrl(notification.actionUrl);
+  }
+
+  protected openCenter(): void {
+    this.open.set(false);
+    this.router.navigate(['/notifications']);
+  }
+
   protected markAllAsRead(): void {
     this.notificationService.markAllAsRead();
   }
@@ -41,5 +56,10 @@ export class NotificationBell implements OnInit, OnDestroy {
     if (!(event.target as HTMLElement).closest('.notification-bell')) {
       this.open.set(false);
     }
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    this.open.set(false);
   }
 }

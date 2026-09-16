@@ -13,6 +13,9 @@ public class MarkRecordDto
     public DateOnly AssessmentDate { get; set; }
     public int MarksObtained { get; set; }
     public int MaximumMarks { get; set; }
+    public string? Comment { get; set; }
+    public int Version { get; set; }
+    public DateTime? UpdatedAtUtc { get; set; }
 
     public static MarkRecordDto FromEntity(Mark mark) => new()
     {
@@ -24,6 +27,9 @@ public class MarkRecordDto
         AssessmentDate = mark.Assessment?.Date ?? default,
         MarksObtained = mark.MarksObtained,
         MaximumMarks = mark.Assessment?.MaximumMarks ?? 0,
+        Comment = mark.Comment,
+        Version = mark.Version,
+        UpdatedAtUtc = mark.UpdatedAtUtc,
     };
 }
 
@@ -32,9 +38,13 @@ public class AssessmentResultDto
 {
     public int MarkId { get; set; }
     public int StudentId { get; set; }
+    public string StudentCode { get; set; } = string.Empty;
     public string StudentName { get; set; } = string.Empty;
     public int MarksObtained { get; set; }
     public int MaximumMarks { get; set; }
+    public string? Comment { get; set; }
+    public int Version { get; set; }
+    public DateTime? UpdatedAtUtc { get; set; }
 }
 
 // Per-subject totals for a student — percentage and result category calculated on the backend.
@@ -59,16 +69,20 @@ public class MarkCreateDto
     public int StudentId { get; set; }
     public int AssessmentId { get; set; }
     public int MarksObtained { get; set; }
+    public string? Comment { get; set; }
 }
 
 public class MarkUpdateDto
 {
     public int MarksObtained { get; set; }
+    public string? Comment { get; set; }
+    public int ExpectedVersion { get; set; }
 }
 
 // A teacher saving marks for a whole class at once.
 public class BulkMarksRequestDto
 {
+    public int SectionId { get; set; }
     public int AssessmentId { get; set; }
     public List<BulkMarkItemDto> Marks { get; set; } = [];
 }
@@ -77,4 +91,20 @@ public class BulkMarkItemDto
 {
     public int StudentId { get; set; }
     public int MarksObtained { get; set; }
+    public string? Comment { get; set; }
+    public int? ExpectedVersion { get; set; }
+}
+
+public class MarkHistoryDto
+{
+    public long Id { get; set; }
+    public int MarkId { get; set; }
+    public int PreviousMarks { get; set; }
+    public int NewMarks { get; set; }
+    public string? PreviousComment { get; set; }
+    public string? NewComment { get; set; }
+    public int Version { get; set; }
+    public int ChangedByUserId { get; set; }
+    public string ChangedByName { get; set; } = string.Empty;
+    public DateTime ChangedAtUtc { get; set; }
 }

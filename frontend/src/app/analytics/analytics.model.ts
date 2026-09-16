@@ -25,12 +25,37 @@ export interface AtRiskStudent {
   studentId: string;
   fullName: string;
   gradeName: string;
+  sectionName: string;
   attendancePercentage: number | null;
   averageMarksPercentage: number | null;
+  riskLevel: 'High' | 'Watch';
+  reasons: string[];
 }
 
 export interface MonthlyTrend {
   month: string;
   attendancePercentage: number;
   marksPercentage: number;
+}
+
+export interface AnalyticsDashboard {
+  overview: AnalyticsOverview;
+  attendanceByGrade: GradeAttendance[];
+  marksByGrade: GradeMarks[];
+  atRiskStudents: AtRiskStudent[];
+  trend: MonthlyTrend[];
+  scopeLabel: string;
+  dateFrom: string;
+  dateTo: string;
+  attendanceThreshold: number;
+  marksThreshold: number;
+  generatedAtUtc: string;
+}
+
+export interface AnalyticsFilters {
+  assignmentId: number | null;
+  dateFrom: string;
+  dateTo: string;
+  attendanceThreshold: number;
+  marksThreshold: number;
 }

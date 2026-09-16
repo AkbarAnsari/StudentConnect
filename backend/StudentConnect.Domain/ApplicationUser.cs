@@ -29,4 +29,8 @@ public class ApplicationUser
     // Opt-in: batch notification emails into one periodic digest instead of a realtime email
     // per event (see NotificationDigestProcessor) — primarily aimed at Parents.
     public bool NotificationDigestEnabled { get; set; }
+    public UserAccountStatus Status { get; set; } = UserAccountStatus.Active;
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime? LastLoginAtUtc { get; set; }
+    public DateTime? DeactivatedAtUtc { get; set; }
 }

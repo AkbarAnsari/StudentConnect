@@ -29,6 +29,26 @@ public class NotificationsController(NotificationStore notificationStore, ICurre
         return Ok(count);
     }
 
+    [HttpGet("history")]
+    public async Task<ActionResult<PagedResult<NotificationResponseDto>>> GetHistory(
+        int page = 1,
+        int pageSize = 20,
+        bool unreadOnly = false,
+        string? type = null)
+    {
+        var userId = currentUser.UserId!.Value;
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var (items, totalCount) = await notificationStore.GetPagedForUserAsync(userId, page, pageSize, unreadOnly, type);
+        return Ok(new PagedResult<NotificationResponseDto>
+        {
+            Items = items.Select(NotificationResponseDto.FromEntity).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        });
+    }
+
     // POST /api/notifications/{id}/read
     [HttpPost("{id:int}/read")]
     public async Task<IActionResult> MarkAsRead(int id)

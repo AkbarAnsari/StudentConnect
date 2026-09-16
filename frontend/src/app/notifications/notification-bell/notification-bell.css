@@ -10,8 +10,8 @@
   gap: 0.4rem;
   padding: 0.4rem 0.75rem;
   font-size: 0.78rem;
-  color: #4b5563;
-  border-bottom: 1px solid #e5e7eb;
+  color: var(--color-neutral-600);
+  border-bottom: 1px solid var(--color-neutral-200);
 }
 
 .digest-toggle input {
@@ -33,7 +33,7 @@
   position: absolute;
   top: 0;
   right: 0;
-  background: #dc2626;
+  background: var(--color-danger-600);
   color: #fff;
   font-size: 0.65rem;
   font-weight: 700;
@@ -50,15 +50,15 @@
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  width: 320px;
-  max-height: 400px;
+  width: min(360px, calc(100vw - 2rem));
+  max-height: min(520px, calc(100vh - 90px));
   overflow-y: auto;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   z-index: 50;
-  color: #111827;
+  color: var(--color-neutral-900);
 }
 
 .notification-panel-header {
@@ -66,14 +66,14 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-neutral-200);
   font-weight: 600;
 }
 
 .mark-all-btn {
   background: none;
   border: none;
-  color: #2563eb;
+  color: var(--color-accent-700);
   cursor: pointer;
   font-size: 0.8rem;
   font-weight: 600;
@@ -81,7 +81,7 @@
 
 .notification-empty {
   padding: 1rem;
-  color: #6b7280;
+  color: var(--color-neutral-500);
   font-size: 0.9rem;
   margin: 0;
 }
@@ -93,9 +93,19 @@
 }
 
 .notification-item {
+  display: block;
+  width: 100%;
+  min-height: 0;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #f3f4f6;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--color-neutral-100);
+  border-left: 3px solid transparent;
+  border-radius: 0;
   cursor: pointer;
+  text-align: left;
+  white-space: normal;
 }
 
 .notification-item:last-child {
@@ -103,16 +113,40 @@
 }
 
 .notification-item.unread {
-  background: #eff6ff;
+  background: var(--color-accent-50);
+  border-left-color: var(--color-accent-600);
 }
+
+.notification-item.priority-important { border-left-color: var(--color-warning-700); }
+.notification-item.priority-urgent { border-left-color: var(--color-danger-600); }
 
 .notification-item p {
   margin: 0.25rem 0;
   font-size: 0.85rem;
-  color: #374151;
+  color: var(--color-neutral-700);
 }
 
 .notification-time {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--color-neutral-500);
+}
+
+.view-all-btn {
+  width: 100%;
+  color: var(--color-accent-700);
+  background: var(--color-surface);
+  border: 0;
+  border-radius: 0;
+}
+
+.view-all-btn:hover { color: #fff; }
+
+@media (max-width: 640px) {
+  .notification-panel {
+    position: fixed;
+    inset: 64px 0 auto 0;
+    width: 100%;
+    max-height: calc(100vh - 64px);
+    border-radius: 0;
+  }
 }

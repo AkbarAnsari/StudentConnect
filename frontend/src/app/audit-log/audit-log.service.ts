@@ -2,7 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { AuditLog } from './audit-log.model';
+import { PagedResult } from '../shared/paged-result.model';
+import { AuditLog, AuditLogFilters } from './audit-log.model';
 
 @Injectable({ providedIn: 'root' })
 export class AuditLogService {
@@ -15,5 +16,22 @@ export class AuditLogService {
       params['entityType'] = entityType;
     }
     return this.http.get<AuditLog[]>(this.baseUrl, { params });
+  }
+
+  getPaged(filters: AuditLogFilters): Observable<PagedResult<AuditLog>> {
+    return this.http.get<PagedResult<AuditLog>>(`${this.baseUrl}/paged`, { params: this.params(filters) });
+  }
+
+  getById(id: number): Observable<AuditLog> {
+    return this.http.get<AuditLog>(`${this.baseUrl}/${id}`);
+  }
+
+  export(filters: AuditLogFilters): Observable<Blob> {
+    const { page: _page, pageSize: _pageSize, ...exportFilters } = filters;
+    return this.http.get(`${this.baseUrl}/export`, { params: this.params(exportFilters), responseType: 'blob' });
+  }
+
+  private params(filters: Partial<AuditLogFilters>): Record<string, string> {
+    return Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== '').map(([key, value]) => [key, String(value)]));
   }
 }

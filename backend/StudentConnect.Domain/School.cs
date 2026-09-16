@@ -3,7 +3,7 @@ namespace StudentConnect.Domain;
 // The multi-tenancy root — every school using the product is exactly one row here. Users,
 // Students, Teachers, Grades, Subjects, and AcademicYears all carry a SchoolId; Terms and
 // Sections are scoped transitively through their AcademicYear/Grade instead of a redundant
-// column. See docs/solution-architecture-multi-tenancy.md.
+// column.
 public class School
 {
     public int Id { get; set; }

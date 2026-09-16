@@ -1,6 +1,7 @@
-<section class="page">
-  <a class="back-link" [routerLink]="['/students', studentId]">← Back to Profile</a>
-  <h1>My Homework</h1>
+<section class="page page-wide homework-page">
+  <a class="back-link" [routerLink]="['/students', studentId]">Back to student record</a>
+  <app-student-record-nav [studentId]="studentId" />
+  <header><p class="page-kicker">Learning</p><h1>Homework</h1><p>Start with overdue and upcoming assignments.</p></header>
 
   @if (state().loading) {
     <p class="loading">Loading homework...</p>
@@ -11,12 +12,13 @@
   } @else if (state().homework.length === 0) {
     <p class="empty">No homework assigned yet.</p>
   } @else {
-    <ul class="homework-list">
-      @for (item of state().homework; track item.id) {
-        <li class="homework-card">
+    @for (group of groups(); track group.label) {
+      <section class="deadline-group"><div class="group-heading"><h2>{{ group.label }}</h2><span>{{ group.items.length }}</span></div><div class="homework-list" role="list">
+      @for (item of group.items; track item.id) {
+        <article class="homework-card" role="listitem">
           <div class="homework-info">
             <span class="title">{{ item.title }}</span>
-            <span class="meta">{{ item.subjectName }} — Due {{ item.dueDate }}</span>
+            <span class="meta">{{ item.subjectName }} / Due {{ item.dueDate }}</span>
           </div>
           <span
             class="status"
@@ -26,9 +28,10 @@
           >
             {{ item.status }}
           </span>
-          <a class="view-link" [routerLink]="['/students', studentId, 'homework', item.id]">View Homework</a>
-        </li>
+          <a class="view-link" [routerLink]="['/students', studentId, 'homework', item.id]">Open homework</a>
+        </article>
       }
-    </ul>
+      </div></section>
+    }
   }
 </section>

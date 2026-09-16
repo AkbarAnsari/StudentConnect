@@ -1,17 +1,17 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
   AttendanceCreateInput,
+  AttendanceCorrection,
   AttendanceRecord,
   AttendanceSummary,
   BulkAttendanceInput,
   Subject,
 } from './attendance.model';
 
-// AttendanceComponent -> AttendanceService -> HttpClient -> ASP.NET Core API -> EF Core -> SQL Server.
-// Components never talk to HttpClient directly — only through this service.
+// Components use this service for all attendance API requests.
 @Injectable({ providedIn: 'root' })
 export class AttendanceService {
   private readonly http = inject(HttpClient);
@@ -22,15 +22,19 @@ export class AttendanceService {
     return this.http.get<AttendanceRecord[]>(`${this.baseUrl}/student/${studentId}`);
   }
 
-  getStudentSubjectAttendance(studentId: number, subjectId: number): Observable<AttendanceRecord[]> {
-    return this.http.get<AttendanceRecord[]>(`${this.baseUrl}/student/${studentId}/subject/${subjectId}`);
+  getStudentSubjectAttendance(studentId: number, subjectId: number, dateFrom?: string, dateTo?: string): Observable<AttendanceRecord[]> {
+    return this.http.get<AttendanceRecord[]>(`${this.baseUrl}/student/${studentId}/subject/${subjectId}`, { params: this.dateParams(dateFrom, dateTo) });
   }
 
-  getStudentAttendanceSummary(studentId: number): Observable<AttendanceSummary[]> {
-    return this.http.get<AttendanceSummary[]>(`${this.baseUrl}/student/${studentId}/summary`);
+  getStudentSubjectAttendanceCorrections(studentId: number, subjectId: number, dateFrom?: string, dateTo?: string): Observable<AttendanceCorrection[]> {
+    return this.http.get<AttendanceCorrection[]>(`${this.baseUrl}/student/${studentId}/subject/${subjectId}/corrections`, { params: this.dateParams(dateFrom, dateTo) });
   }
 
-  // Every already-recorded status for a subject+date — used to prefill the Record Attendance
+  getStudentAttendanceSummary(studentId: number, dateFrom?: string, dateTo?: string): Observable<AttendanceSummary[]> {
+    return this.http.get<AttendanceSummary[]>(`${this.baseUrl}/student/${studentId}/summary`, { params: this.dateParams(dateFrom, dateTo) });
+  }
+
+  // Every already-recorded status for a subject+date, used to prefill the Record Attendance
   // grid so re-saving a past date doesn't silently overwrite real data with defaults.
   getBySubjectAndDate(subjectId: number, date: string): Observable<AttendanceRecord[]> {
     return this.http.get<AttendanceRecord[]>(`${this.baseUrl}/subject/${subjectId}/date/${date}`);
@@ -55,9 +59,16 @@ export class AttendanceService {
   getSubjects(): Observable<Subject[]> {
     return this.http.get<Subject[]>(this.subjectsUrl);
   }
+
+  private dateParams(dateFrom?: string, dateTo?: string): HttpParams {
+    let params = new HttpParams();
+    if (dateFrom) params = params.set('dateFrom', dateFrom);
+    if (dateTo) params = params.set('dateTo', dateTo);
+    return params;
+  }
 }
 
 interface AttendanceStatusInput {
-  status: 'Present' | 'Absent';
+  status: 'Present' | 'Absent' | 'Late' | 'Excused';
   reason?: string;
 }

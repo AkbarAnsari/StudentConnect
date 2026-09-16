@@ -48,6 +48,35 @@ public class GradesController(ReferenceDataStore referenceData, ICurrentTenantSe
         return CreatedAtAction(nameof(GetGrades), null, created);
     }
 
+    [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<Grade>> UpdateGrade(int id, GradeUpdateDto dto)
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        if (!await referenceData.GradeExistsAsync(id, schoolId))
+        {
+            return NotFound();
+        }
+
+        var name = (dto.Name ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return BadRequest(new { message = "Name is required." });
+        }
+
+        if (await referenceData.GradeNameExistsAsync(name, schoolId, id))
+        {
+            return Conflict(new { message = $"Grade '{name}' already exists." });
+        }
+
+        await referenceData.UpdateGradeAsync(id, name, schoolId);
+        return Ok(await referenceData.GetGradeByIdAsync(id, schoolId));
+    }
+
     // DELETE /api/grades/{id}
     [HttpDelete("{id:int}")]
     [Authorize(Roles = "Admin")]

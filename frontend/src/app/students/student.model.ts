@@ -11,6 +11,7 @@ export interface Student {
   sectionId: number | null;
   sectionName: string;
   status: StudentLifecycleStatus;
+  statusChangedAtUtc: string | null;
   statusReason: string | null;
   dateOfBirth: string | null;
   phone: string | null;
@@ -48,11 +49,33 @@ export interface StudentInput {
   dateOfBirth?: string | null;
   phone?: string | null;
   address?: string | null;
+  subjectIds?: number[];
+  createLogin?: boolean;
+  username?: string | null;
+  guardianParentUserId?: number | null;
+  guardianRelationshipType?: string;
+  guardianIsPrimaryContact?: boolean;
 }
 
 export interface StudentStatusUpdate {
   status: StudentLifecycleStatus;
   reason?: string;
+}
+
+export interface StudentBulkStatusResult {
+  requested: number;
+  updated: number;
+}
+
+export interface StudentHistoryEntry {
+  id: number;
+  timestampUtc: string;
+  username: string;
+  role: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  details: string | null;
 }
 
 export interface StudentImportRowResult {

@@ -1,0 +1,39 @@
+.route-state {
+  min-height: min(68dvh, 620px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.route-code {
+  margin: 0 0 0.25rem;
+  color: var(--color-secondary-600);
+  font-family: var(--font-heading);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.route-state h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+}
+
+.route-state > p:not(.route-code) {
+  max-width: 34rem;
+  color: var(--color-neutral-600);
+}
+
+.attempted-path {
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--color-neutral-300);
+  background: var(--color-surface);
+  overflow-wrap: anywhere;
+}
+
+.route-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}

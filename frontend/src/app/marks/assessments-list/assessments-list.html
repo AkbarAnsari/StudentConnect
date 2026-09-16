@@ -1,28 +1,27 @@
 <section class="page page-wide">
-  <div class="page-header">
-    <h1>Assessments</h1>
-    <a class="add-link" routerLink="/assessments/add">+ Create Assessment</a>
+  <header class="page-header assessment-header"><div><p class="page-kicker">Gradebook</p><h1>Assessments</h1><p>Prepare assessments, enter marks in Draft, and publish results when they are ready.</p></div><a class="btn" routerLink="/assessments/add">Create assessment</a></header>
+
+  <div class="controls assessment-filters" aria-label="Assessment filters">
+    <label><span>Status</span><select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"><option value="All">All statuses</option><option value="Draft">Draft</option><option value="Published">Published</option></select></label>
+    <label><span>Subject</span><select [ngModel]="subjectFilter()" (ngModelChange)="subjectFilter.set($event)"><option value="All">All subjects</option>@for (subject of subjects(); track subject) { <option [value]="subject">{{ subject }}</option> }</select></label>
+    <label><span>Type</span><select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)"><option value="All">All types</option>@for (type of types(); track type) { <option [value]="type">{{ type }}</option> }</select></label>
   </div>
+
+  @if (actionError()) { <p class="error-message" role="alert">{{ actionError() }}</p> }
 
   @if (state().loading) {
     <p class="loading">Loading assessments...</p>
   } @else if (state().error) {
     <p class="error-message">Unable to load assessments. Please check whether the StudentConnect API is running.</p>
   } @else if (state().assessments.length === 0) {
-    <p class="empty">No assessments yet.</p>
+    <div class="assessment-state"><h2>No assessments yet</h2><p>Create a Draft assessment to begin entering marks.</p><a class="btn" routerLink="/assessments/add">Create assessment</a></div>
+  } @else if (filteredAssessments().length === 0) {
+    <div class="assessment-state"><h2>No matching assessments</h2><p>Change or clear the filters to see other assessments.</p><button type="button" class="btn btn-secondary" (click)="clearFilters()">Clear filters</button></div>
   } @else {
-    @for (group of bySubject(); track group[0]) {
-      <section class="subject-group">
-        <h2>{{ group[0] }}</h2>
-        <ul class="assessment-list">
-          @for (assessment of group[1]; track assessment.id) {
-            <li>
-              <span class="title">{{ assessment.title }}</span>
-              <span class="meta">{{ assessment.date }} — {{ assessment.maximumMarks }} marks{{ assessment.termName ? ' — ' + assessment.termName : '' }}</span>
-            </li>
-          }
-        </ul>
-      </section>
-    }
+    <div class="result-summary"><strong>{{ filteredAssessments().length }}</strong> {{ filteredAssessments().length === 1 ? 'assessment' : 'assessments' }}</div>
+    <div class="assessment-table-region" tabindex="0" aria-label="Assessment management table">
+      <table><caption>Assessments and publication status</caption><thead><tr><th>Assessment</th><th>Class</th><th>Date</th><th>Type</th><th>Term</th><th>Maximum</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+      <tbody>@for (assessment of filteredAssessments(); track assessment.id) { <tr><td data-label="Assessment"><strong class="title">{{ assessment.title }}</strong></td><td data-label="Class">{{ assessment.subjectName }}<span class="class-context">{{ assessment.gradeName ? assessment.gradeName + ' / Section ' + assessment.sectionName : 'Legacy school-wide assessment' }}</span></td><td data-label="Date">{{ assessment.date }}</td><td data-label="Type">{{ assessment.assessmentType }}</td><td data-label="Term">{{ assessment.termName || 'Not assigned' }}</td><td data-label="Maximum">{{ assessment.maximumMarks }}</td><td data-label="Status"><span class="badge" [class.badge-success]="assessment.status === 'Published'" [class.badge-warning]="assessment.status === 'Draft'">{{ assessment.status }}</span></td><td data-label="Action" class="row-action">@if (assessment.teacherSubjectAssignmentId === null) { <span class="legacy-label">Read only</span> } @else if (assessment.status === 'Draft') { <a class="table-action" [routerLink]="['/assessments', assessment.id, 'edit']">Edit</a><button type="button" class="table-action" [disabled]="actionId() === assessment.id" (click)="publish(assessment)">Publish</button> } @else { <button type="button" class="table-action" [disabled]="actionId() === assessment.id" (click)="reopen(assessment)">Reopen</button> }</td></tr> }</tbody></table>
+    </div>
   }
 </section>

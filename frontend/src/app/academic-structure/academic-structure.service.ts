@@ -11,12 +11,18 @@ import {
   GradingBand,
   GradingBandInput,
   RolloverCommitResult,
+  RolloverOverrideInput,
+  RolloverRun,
   RolloverStudentRow,
   SectionInput,
+  SectionUpdateInput,
   SectionStudent,
   SubjectInput,
+  SetupDependency,
   Term,
   TermInput,
+  TermUpdateInput,
+  CurriculumDefault,
 } from './academic-structure.model';
 
 @Injectable({ providedIn: 'root' })
@@ -28,6 +34,22 @@ export class AcademicStructureService {
   private readonly gradesUrl = `${environment.apiBaseUrl}/grades`;
   private readonly subjectsUrl = `${environment.apiBaseUrl}/subjects`;
   private readonly gradingBandsUrl = `${environment.apiBaseUrl}/grading-bands`;
+  private readonly dependenciesUrl = `${environment.apiBaseUrl}/setup-dependencies`;
+  private readonly curriculumDefaultsUrl = `${environment.apiBaseUrl}/curriculum-defaults`;
+
+  getDependencies(): Observable<SetupDependency[]> {
+    return this.http.get<SetupDependency[]>(this.dependenciesUrl);
+  }
+
+  getCurriculumDefaults(gradeId: number, sectionId?: number): Observable<CurriculumDefault> {
+    let params = new HttpParams().set('gradeId', gradeId);
+    if (sectionId) params = params.set('sectionId', sectionId);
+    return this.http.get<CurriculumDefault>(this.curriculumDefaultsUrl, { params });
+  }
+
+  replaceCurriculumDefaults(gradeId: number, sectionId: number | null, subjectIds: number[]): Observable<CurriculumDefault> {
+    return this.http.put<CurriculumDefault>(this.curriculumDefaultsUrl, { gradeId, sectionId, subjectIds });
+  }
 
   getGradingBands(): Observable<GradingBand[]> {
     return this.http.get<GradingBand[]>(this.gradingBandsUrl);
@@ -59,9 +81,17 @@ export class AcademicStructureService {
     return this.http.post<RolloverStudentRow[]>(`${this.academicYearsUrl}/${academicYearId}/rollover-preview`, {});
   }
 
-  commitRollover(academicYearId: number, force: boolean): Observable<RolloverCommitResult> {
+  commitRollover(academicYearId: number, force: boolean, overrides: RolloverOverrideInput[]): Observable<RolloverCommitResult> {
     const params = force ? new HttpParams().set('force', 'true') : undefined;
-    return this.http.post<RolloverCommitResult>(`${this.academicYearsUrl}/${academicYearId}/rollover-commit`, { overrides: [] }, { params });
+    return this.http.post<RolloverCommitResult>(`${this.academicYearsUrl}/${academicYearId}/rollover-commit`, { overrides }, { params });
+  }
+
+  getRolloverRuns(): Observable<RolloverRun[]> {
+    return this.http.get<RolloverRun[]>(`${this.academicYearsUrl}/rollover-runs`);
+  }
+
+  downloadRolloverRun(runId: number): Observable<Blob> {
+    return this.http.get(`${this.academicYearsUrl}/rollover-runs/${runId}/csv`, { responseType: 'blob' });
   }
 
   getTerms(): Observable<Term[]> {
@@ -70,6 +100,10 @@ export class AcademicStructureService {
 
   createTerm(term: TermInput): Observable<Term> {
     return this.http.post<Term>(this.termsUrl, term);
+  }
+
+  updateTerm(id: number, term: TermUpdateInput): Observable<Term> {
+    return this.http.put<Term>(`${this.termsUrl}/${id}`, term);
   }
 
   deleteTerm(id: number): Observable<void> {
@@ -102,6 +136,10 @@ export class AcademicStructureService {
     return this.http.post<Section>(this.sectionsUrl, section);
   }
 
+  updateSection(id: number, section: SectionUpdateInput): Observable<Section> {
+    return this.http.put<Section>(`${this.sectionsUrl}/${id}`, section);
+  }
+
   deleteSection(id: number): Observable<void> {
     return this.http.delete<void>(`${this.sectionsUrl}/${id}`);
   }
@@ -118,6 +156,10 @@ export class AcademicStructureService {
     return this.http.post<Grade>(this.gradesUrl, grade);
   }
 
+  updateGrade(id: number, grade: GradeInput): Observable<Grade> {
+    return this.http.put<Grade>(`${this.gradesUrl}/${id}`, grade);
+  }
+
   deleteGrade(id: number): Observable<void> {
     return this.http.delete<void>(`${this.gradesUrl}/${id}`);
   }
@@ -128,6 +170,10 @@ export class AcademicStructureService {
 
   createSubject(subject: SubjectInput): Observable<Subject> {
     return this.http.post<Subject>(this.subjectsUrl, subject);
+  }
+
+  updateSubject(id: number, subject: SubjectInput): Observable<Subject> {
+    return this.http.put<Subject>(`${this.subjectsUrl}/${id}`, subject);
   }
 
   deleteSubject(id: number): Observable<void> {

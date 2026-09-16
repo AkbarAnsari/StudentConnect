@@ -2,33 +2,27 @@
   <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
   <h1>My Classes</h1>
 
-  @if (assignments().length > 0) {
-    <div class="card">
-      <h2>My Subject Assignments</h2>
-      <ul class="entity-list">
-        @for (assignment of assignments(); track assignment.id) {
-          <li><span>{{ assignment.subjectName }} — {{ assignment.gradeName }} - {{ assignment.sectionName }}</span></li>
-        }
-      </ul>
-    </div>
-  }
-
   @if (teacherId) {
     <button type="button" class="btn" (click)="downloadCsv()">Download Class Reports (CSV)</button>
   }
 
-  @if (sections().length === 0) {
-    <p>You are not assigned as homeroom teacher for any section yet.</p>
+  @if (assignments().length === 0) {
+    <p class="empty">You do not have any subject and section assignments yet.</p>
   }
 
-  @for (section of sections(); track section.id) {
+  @for (assignment of assignments(); track assignment.id) {
     <div class="card">
-      <button type="button" class="section-header" (click)="toggleSection(section.id)">
-        <h2>{{ section.gradeName }} - Section {{ section.name }}</h2>
-        <span>{{ expandedSectionId() === section.id ? '▲' : '▼' }}</span>
+      <button
+        type="button"
+        class="section-header"
+        [attr.aria-expanded]="expandedAssignmentId() === assignment.id"
+        (click)="toggleAssignment(assignment.id)"
+      >
+        <h2>{{ assignment.subjectName }} — {{ assignment.gradeName }} - Section {{ assignment.sectionName }}</h2>
+        <span aria-hidden="true">{{ expandedAssignmentId() === assignment.id ? '▲' : '▼' }}</span>
       </button>
 
-      @if (classReports()[section.id]; as report) {
+      @if (classReports()[assignment.id]; as report) {
         <div class="class-report-stats">
           <span class="stat"><strong>{{ report.studentCount }}</strong> students</span>
           <span class="stat"><strong>{{ report.averageAttendancePercentage }}%</strong> avg attendance</span>
@@ -39,8 +33,8 @@
         </div>
       }
 
-      @if (expandedSectionId() === section.id) {
-        @if (rosters()[section.id]; as roster) {
+      @if (expandedAssignmentId() === assignment.id) {
+        @if (rosters()[assignment.id]; as roster) {
           @if (roster.length === 0) {
             <p>No students are assigned to this section yet.</p>
           } @else {

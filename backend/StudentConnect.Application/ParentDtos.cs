@@ -19,6 +19,8 @@ public class ParentChildDto
     public string LastName { get; set; } = string.Empty;
     public string GradeName { get; set; } = string.Empty;
     public string Section { get; set; } = string.Empty;
+    public string RelationshipType { get; set; } = "Guardian";
+    public bool IsPrimaryContact { get; set; }
 }
 
 public class ParentResponseDto
@@ -26,6 +28,7 @@ public class ParentResponseDto
     public int Id { get; set; }
     public string Username { get; set; } = string.Empty;
     public string? Email { get; set; }
+    public string Status { get; set; } = string.Empty;
     public List<ParentChildDto> Children { get; set; } = [];
 
     public static ParentResponseDto FromEntity(ApplicationUser user, List<ParentChildDto> children) => new()
@@ -33,6 +36,7 @@ public class ParentResponseDto
         Id = user.Id,
         Username = user.Username,
         Email = user.Email,
+        Status = user.Status.ToString(),
         Children = children,
     };
 }
@@ -40,4 +44,20 @@ public class ParentResponseDto
 public class LinkChildDto
 {
     public int StudentId { get; set; }
+    public string RelationshipType { get; set; } = "Guardian";
+    public bool IsPrimaryContact { get; set; }
+    public string? Reason { get; set; }
+}
+
+public class ParentStudentHistoryDto
+{
+    public long Id { get; set; }
+    public int StudentId { get; set; }
+    public string StudentName { get; set; } = string.Empty;
+    public string Action { get; set; } = string.Empty;
+    public string RelationshipType { get; set; } = string.Empty;
+    public bool IsPrimaryContact { get; set; }
+    public string? Reason { get; set; }
+    public string ChangedByName { get; set; } = string.Empty;
+    public DateTime ChangedAtUtc { get; set; }
 }

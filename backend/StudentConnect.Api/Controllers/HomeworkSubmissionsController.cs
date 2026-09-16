@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -45,6 +47,12 @@ public class HomeworkSubmissionsController(
             return NotFound();
         }
 
+        if (currentUser.Role == "Teacher")
+        {
+            var homeworkItem = await homework.GetByIdAsync(submission.HomeworkId, schoolId);
+            if (homeworkItem is null || !currentUser.CanActAsTeacher(homeworkItem.TeacherId)) return Forbid();
+        }
+
         return Ok(HomeworkSubmissionDto.FromEntity(submission));
     }
 
@@ -65,7 +73,14 @@ public class HomeworkSubmissionsController(
             return NotFound(new { message = "Homework not found." });
         }
 
-        var roster = await students.GetByGradeOrderedByFirstNameAsync(homeworkItem.GradeId);
+        if (!currentUser.CanActAsTeacher(homeworkItem.TeacherId))
+        {
+            return Forbid();
+        }
+
+        var roster = homeworkItem.SectionId is { } sectionId
+            ? await students.GetActiveBySectionAndSubjectAsync(sectionId, homeworkItem.SubjectId, schoolId)
+            : await students.GetActiveByGradeAndSubjectAsync(homeworkItem.GradeId, homeworkItem.SubjectId, schoolId);
         var homeworkSubmissions = await submissions.GetByHomeworkIdRawAsync(homeworkId);
         var submissionByStudentId = homeworkSubmissions.ToDictionary(s => s.StudentId);
 
@@ -93,10 +108,78 @@ public class HomeworkSubmissionsController(
         return Ok(overview);
     }
 
+    [HttpGet("homework/{homeworkId:int}/download")]
+    [Authorize(Roles = "Teacher,Admin")]
+    public async Task<IActionResult> DownloadHomeworkSubmissions(int homeworkId)
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var homeworkItem = await homework.GetByIdAsync(homeworkId, schoolId);
+        if (homeworkItem is null)
+        {
+            return NotFound(new { message = "Homework not found." });
+        }
+
+        if (!currentUser.CanActAsTeacher(homeworkItem.TeacherId))
+        {
+            return Forbid();
+        }
+
+        var homeworkSubmissions = await submissions.GetByHomeworkAsync(homeworkId);
+        var archiveStream = new MemoryStream();
+        using (var archive = new ZipArchive(archiveStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var manifest = archive.CreateEntry("review-manifest.csv");
+            await using (var manifestStream = manifest.Open())
+            await using (var writer = new StreamWriter(manifestStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
+            {
+                await writer.WriteLineAsync("SubmissionId,Student,Status,SubmittedUtc,FileName,Comments,TeacherFeedback");
+                foreach (var submission in homeworkSubmissions)
+                {
+                    await writer.WriteLineAsync(string.Join(',',
+                        submission.Id,
+                        Csv(submission.Student is null ? string.Empty : $"{submission.Student.FirstName} {submission.Student.LastName}"),
+                        Csv(submission.Status.ToString()),
+                        Csv(submission.SubmittedDate.ToString("O")),
+                        Csv(submission.FileName),
+                        Csv(submission.Comments),
+                        Csv(submission.TeacherFeedback)));
+                }
+            }
+
+            foreach (var submission in homeworkSubmissions.Where(item => item.StoredFileName is not null))
+            {
+                var source = await fileStorage.GetFileAsync(submission.StoredFileName!, HttpContext.RequestAborted);
+                if (source is null)
+                {
+                    continue;
+                }
+
+                await using (source)
+                {
+                    var studentName = submission.Student is null
+                        ? $"student-{submission.StudentId}"
+                        : $"{submission.Student.FirstName}-{submission.Student.LastName}";
+                    var entryName = $"{submission.Id}-{SafeFileName(studentName)}-{SafeFileName(submission.FileName ?? "submission")}";
+                    var entry = archive.CreateEntry(entryName, CompressionLevel.Fastest);
+                    await using var entryStream = entry.Open();
+                    await source.CopyToAsync(entryStream, HttpContext.RequestAborted);
+                }
+            }
+        }
+
+        archiveStream.Position = 0;
+        return File(archiveStream, "application/zip", $"homework-{homeworkId}-submissions.zip");
+    }
+
     // GET /api/homework-submissions/student/{studentId}
     [HttpGet("student/{studentId:int}")]
     public async Task<ActionResult<IEnumerable<HomeworkSubmissionDto>>> GetStudentSubmissions(int studentId)
     {
+        if (currentUser.Role == "Teacher") return Forbid();
         if (!currentUser.CanAccessStudent(studentId))
         {
             return Forbid();
@@ -133,6 +216,19 @@ public class HomeworkSubmissionsController(
         if (homeworkItem is null)
         {
             return BadRequest(new { message = "Homework does not exist." });
+        }
+
+        if (!IsSubmissionOpen(homeworkItem))
+        {
+            return Conflict(new { message = "This homework is not open for submissions." });
+        }
+
+        var student = await students.GetByIdAsync(studentId, schoolId);
+        if (student?.GradeId != homeworkItem.GradeId ||
+            (homeworkItem.SectionId is not null && student.SectionId != homeworkItem.SectionId) ||
+            !(await students.GetSubjectIdsForStudentAsync(studentId)).Contains(homeworkItem.SubjectId))
+        {
+            return Forbid();
         }
 
         if (await submissions.ExistsAsync(studentId, dto.HomeworkId))
@@ -202,6 +298,22 @@ public class HomeworkSubmissionsController(
             return Forbid();
         }
 
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var homeworkItem = await homework.GetByIdAsync(submission.HomeworkId, schoolId);
+        if (homeworkItem is null)
+        {
+            return NotFound();
+        }
+
+        if (!IsSubmissionOpen(homeworkItem))
+        {
+            return Conflict(new { message = "This homework is not open for submission changes." });
+        }
+
         var (fileError, fileName, storedFileName, contentType, fileSize) = await TrySaveAttachmentAsync(dto.File);
         if (fileError is not null)
         {
@@ -265,6 +377,15 @@ public class HomeworkSubmissionsController(
             return NotFound();
         }
 
+        if (currentUser.Role == "Teacher")
+        {
+            var homeworkItem = await homework.GetByIdAsync(submission.HomeworkId, schoolId);
+            if (homeworkItem is null || !currentUser.CanActAsTeacher(homeworkItem.TeacherId))
+            {
+                return Forbid();
+            }
+        }
+
         if (submission.StoredFileName is null)
         {
             return NotFound(new { message = "This submission has no attached file." });
@@ -294,6 +415,12 @@ public class HomeworkSubmissionsController(
         if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(submission.StudentId, schoolId))
         {
             return NotFound();
+        }
+
+        var homeworkItem = await homework.GetByIdAsync(submission.HomeworkId, schoolId);
+        if (homeworkItem is null || !currentUser.CanActAsTeacher(homeworkItem.TeacherId))
+        {
+            return Forbid();
         }
 
         await submissions.UpdateFeedbackAsync(id, dto.TeacherFeedback);
@@ -352,5 +479,17 @@ public class HomeworkSubmissionsController(
         }
 
         return (null, file.FileName, storedFileName, file.ContentType, file.Length);
+    }
+
+    private static bool IsSubmissionOpen(Homework item) =>
+        item.Status == ContentLifecycleStatus.Published ||
+        item.Status == ContentLifecycleStatus.Scheduled && item.ScheduledForUtc <= DateTime.UtcNow;
+
+    private static string Csv(string? value) => $"\"{(value ?? string.Empty).Replace("\"", "\"\"")}\"";
+
+    private static string SafeFileName(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        return string.Concat(value.Select(character => invalid.Contains(character) || character is '/' or '\\' ? '_' : character));
     }
 }

@@ -9,6 +9,7 @@
     </p>
   } @else if (state().homework; as h) {
     <h1>{{ h.title }}</h1>
+    @if (h.status === 'Closed') { <p class="notice">This homework is closed. Existing work and feedback remain available, but submissions cannot change.</p> }
 
     <dl class="details">
       <dt>Subject</dt>
@@ -25,46 +26,43 @@
     </section>
 
     <section class="panel">
-      <h3>Your Submission</h3>
+      <h3>{{ canSubmit() ? 'Your Submission' : 'Submission' }}</h3>
 
       @if (!checkedForSubmission()) {
         <p class="loading">Loading submission status...</p>
       } @else {
         @if (existingSubmission(); as s) {
           @if (!editing()) {
-            <dl class="details">
-              <dt>Submitted</dt>
-              <dd>{{ s.submittedDate }}</dd>
-              <dt>Status</dt>
-              <dd>
+            <div class="details" role="list" aria-label="Submission details">
+              <div role="listitem"><strong>Submitted</strong><span>{{ s.submittedDate }}</span></div>
+              <div role="listitem"><strong>Status</strong><span>
                 <span
                   class="badge"
                   [class.status-submitted]="s.status === 'Submitted'"
                   [class.status-late]="s.status === 'Late'"
                   [class.status-not-submitted]="s.status === 'Not Submitted'"
                 >{{ s.status }}</span>
-              </dd>
-              <dt>Comments</dt>
-              <dd>{{ s.comments }}</dd>
+              </span></div>
+              <div role="listitem"><strong>Comments</strong><span>{{ s.comments }}</span></div>
               @if (s.fileName) {
-                <dt>Attached file</dt>
-                <dd><button type="button" class="link-button" (click)="download()">{{ s.fileName }}</button></dd>
+                <div role="listitem"><strong>Attached file</strong><span><button type="button" class="link-button" (click)="download()">{{ s.fileName }}</button></span></div>
               }
               @if (s.teacherFeedback) {
-                <dt>Teacher feedback</dt>
-                <dd>{{ s.teacherFeedback }}</dd>
+                <div role="listitem"><strong>Teacher feedback</strong><span>{{ s.teacherFeedback }}</span></div>
               }
-            </dl>
+            </div>
 
             @if (successMessage()) {
               <p class="success-message">{{ successMessage() }}</p>
             }
 
-            <button type="button" (click)="startEdit()">Edit Submission</button>
+            @if (canSubmit()) {
+              <button type="button" (click)="startEdit()">Edit Submission</button>
+            }
           }
         }
 
-        @if (editing() || !existingSubmission()) {
+        @if (canSubmit() && (editing() || !existingSubmission())) {
           @if (successMessage()) {
             <p class="success-message">{{ successMessage() }}</p>
           }
@@ -87,6 +85,8 @@
               {{ submitting() ? 'Submitting...' : (existingSubmission() ? 'Save Changes' : 'Submit Homework') }}
             </button>
           </form>
+        } @else if (!canSubmit() && !existingSubmission()) {
+          <p class="empty">No submission has been recorded.</p>
         }
       }
     </section>

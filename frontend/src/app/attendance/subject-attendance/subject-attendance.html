@@ -1,5 +1,14 @@
-<section class="page">
-  <a class="back-link" [routerLink]="['/students', studentId, 'attendance']">← Back to Attendance</a>
+<section class="page page-wide subject-attendance-page">
+  <a class="back-link" [routerLink]="['/students', studentId, 'attendance']">Back to attendance overview</a>
+  <app-student-record-nav [studentId]="studentId" />
+
+  <form class="period-filter" (ngSubmit)="applyRange()">
+    <div class="period-presets" aria-label="Attendance period presets"><span>Period</span><div><button type="button" class="btn btn-secondary" (click)="setPeriod(30)">30 days</button><button type="button" class="btn btn-secondary" (click)="setPeriod(90)">90 days</button><button type="button" class="btn btn-secondary" (click)="setPeriod(365)">1 year</button></div></div>
+    <label>From<input type="date" name="dateFrom" [ngModel]="dateFrom()" (ngModelChange)="dateFrom.set($event)" /></label>
+    <label>To<input type="date" name="dateTo" [ngModel]="dateTo()" (ngModelChange)="dateTo.set($event)" /></label>
+    <button type="submit" [disabled]="dateFrom() > dateTo()">Apply</button>
+  </form>
+  @if (dateFrom() > dateTo()) { <p class="field-error" role="alert">From date must be earlier than To date.</p> }
 
   @if (state().loading) {
     <p class="loading">Loading attendance...</p>
@@ -8,10 +17,12 @@
       Unable to load attendance. Please check whether the StudentConnect API is running.
     </p>
   } @else if (state().records.length === 0) {
-    <p class="empty">No attendance records for this subject yet.</p>
+    <p class="empty">No attendance records for this subject in this period.</p>
   } @else {
-    <h1>{{ state().records[0].subjectName }} Attendance</h1>
+    <header><p class="page-kicker">Attendance history</p><h1>{{ state().records[0].subjectName }}</h1><p>{{ state().records[0].studentName }} / {{ state().records.length }} recorded sessions</p></header>
+    <div class="table-region" tabindex="0" aria-label="Subject attendance history">
     <table class="attendance-table">
+      <caption>Recorded attendance by date</caption>
       <thead>
         <tr>
           <th>Date</th>
@@ -22,14 +33,25 @@
       <tbody>
         @for (record of state().records; track record.id) {
           <tr>
-            <td>{{ record.date }}</td>
-            <td [class.status-present]="record.status === 'Present'" [class.status-absent]="record.status === 'Absent'">
-              {{ record.status }}
-            </td>
-            <td>{{ record.correctionReason }}</td>
+            <td data-label="Date">{{ record.date }}</td>
+            <td data-label="Status"><span [class.status-present]="record.status === 'Present'" [class.status-absent]="record.status === 'Absent'">{{ record.status }}</span></td>
+            <td data-label="Latest note">{{ record.correctionReason || 'No correction' }}</td>
           </tr>
         }
       </tbody>
     </table>
+    </div>
+    <section class="correction-history" aria-labelledby="correction-history-title">
+      <div><p class="page-kicker">Audit trail</p><h2 id="correction-history-title">Corrections</h2></div>
+      @if (state().corrections.length === 0) {
+        <p class="empty-history">No corrections have been recorded for this subject.</p>
+      } @else {
+        <div class="timeline" role="list">
+          @for (correction of state().corrections; track correction.id) {
+            <article role="listitem"><div class="timeline-marker" aria-hidden="true"></div><div><strong>{{ correction.previousStatus }} to {{ correction.newStatus }}</strong><p>{{ correction.reason }}</p><small>{{ correction.changedAtUtc | date:'medium' }} by {{ correction.changedByName }}</small></div></article>
+          }
+        </div>
+      }
+    </section>
   }
 </section>

@@ -4,6 +4,17 @@ using StudentConnect.Domain;
 
 namespace StudentConnect.Infrastructure.Data.Stores;
 
+public sealed record StudentLoginInvitation(
+    string Username,
+    string PasswordHash,
+    string TokenHash,
+    DateTime ExpiresAtUtc,
+    string EmailSubject,
+    string EmailBody);
+
+public sealed record StudentEnrollmentResult(int StudentId, int? UserId);
+public sealed record StudentGuardianLink(int ParentUserId, string RelationshipType, bool IsPrimaryContact, int? ChangedByUserId);
+
 public class StudentStore(Database db)
 {
     private static Student MapWithGrade(NpgsqlDataReader reader) => new()
@@ -65,7 +76,15 @@ public class StudentStore(Database db)
 
     // Page/pageSize-bounded variant backing GET /api/students (see StudentsController) — keeps
     // the response fast and bounded regardless of how many students a school has.
-    public async Task<(List<Student> Items, int TotalCount)> GetPagedAsync(int schoolId, StudentStatus? statusFilter, int page, int pageSize, int? gradeId = null)
+    public async Task<(List<Student> Items, int TotalCount)> GetPagedAsync(
+        int schoolId,
+        StudentStatus? statusFilter,
+        int page,
+        int pageSize,
+        int? gradeId = null,
+        int? sectionId = null,
+        string? query = null,
+        string? sort = null)
     {
         var conditions = new List<string> { """s."SchoolId" = @schoolId""" };
         if (statusFilter is not null)
@@ -76,7 +95,25 @@ public class StudentStore(Database db)
         {
             conditions.Add("""s."GradeId" = @gradeId""");
         }
+        if (sectionId is not null)
+        {
+            conditions.Add("""s."SectionId" = @sectionId""");
+        }
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            conditions.Add(
+                """(s."StudentId" ILIKE @query ESCAPE '\' OR s."FirstName" ILIKE @query ESCAPE '\' OR s."LastName" ILIKE @query ESCAPE '\' OR concat_ws(' ', s."FirstName", s."LastName") ILIKE @query ESCAPE '\')""");
+        }
         var whereClause = "WHERE " + string.Join(" AND ", conditions);
+        var orderBy = sort?.Trim().ToLowerInvariant() switch
+        {
+            "name-desc" => """s."LastName" DESC, s."FirstName" DESC, s."Id" DESC""",
+            "student-id" => """s."StudentId" ASC, s."Id" ASC""",
+            "student-id-desc" => """s."StudentId" DESC, s."Id" DESC""",
+            "grade" => """g."Name" ASC, sec."Name" ASC NULLS LAST, s."LastName" ASC, s."FirstName" ASC""",
+            "grade-desc" => """g."Name" DESC, sec."Name" DESC NULLS LAST, s."LastName" ASC, s."FirstName" ASC""",
+            _ => """s."LastName" ASC, s."FirstName" ASC, s."Id" ASC""",
+        };
 
         void Bind(NpgsqlParameterCollection p)
         {
@@ -89,10 +126,22 @@ public class StudentStore(Database db)
             {
                 p.AddWithValue("gradeId", gradeId.Value);
             }
+            if (sectionId is not null)
+            {
+                p.AddWithValue("sectionId", sectionId.Value);
+            }
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                var escapedQuery = query.Trim()
+                    .Replace("\\", "\\\\", StringComparison.Ordinal)
+                    .Replace("%", "\\%", StringComparison.Ordinal)
+                    .Replace("_", "\\_", StringComparison.Ordinal);
+                p.AddWithValue("query", $"%{escapedQuery}%");
+            }
         }
 
         var items = await db.QueryAsync(
-            $"""{SelectWithGrade} {whereClause} ORDER BY s."Id" LIMIT @pageSize OFFSET @offset""",
+            $"""{SelectWithGrade} {whereClause} ORDER BY {orderBy} LIMIT @pageSize OFFSET @offset""",
             p =>
             {
                 Bind(p);
@@ -107,6 +156,25 @@ public class StudentStore(Database db)
 
         return (items, (int)totalCount);
     }
+
+    public async Task<int> CountByIdsAsync(IReadOnlyCollection<int> ids, int schoolId) =>
+        ids.Count == 0 ? 0 : (int)await db.ExecuteScalarAsync<long>(
+            """SELECT COUNT(*) FROM "Students" WHERE "Id" = ANY(@ids) AND "SchoolId" = @schoolId""",
+            p => { p.AddWithValue("ids", ids.Distinct().ToArray()); p.AddWithValue("schoolId", schoolId); });
+
+    public async Task<int> UpdateStatusAsync(IReadOnlyCollection<int> ids, int schoolId, StudentStatus status, string? reason) =>
+        ids.Count == 0 ? 0 : await db.ExecuteAsync(
+            """
+            UPDATE "Students" SET "Status" = @status, "StatusChangedAtUtc" = now(), "StatusReason" = @reason
+            WHERE "Id" = ANY(@ids) AND "SchoolId" = @schoolId AND "Status" <> @status
+            """,
+            p =>
+            {
+                p.AddWithValue("ids", ids.Distinct().ToArray());
+                p.AddWithValue("schoolId", schoolId);
+                p.AddWithValue("status", status.ToString());
+                p.AddWithValue("reason", (object?)reason ?? DBNull.Value);
+            });
 
     public async Task<Student?> GetByIdAsync(int id) =>
         await db.QuerySingleOrDefaultAsync(
@@ -171,6 +239,127 @@ public class StudentStore(Database db)
             });
         return id;
     }
+
+    public async Task<StudentEnrollmentResult> CreateEnrollmentAsync(
+        Student student,
+        IReadOnlyCollection<int> subjectIds,
+        StudentLoginInvitation? invitation,
+        StudentGuardianLink? guardian = null) =>
+        await db.WithTransactionAsync(async (connection, transaction) =>
+        {
+            await using var studentCommand = new NpgsqlCommand(
+                """
+                INSERT INTO "Students" ("StudentId", "FirstName", "LastName", "Email", "GradeId", "SectionId", "SchoolId", "DateOfBirth", "Phone", "Address")
+                VALUES (@studentId, @firstName, @lastName, @email, @gradeId, @sectionId, @schoolId, @dateOfBirth, @phone, @address)
+                RETURNING "Id"
+                """,
+                connection,
+                transaction);
+            studentCommand.Parameters.AddWithValue("studentId", student.StudentId);
+            studentCommand.Parameters.AddWithValue("firstName", student.FirstName);
+            studentCommand.Parameters.AddWithValue("lastName", student.LastName);
+            studentCommand.Parameters.AddWithValue("email", student.Email);
+            studentCommand.Parameters.AddWithValue("gradeId", student.GradeId);
+            studentCommand.Parameters.AddWithValue("sectionId", (object?)student.SectionId ?? DBNull.Value);
+            studentCommand.Parameters.AddWithValue("schoolId", student.SchoolId);
+            studentCommand.Parameters.AddWithValue("dateOfBirth", (object?)student.DateOfBirth ?? DBNull.Value);
+            studentCommand.Parameters.AddWithValue("phone", (object?)student.Phone ?? DBNull.Value);
+            studentCommand.Parameters.AddWithValue("address", (object?)student.Address ?? DBNull.Value);
+            var studentId = Convert.ToInt32(await studentCommand.ExecuteScalarAsync());
+
+            await using var subjectsCommand = new NpgsqlCommand(
+                """
+                INSERT INTO "StudentSubjects" ("StudentId", "SubjectId")
+                SELECT @studentId, unnest(@subjectIds)
+                """,
+                connection,
+                transaction);
+            subjectsCommand.Parameters.AddWithValue("studentId", studentId);
+            subjectsCommand.Parameters.AddWithValue("subjectIds", subjectIds.Distinct().ToArray());
+            await subjectsCommand.ExecuteNonQueryAsync();
+
+            if (guardian is not null)
+            {
+                if (guardian.IsPrimaryContact)
+                {
+                    await using var clearPrimary = new NpgsqlCommand(
+                        """UPDATE "ParentStudents" SET "IsPrimaryContact" = false WHERE "StudentId" = @studentId""",
+                        connection,
+                        transaction);
+                    clearPrimary.Parameters.AddWithValue("studentId", studentId);
+                    await clearPrimary.ExecuteNonQueryAsync();
+                }
+
+                await using var guardianCommand = new NpgsqlCommand(
+                    """INSERT INTO "ParentStudents" ("ParentUserId", "StudentId", "RelationshipType", "IsPrimaryContact", "CreatedByUserId") VALUES (@parentUserId, @studentId, @relationshipType, @isPrimaryContact, @changedByUserId)""",
+                    connection,
+                    transaction);
+                guardianCommand.Parameters.AddWithValue("parentUserId", guardian.ParentUserId);
+                guardianCommand.Parameters.AddWithValue("studentId", studentId);
+                guardianCommand.Parameters.AddWithValue("relationshipType", guardian.RelationshipType);
+                guardianCommand.Parameters.AddWithValue("isPrimaryContact", guardian.IsPrimaryContact);
+                guardianCommand.Parameters.AddWithValue("changedByUserId", (object?)guardian.ChangedByUserId ?? DBNull.Value);
+                await guardianCommand.ExecuteNonQueryAsync();
+
+                await using var historyCommand = new NpgsqlCommand(
+                    """INSERT INTO "ParentStudentHistory" ("ParentUserId", "StudentId", "Action", "RelationshipType", "IsPrimaryContact", "Reason", "ChangedByUserId") VALUES (@parentUserId, @studentId, 'Linked', @relationshipType, @isPrimaryContact, 'Linked during student enrollment', @changedByUserId)""",
+                    connection,
+                    transaction);
+                historyCommand.Parameters.AddWithValue("parentUserId", guardian.ParentUserId);
+                historyCommand.Parameters.AddWithValue("studentId", studentId);
+                historyCommand.Parameters.AddWithValue("relationshipType", guardian.RelationshipType);
+                historyCommand.Parameters.AddWithValue("isPrimaryContact", guardian.IsPrimaryContact);
+                historyCommand.Parameters.AddWithValue("changedByUserId", (object?)guardian.ChangedByUserId ?? DBNull.Value);
+                await historyCommand.ExecuteNonQueryAsync();
+            }
+
+            if (invitation is null)
+            {
+                return new StudentEnrollmentResult(studentId, null);
+            }
+
+            await using var userCommand = new NpgsqlCommand(
+                """
+                INSERT INTO "Users" ("Username", "PasswordHash", "Role", "StudentId", "Email", "SchoolId")
+                VALUES (@username, @passwordHash, 'Student', @studentId, @email, @schoolId)
+                RETURNING "Id"
+                """,
+                connection,
+                transaction);
+            userCommand.Parameters.AddWithValue("username", invitation.Username);
+            userCommand.Parameters.AddWithValue("passwordHash", invitation.PasswordHash);
+            userCommand.Parameters.AddWithValue("studentId", studentId);
+            userCommand.Parameters.AddWithValue("email", student.Email);
+            userCommand.Parameters.AddWithValue("schoolId", student.SchoolId);
+            var userId = Convert.ToInt32(await userCommand.ExecuteScalarAsync());
+
+            await using var tokenCommand = new NpgsqlCommand(
+                """
+                INSERT INTO "PasswordResetTokens" ("UserId", "TokenHash", "ExpiresAtUtc")
+                VALUES (@userId, @tokenHash, @expiresAtUtc)
+                """,
+                connection,
+                transaction);
+            tokenCommand.Parameters.AddWithValue("userId", userId);
+            tokenCommand.Parameters.AddWithValue("tokenHash", invitation.TokenHash);
+            tokenCommand.Parameters.AddWithValue("expiresAtUtc", invitation.ExpiresAtUtc);
+            await tokenCommand.ExecuteNonQueryAsync();
+
+            await using var outboxCommand = new NpgsqlCommand(
+                """
+                INSERT INTO "EmailOutbox" ("ToEmail", "ToUserId", "Subject", "Body")
+                VALUES (@email, @userId, @subject, @body)
+                """,
+                connection,
+                transaction);
+            outboxCommand.Parameters.AddWithValue("email", student.Email);
+            outboxCommand.Parameters.AddWithValue("userId", userId);
+            outboxCommand.Parameters.AddWithValue("subject", invitation.EmailSubject);
+            outboxCommand.Parameters.AddWithValue("body", invitation.EmailBody);
+            await outboxCommand.ExecuteNonQueryAsync();
+
+            return new StudentEnrollmentResult(studentId, userId);
+        });
 
     public async Task UpdateAsync(Student student) =>
         await db.ExecuteAsync(
@@ -257,6 +446,26 @@ public class StudentStore(Database db)
                 LastName = reader.GetString("LastName"),
             });
 
+    public async Task<List<Student>> GetActiveByGradeAsync(int gradeId, int schoolId) =>
+        await db.QueryAsync(
+            """
+            SELECT "Id", "FirstName", "LastName"
+            FROM "Students"
+            WHERE "GradeId" = @gradeId AND "SchoolId" = @schoolId AND "Status" = 'Active'
+            ORDER BY "FirstName", "LastName"
+            """,
+            p =>
+            {
+                p.AddWithValue("gradeId", gradeId);
+                p.AddWithValue("schoolId", schoolId);
+            },
+            reader => new Student
+            {
+                Id = reader.GetInt32("Id"),
+                FirstName = reader.GetString("FirstName"),
+                LastName = reader.GetString("LastName"),
+            });
+
     // Used to build a teacher's "My Classes" roster for a section they are homeroom teacher of.
     public async Task<List<Student>> GetBySectionAsync(int sectionId) =>
         await db.QueryAsync(
@@ -270,4 +479,114 @@ public class StudentStore(Database db)
                 LastName = reader.GetString("LastName"),
                 Email = reader.GetString("Email"),
             });
+
+    public async Task<List<Student>> GetActiveBySectionAsync(int sectionId, int schoolId) =>
+        await db.QueryAsync(
+            """
+            SELECT "Id", "StudentId", "FirstName", "LastName", "Email"
+            FROM "Students"
+            WHERE "SectionId" = @sectionId AND "SchoolId" = @schoolId AND "Status" = 'Active'
+            ORDER BY "FirstName", "LastName"
+            """,
+            p =>
+            {
+                p.AddWithValue("sectionId", sectionId);
+                p.AddWithValue("schoolId", schoolId);
+            },
+            reader => new Student
+            {
+                Id = reader.GetInt32("Id"),
+                StudentId = reader.GetString("StudentId"),
+                FirstName = reader.GetString("FirstName"),
+                LastName = reader.GetString("LastName"),
+                Email = reader.GetString("Email"),
+            });
+
+    public async Task<List<Student>> GetActiveBySectionAndSubjectAsync(int sectionId, int subjectId, int schoolId) =>
+        await db.QueryAsync(
+            """
+            SELECT s."Id", s."StudentId", s."FirstName", s."LastName", s."Email"
+            FROM "Students" s
+            JOIN "StudentSubjects" ss ON ss."StudentId" = s."Id"
+            WHERE s."SectionId" = @sectionId
+              AND ss."SubjectId" = @subjectId
+              AND s."SchoolId" = @schoolId
+              AND s."Status" = 'Active'
+            ORDER BY s."FirstName", s."LastName"
+            """,
+            p =>
+            {
+                p.AddWithValue("sectionId", sectionId);
+                p.AddWithValue("subjectId", subjectId);
+                p.AddWithValue("schoolId", schoolId);
+            },
+            reader => new Student
+            {
+                Id = reader.GetInt32("Id"),
+                StudentId = reader.GetString("StudentId"),
+                FirstName = reader.GetString("FirstName"),
+                LastName = reader.GetString("LastName"),
+                Email = reader.GetString("Email"),
+            });
+
+    public async Task<List<Student>> GetActiveByGradeAndSubjectAsync(int gradeId, int subjectId, int schoolId) =>
+        await db.QueryAsync(
+            """
+            SELECT s."Id", s."StudentId", s."FirstName", s."LastName", s."Email"
+            FROM "Students" s
+            JOIN "StudentSubjects" ss ON ss."StudentId" = s."Id"
+            WHERE s."GradeId" = @gradeId
+              AND ss."SubjectId" = @subjectId
+              AND s."SchoolId" = @schoolId
+              AND s."Status" = 'Active'
+            ORDER BY s."FirstName", s."LastName"
+            """,
+            p =>
+            {
+                p.AddWithValue("gradeId", gradeId);
+                p.AddWithValue("subjectId", subjectId);
+                p.AddWithValue("schoolId", schoolId);
+            },
+            reader => new Student
+            {
+                Id = reader.GetInt32("Id"),
+                StudentId = reader.GetString("StudentId"),
+                FirstName = reader.GetString("FirstName"),
+                LastName = reader.GetString("LastName"),
+                Email = reader.GetString("Email"),
+            });
+
+    public async Task<bool> AreActiveStudentsEnrolledInClassAsync(
+        IReadOnlyCollection<int> studentIds,
+        int sectionId,
+        int subjectId,
+        int schoolId)
+    {
+        if (studentIds.Count == 0)
+        {
+            return false;
+        }
+
+        var distinctIds = studentIds.Distinct().ToArray();
+        var matchingCount = await db.ExecuteScalarAsync<long>(
+            """
+            SELECT COUNT(DISTINCT s."Id")
+            FROM "Students" s
+            JOIN "StudentSubjects" ss ON ss."StudentId" = s."Id"
+            WHERE s."Id" = ANY(@studentIds)
+              AND s."SectionId" = @sectionId
+              AND ss."SubjectId" = @subjectId
+              AND s."SchoolId" = @schoolId
+              AND s."Status" = 'Active'
+            """,
+            p =>
+            {
+                p.AddWithValue("studentIds", distinctIds);
+                p.AddWithValue("sectionId", sectionId);
+                p.AddWithValue("subjectId", subjectId);
+                p.AddWithValue("schoolId", schoolId);
+            });
+
+        return matchingCount == distinctIds.Length;
+    }
 }

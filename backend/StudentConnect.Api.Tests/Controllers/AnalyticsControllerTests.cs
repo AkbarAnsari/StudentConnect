@@ -17,17 +17,25 @@ public class AnalyticsControllerTests(DatabaseFixture fixture)
     {
         var db = fixture.Database;
 
-        var expectedStudents = await db.ExecuteScalarAsync<long>("""SELECT COUNT(*) FROM "Students" """, bind: null);
-        var expectedTeachers = await db.ExecuteScalarAsync<long>("""SELECT COUNT(*) FROM "Teachers" """, bind: null);
-        var expectedSubjects = await db.ExecuteScalarAsync<long>("""SELECT COUNT(*) FROM "Subjects" """, bind: null);
-        var attendanceTotal = await db.ExecuteScalarAsync<long>("""SELECT COUNT(*) FROM "Attendance" """, bind: null);
+        var expectedStudents = await db.ExecuteScalarAsync<long>("""SELECT COUNT(*) FROM "Students" WHERE "SchoolId" = 1""", bind: null);
+        var expectedTeachers = await db.ExecuteScalarAsync<long>("""SELECT COUNT(*) FROM "Teachers" WHERE "SchoolId" = 1""", bind: null);
+        var expectedSubjects = await db.ExecuteScalarAsync<long>("""SELECT COUNT(*) FROM "Subjects" WHERE "SchoolId" = 1""", bind: null);
+        var attendanceTotal = await db.ExecuteScalarAsync<long>(
+            """SELECT COUNT(*) FROM "Attendance" a JOIN "Students" s ON s."Id" = a."StudentId" WHERE s."SchoolId" = 1""",
+            bind: null);
         var attendancePresent = await db.ExecuteScalarAsync<long>(
-            """SELECT COUNT(*) FROM "Attendance" WHERE "Status" = 'Present'""", bind: null);
-        var marksCount = await db.ExecuteScalarAsync<long>("""SELECT COUNT(*) FROM "Marks" """, bind: null);
+            """SELECT COUNT(*) FROM "Attendance" a JOIN "Students" s ON s."Id" = a."StudentId" WHERE s."SchoolId" = 1 AND a."Status" = 'Present'""",
+            bind: null);
+        var marksCount = await db.ExecuteScalarAsync<long>(
+            """SELECT COUNT(*) FROM "Marks" m JOIN "Students" s ON s."Id" = m."StudentId" WHERE s."SchoolId" = 1""",
+            bind: null);
         var marksSum = await db.ExecuteScalarAsync<double>(
             """
             SELECT COALESCE(SUM(m."MarksObtained" * 100.0 / a."MaximumMarks"), 0)::double precision
-            FROM "Marks" m JOIN "Assessments" a ON a."Id" = m."AssessmentId"
+            FROM "Marks" m
+            JOIN "Assessments" a ON a."Id" = m."AssessmentId"
+            JOIN "Students" s ON s."Id" = m."StudentId"
+            WHERE s."SchoolId" = 1
             """,
             bind: null);
 

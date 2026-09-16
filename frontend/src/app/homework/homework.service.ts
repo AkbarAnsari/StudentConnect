@@ -12,7 +12,6 @@ import {
   SubmissionOverview,
 } from './homework.model';
 
-// HomeworkComponent -> HomeworkService -> HttpClient -> ASP.NET Core API -> EF Core -> SQL Server.
 @Injectable({ providedIn: 'root' })
 export class HomeworkService {
   private readonly http = inject(HttpClient);
@@ -48,6 +47,26 @@ export class HomeworkService {
 
   deleteHomework(id: number): Observable<void> {
     return this.http.delete<void>(`${this.homeworkUrl}/${id}`);
+  }
+
+  publishHomework(id: number): Observable<Homework> {
+    return this.http.post<Homework>(`${this.homeworkUrl}/${id}/publish`, {});
+  }
+
+  scheduleHomework(id: number, scheduledForUtc: string): Observable<Homework> {
+    return this.http.post<Homework>(`${this.homeworkUrl}/${id}/schedule`, { scheduledForUtc });
+  }
+
+  closeHomework(id: number): Observable<Homework> {
+    return this.http.post<Homework>(`${this.homeworkUrl}/${id}/close`, {});
+  }
+
+  archiveHomework(id: number): Observable<Homework> {
+    return this.http.post<Homework>(`${this.homeworkUrl}/${id}/archive`, {});
+  }
+
+  reopenHomework(id: number): Observable<Homework> {
+    return this.http.post<Homework>(`${this.homeworkUrl}/${id}/reopen`, {});
   }
 }
 
@@ -92,5 +111,9 @@ export class HomeworkSubmissionService {
   // anchor href would bypass it entirely and 401.
   downloadFile(id: number): Observable<Blob> {
     return this.http.get(`${this.baseUrl}/${id}/download`, { responseType: 'blob' });
+  }
+
+  downloadHomeworkSubmissions(homeworkId: number): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/homework/${homeworkId}/download`, { responseType: 'blob' });
   }
 }

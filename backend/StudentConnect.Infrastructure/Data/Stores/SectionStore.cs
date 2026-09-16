@@ -106,6 +106,11 @@ public class SectionStore(Database db)
                 p.AddWithValue("name", name);
             });
 
+    public async Task<bool> NameExistsInGradeAsync(int gradeId, string name, int excludingId) =>
+        await db.ExistsAsync(
+            """SELECT 1 FROM "Sections" WHERE "GradeId" = @gradeId AND "Name" = @name AND "Id" <> @excludingId""",
+            p => { p.AddWithValue("gradeId", gradeId); p.AddWithValue("name", name); p.AddWithValue("excludingId", excludingId); });
+
     public async Task<int> CreateAsync(Section section) =>
         await db.ExecuteScalarAsync<int>(
             """INSERT INTO "Sections" ("GradeId", "Name", "HomeroomTeacherId") VALUES (@gradeId, @name, @homeroomTeacherId) RETURNING "Id" """,
@@ -118,6 +123,11 @@ public class SectionStore(Database db)
 
     public async Task DeleteAsync(int id) =>
         await db.ExecuteAsync("""DELETE FROM "Sections" WHERE "Id" = @id""", p => p.AddWithValue("id", id));
+
+    public async Task UpdateAsync(int id, string name, int? homeroomTeacherId) =>
+        await db.ExecuteAsync(
+            """UPDATE "Sections" SET "Name" = @name, "HomeroomTeacherId" = @homeroomTeacherId WHERE "Id" = @id""",
+            p => { p.AddWithValue("id", id); p.AddWithValue("name", name); p.AddWithValue("homeroomTeacherId", (object?)homeroomTeacherId ?? DBNull.Value); });
 
     // Soft-delete: keeps the row (and its historical attendance/marks/homework) intact but
     // hides it from the active-section views used elsewhere in the app.

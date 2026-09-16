@@ -15,6 +15,7 @@ public class TeacherSubjectAssignmentsController(
     TeacherStore teachers,
     SectionStore sections,
     ReferenceDataStore referenceData,
+    StudentStore students,
     ICurrentUserService currentUser,
     ICurrentTenantService currentTenant,
     IAuditService audit) : ControllerBase
@@ -47,6 +48,30 @@ public class TeacherSubjectAssignmentsController(
         return Ok(mine.Select(TeacherSubjectAssignmentDto.FromEntity));
     }
 
+    [HttpGet("{id:int}/students")]
+    [Authorize(Roles = "Teacher,Admin")]
+    public async Task<ActionResult<IEnumerable<SectionStudentDto>>> GetStudents(int id)
+    {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var assignment = await assignments.GetByIdAsync(id, schoolId);
+        if (assignment is null)
+        {
+            return NotFound();
+        }
+
+        if (currentUser.Role == "Teacher" && assignment.TeacherId != currentUser.TeacherId)
+        {
+            return Forbid();
+        }
+
+        var roster = await students.GetActiveBySectionAndSubjectAsync(assignment.SectionId, assignment.SubjectId, schoolId);
+        return Ok(roster.Select(SectionStudentDto.FromEntity));
+    }
+
     // POST /api/teacher-subject-assignments
     [HttpPost]
     [Authorize(Roles = "Admin")]
@@ -62,7 +87,7 @@ public class TeacherSubjectAssignmentsController(
             return BadRequest(new { message = "Teacher does not exist." });
         }
 
-        if (!await referenceData.SubjectExistsAsync(dto.SubjectId))
+        if (!await referenceData.SubjectExistsAsync(dto.SubjectId, schoolId))
         {
             return BadRequest(new { message = "Subject does not exist." });
         }
@@ -78,7 +103,7 @@ public class TeacherSubjectAssignmentsController(
         }
 
         var newId = await assignments.CreateAsync(dto.TeacherId, dto.SubjectId, dto.SectionId);
-        var created = await assignments.GetByIdAsync(newId);
+        var created = await assignments.GetByIdAsync(newId, schoolId);
         await audit.LogAsync("Create", "TeacherSubjectAssignment", newId.ToString(), $"TeacherId={dto.TeacherId}, SubjectId={dto.SubjectId}, SectionId={dto.SectionId}");
         return CreatedAtAction(nameof(GetAll), null, TeacherSubjectAssignmentDto.FromEntity(created!));
     }

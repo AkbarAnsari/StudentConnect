@@ -1,6 +1,7 @@
-<section class="page">
-  <a class="back-link" [routerLink]="['/students', studentId]">← Back to Profile</a>
-  <h1>My Learning Materials</h1>
+<section class="page page-wide materials-page">
+  <a class="back-link" [routerLink]="['/students', studentId]">Back to student record</a>
+  <app-student-record-nav [studentId]="studentId" />
+  <header><p class="page-kicker">Learning</p><h1>Learning materials</h1><p>Find published resources from assigned classes.</p></header>
 
   @if (state().loading) {
     <p class="loading">Loading learning materials...</p>
@@ -12,25 +13,25 @@
     <p class="empty">No learning materials yet.</p>
   } @else {
     <div class="filters">
-      <select (change)="onSubjectChange($any($event.target).value)">
-        <option value="">All Subjects</option>
+      <select aria-label="Filter learning materials by subject" (change)="onSubjectChange($any($event.target).value)">
+        <option value="">All subjects</option>
         @for (subject of subjects(); track subject[0]) {
           <option [value]="subject[0]">{{ subject[1] }}</option>
         }
       </select>
     </div>
 
-    <ul class="material-list">
+    <div class="material-list" role="list">
       @for (material of filteredMaterials(); track material.id) {
-        <li class="material-card">
+        <article class="material-card" role="listitem">
           <div class="material-info">
             <span class="subject">{{ material.subjectName }}</span>
             <span class="title">{{ material.title }}</span>
-            <span class="meta">{{ material.fileName }} — {{ formatSize(material.fileSize) }}</span>
+            <span class="meta">{{ material.fileName }} / {{ formatSize(material.fileSize) }}</span>
           </div>
           <button type="button" class="download-link" (click)="download(material)">Download</button>
-        </li>
+        </article>
       }
-    </ul>
+    </div>
   }
 </section>

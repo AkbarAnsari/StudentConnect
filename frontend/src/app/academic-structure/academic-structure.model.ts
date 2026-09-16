@@ -31,8 +31,19 @@ export interface TermInput {
   endDate: string;
 }
 
+export interface TermUpdateInput {
+  name: string;
+  startDate: string;
+  endDate: string;
+}
+
 export interface SectionInput {
   gradeId: number;
+  name: string;
+  homeroomTeacherId?: number;
+}
+
+export interface SectionUpdateInput {
   name: string;
   homeroomTeacherId?: number;
 }
@@ -44,6 +55,12 @@ export interface GradeInput {
 export interface SubjectInput {
   name: string;
   code: string;
+}
+
+export interface CurriculumDefault {
+  gradeId: number;
+  sectionId: number | null;
+  subjectIds: number[];
 }
 
 export interface SectionStudent {
@@ -81,6 +98,40 @@ export interface RolloverStudentRow {
 }
 
 export interface RolloverCommitResult {
+  runId: number;
   promoted: number;
   skipped: number;
+}
+
+export interface RolloverOverrideInput {
+  studentId: number;
+  skip: boolean;
+  gradeId: number | null;
+  sectionId: number | null;
+}
+
+export interface RolloverRun {
+  id: number;
+  academicYearId: number;
+  academicYearName: string;
+  actorUserId: number;
+  actorName: string;
+  createdAtUtc: string;
+  isForced: boolean;
+  promotedCount: number;
+  skippedCount: number;
+}
+
+export type SetupResourceType = 'Grade' | 'Subject' | 'Section' | 'Term';
+
+export interface SetupDependency {
+  resourceType: SetupResourceType;
+  resourceId: number;
+  studentCount: number;
+  sectionCount: number;
+  assessmentCount: number;
+  contentCount: number;
+  assignmentCount: number;
+  issuedReportCount: number;
+  totalCount: number;
 }

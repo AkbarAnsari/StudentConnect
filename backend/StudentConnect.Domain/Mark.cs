@@ -13,4 +13,8 @@ public class Mark
     public Assessment? Assessment { get; set; }
 
     public int MarksObtained { get; set; }
+    public string? Comment { get; set; }
+    public int Version { get; set; } = 1;
+    public DateTime? UpdatedAtUtc { get; set; }
+    public int? UpdatedByUserId { get; set; }
 }

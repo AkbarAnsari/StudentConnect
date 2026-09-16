@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, HostListener, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -49,6 +49,7 @@ export class EditStudent {
   protected readonly statusSubmitting = signal(false);
   protected readonly statusMessage = signal('');
   protected readonly statusError = signal('');
+  private saved = false;
 
   protected readonly sections = toSignal(
     this.form.controls.gradeId.valueChanges.pipe(
@@ -95,6 +96,7 @@ export class EditStudent {
     this.studentService.updateStatus(this.studentId, { status: status as never, reason: reason || undefined }).subscribe({
       next: () => {
         this.statusSubmitting.set(false);
+        this.statusForm.markAsPristine();
         this.statusMessage.set('Status updated.');
       },
       error: (err: HttpErrorResponse) => {
@@ -117,7 +119,10 @@ export class EditStudent {
     this.studentService
       .updateStudent(this.studentId, { ...rest, dateOfBirth: dateOfBirth || null, phone: phone || null, address: address || null })
       .subscribe({
-        next: (student) => this.router.navigate(['/students', student.id]),
+        next: (student) => {
+          this.saved = true;
+          this.router.navigate(['/students', student.id]);
+        },
         error: (err: HttpErrorResponse) => {
           this.submitting.set(false);
           this.errorMessage.set(
@@ -127,5 +132,14 @@ export class EditStudent {
           );
         },
       });
+  }
+
+  hasUnsavedChanges(): boolean {
+    return (this.form.dirty || this.statusForm.dirty) && !this.saved && !this.submitting() && !this.statusSubmitting();
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  protected onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.hasUnsavedChanges()) event.preventDefault();
   }
 }

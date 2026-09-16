@@ -12,19 +12,24 @@ namespace StudentConnect.Api.Controllers;
 [ApiController]
 [Route("api/search")]
 [Authorize(Roles = "Teacher,Admin")]
-public class SearchController(SearchStore search) : ControllerBase
+public class SearchController(SearchStore search, ICurrentTenantService currentTenant) : ControllerBase
 {
     // GET /api/search?q=...&take=20
     [HttpGet]
     public async Task<ActionResult<IEnumerable<SearchResultDto>>> Search([FromQuery] string q, [FromQuery] int take = 20)
     {
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
         if (string.IsNullOrWhiteSpace(q))
         {
             return Ok(Array.Empty<SearchResultDto>());
         }
 
         var bounded = Math.Clamp(take, 1, 100);
-        var results = await search.SearchAsync(q, bounded);
+        var results = await search.SearchAsync(q, bounded, schoolId);
         return Ok(results);
     }
 }

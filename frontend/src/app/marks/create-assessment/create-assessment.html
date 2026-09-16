@@ -1,22 +1,22 @@
 <section class="page page-narrow">
-  <a class="back-link" routerLink="/assessments">← Back to Assessments</a>
-  <h1>Create Assessment</h1>
+  <a class="back-link" routerLink="/assessments">Back to assessments</a>
+  <header><p class="page-kicker">Gradebook</p><h1>Create assessment</h1><p>Save as Draft while entering marks, or publish immediately when results are ready.</p></header>
 
   @if (errorMessage()) {
     <p class="error-message">{{ errorMessage() }}</p>
   }
 
-  <form [formGroup]="form" (ngSubmit)="onSubmit()">
+  <form [formGroup]="form" (ngSubmit)="onSubmit(false)">
     <label>
-      Subject
-      <select formControlName="subjectId">
-        <option [value]="0">Select a subject</option>
-        @for (subject of subjects(); track subject.id) {
-          <option [value]="subject.id">{{ subject.name }}</option>
+      Assigned class
+      <select formControlName="assignmentId">
+        <option [value]="0">Select a class</option>
+        @for (assignment of assignments(); track assignment.id) {
+          <option [value]="assignment.id">{{ assignment.subjectName }} / {{ assignment.gradeName }} - Section {{ assignment.sectionName }}</option>
         }
       </select>
-      @if (form.controls.subjectId.invalid && form.controls.subjectId.touched) {
-        <span class="field-error">Subject is required.</span>
+      @if (form.controls.assignmentId.invalid && form.controls.assignmentId.touched) {
+        <span class="field-error">Assigned class is required.</span>
       }
     </label>
 
@@ -43,7 +43,7 @@
     </label>
 
     <label>
-      Maximum Marks
+      Maximum marks
       <input type="number" formControlName="maximumMarks" min="1" />
       @if (form.controls.maximumMarks.invalid && form.controls.maximumMarks.touched) {
         <span class="field-error">Maximum marks must be greater than zero.</span>
@@ -52,7 +52,7 @@
 
     <label>
       Description
-      <input type="text" formControlName="description" placeholder="Optional" />
+      <textarea formControlName="description" rows="3" placeholder="Optional context for staff"></textarea>
     </label>
 
     <label>
@@ -60,7 +60,7 @@
       <select formControlName="termId">
         <option [value]="0">No term</option>
         @for (term of terms(); track term.id) {
-          <option [value]="term.id" [disabled]="term.isLocked">{{ term.name }} ({{ term.academicYearName }}){{ term.isLocked ? ' — locked' : '' }}</option>
+          <option [value]="term.id" [disabled]="term.isLocked">{{ term.name }} ({{ term.academicYearName }}){{ term.isLocked ? ' - locked' : '' }}</option>
         }
       </select>
     </label>
@@ -73,8 +73,6 @@
       }
     </label>
 
-    <button type="submit" [disabled]="submitting()">
-      {{ submitting() ? 'Saving...' : 'Create Assessment' }}
-    </button>
+    <div class="form-actions"><button type="submit" class="btn btn-secondary" [disabled]="submitting()">{{ submitting() ? 'Saving...' : 'Save draft' }}</button><button type="button" [disabled]="submitting()" (click)="onSubmit(true)">Create and publish</button></div>
   </form>
 </section>

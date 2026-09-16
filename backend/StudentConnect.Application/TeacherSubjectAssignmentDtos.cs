@@ -11,6 +11,7 @@ public class TeacherSubjectAssignmentDto
     public string SubjectName { get; set; } = string.Empty;
     public int SectionId { get; set; }
     public string SectionName { get; set; } = string.Empty;
+    public int GradeId { get; set; }
     public string GradeName { get; set; } = string.Empty;
 
     public static TeacherSubjectAssignmentDto FromEntity(TeacherSubjectAssignment assignment) => new()
@@ -22,6 +23,7 @@ public class TeacherSubjectAssignmentDto
         SubjectName = assignment.Subject?.Name ?? string.Empty,
         SectionId = assignment.SectionId,
         SectionName = assignment.Section?.Name ?? string.Empty,
+        GradeId = assignment.Section?.Grade?.Id ?? 0,
         GradeName = assignment.Section?.Grade?.Name ?? string.Empty,
     };
 }

@@ -1,35 +1,22 @@
 <section class="page page-wide">
-  <h1>Record Attendance</h1>
+  <header class="attendance-header">
+    <div><p class="page-kicker">Daily teaching</p><h1>Record attendance</h1><p>Open an assigned class, review existing records, and save only intentional changes.</p></div>
+  </header>
 
-  <div class="controls">
+  <div class="controls attendance-controls">
     <label>
-      Grade
-      <select [ngModel]="gradeId()" (ngModelChange)="gradeId.set($event)">
-        <option [ngValue]="null">Select a grade</option>
-        @for (grade of grades(); track grade.id) {
-          <option [ngValue]="grade.id">{{ grade.name }}</option>
+      <span>Assigned class</span>
+      <select [ngModel]="assignmentId()" (ngModelChange)="onAssignmentChange($event)" [disabled]="loadingAssignments()">
+        <option [ngValue]="null">Select a class</option>
+        @for (assignment of assignments(); track assignment.id) {
+          <option [ngValue]="assignment.id">{{ assignment.subjectName }} / {{ assignment.gradeName }} - Section {{ assignment.sectionName }}</option>
         }
       </select>
     </label>
 
     <label>
-      Subject
-      <select [ngModel]="subjectId()" (ngModelChange)="subjectId.set($event)">
-        <option [ngValue]="null">Select a subject</option>
-        @for (subject of subjects(); track subject.id) {
-          <option [ngValue]="subject.id">{{ subject.name }}</option>
-        }
-      </select>
-    </label>
-
-    <label>
-      Date
-      <input type="date" [ngModel]="date()" (ngModelChange)="date.set($event)" />
-    </label>
-
-    <label>
-      Correction reason (optional, only needed when changing an existing record)
-      <input type="text" [ngModel]="correctionReason()" (ngModelChange)="correctionReason.set($event)" placeholder="e.g. Marked absent by mistake" />
+      <span>Attendance date</span>
+      <input type="date" [ngModel]="date()" (ngModelChange)="onDateChange($event)" />
     </label>
   </div>
 
@@ -39,39 +26,58 @@
   @if (errorMessage()) {
     <p class="error-message">{{ errorMessage() }}</p>
   }
-  @if (loadingExisting()) {
-    <p class="notice">Loading any attendance already recorded for this subject and date...</p>
+  @if (loadingAssignments()) {
+    <p class="loading">Loading class assignments...</p>
+  } @else if (assignments().length === 0) {
+    <p class="notice">No class assignments are configured for this account. Ask an administrator to assign a subject and section before recording attendance.</p>
+  } @else if (loadingExisting()) {
+    <div class="attendance-state" aria-live="polite"><span class="loading-indicator" aria-hidden="true"></span><p>Loading roster and existing attendance...</p></div>
   }
 
-  @if (gradeId() === null) {
-    <p class="empty">Select a grade to see its students.</p>
+  @if (assignmentId() === null) {
+    <p class="empty">Select an assigned class to see its active students.</p>
   } @else if (classStudents().length === 0) {
-    <p class="empty">No students found for this grade.</p>
+    @if (!loadingExisting() && !errorMessage()) {
+      <p class="empty">No active students are enrolled in this class and subject.</p>
+    }
   } @else {
-    <table class="roster-table">
-      <thead>
-        <tr>
-          <th>Student</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (student of classStudents(); track student.id) {
-          <tr>
-            <td>{{ student.firstName }} {{ student.lastName }}</td>
-            <td>
-              <select [ngModel]="statusFor(student.id)" (ngModelChange)="onStatusChange(student.id, $event)">
-                <option value="Present">Present</option>
-                <option value="Absent">Absent</option>
-              </select>
-            </td>
-          </tr>
-        }
-      </tbody>
-    </table>
-
-    <button type="button" [disabled]="saving()" (click)="onSave()">
-      {{ saving() ? 'Saving...' : 'Save Attendance' }}
-    </button>
+    <div class="attendance-summary-bar">
+      <div class="attendance-count"><strong>{{ classStudents().length }}</strong><span>Students</span></div>
+      <div class="attendance-count tone-present"><strong>{{ presentCount() }}</strong><span>Present</span></div>
+      <div class="attendance-count tone-absent"><strong>{{ absentCount() }}</strong><span>Absent</span></div>
+      <div class="attendance-count"><strong>{{ lateCount() }}</strong><span>Late</span></div>
+      <div class="attendance-count"><strong>{{ excusedCount() }}</strong><span>Excused</span></div>
+      <div class="quick-fill" role="group" aria-label="Set attendance for all students">
+        <span>Quick fill</span>
+        <button type="button" class="btn btn-secondary" (click)="markAll('Present')">All present</button>
+        <button type="button" class="btn btn-secondary" (click)="markAll('Absent')">All absent</button>
+      </div>
+    </div>
+    <div class="roster-table-region" tabindex="0" aria-label="Class attendance roster">
+      <table class="roster-table">
+        <caption>Attendance status for the selected class and date</caption>
+        <thead><tr><th scope="col">Student ID</th><th scope="col">Student</th><th scope="col">Status</th></tr></thead>
+        <tbody>
+          @for (student of classStudents(); track student.id; let rowIndex = $index) {
+            <tr [class.changed-row]="pendingStudentIds().includes(student.id)" [class.keyboard-focus]="focusedStudentId() === student.id">
+              <td data-label="Student ID"><span class="student-id">{{ student.studentId }}</span></td>
+              <td data-label="Student"><strong>{{ student.firstName }} {{ student.lastName }}</strong></td>
+              <td data-label="Status">
+                <div #statusGroup class="status-segment" role="radiogroup" tabindex="0" aria-keyshortcuts="P A L E ArrowUp ArrowDown ArrowLeft ArrowRight Home End" [attr.aria-label]="'Attendance status for ' + student.firstName + ' ' + student.lastName" aria-description="Press P, A, L, or E to set status, and up or down arrow to move rows." (focusin)="focusedStudentId.set(student.id)" (focusout)="focusedStudentId.set(null)" (keydown)="onStatusKeydown($event, rowIndex, student.id)">
+                  <button type="button" role="radio" tabindex="-1" aria-checked="false" [class.selected]="statusFor(student.id) === 'Present'" [attr.aria-checked]="statusFor(student.id) === 'Present'" (click)="onStatusChange(student.id, 'Present')">Present</button>
+                  <button type="button" role="radio" tabindex="-1" aria-checked="false" class="absent-option" [class.selected]="statusFor(student.id) === 'Absent'" [attr.aria-checked]="statusFor(student.id) === 'Absent'" (click)="onStatusChange(student.id, 'Absent')">Absent</button>
+                  <button type="button" role="radio" tabindex="-1" aria-checked="false" [class.selected]="statusFor(student.id) === 'Late'" [attr.aria-checked]="statusFor(student.id) === 'Late'" (click)="onStatusChange(student.id, 'Late')">Late</button>
+                  <button type="button" role="radio" tabindex="-1" aria-checked="false" [class.selected]="statusFor(student.id) === 'Excused'" [attr.aria-checked]="statusFor(student.id) === 'Excused'" (click)="onStatusChange(student.id, 'Excused')">Excused</button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    @if (requiresCorrectionReason()) {
+      <label class="correction-field"><span>Correction reason <span aria-hidden="true">*</span></span><input type="text" [ngModel]="correctionReason()" (ngModelChange)="correctionReason.set($event)" placeholder="Explain why existing attendance is changing" /><small>This reason is stored in the student's attendance history.</small></label>
+    }
+    <div class="save-bar"><p><strong>{{ pendingCount() }}</strong> {{ pendingCount() === 1 ? 'record needs' : 'records need' }} saving</p><button type="button" [disabled]="!canSave()" (click)="onSave()">{{ saving() ? 'Saving...' : 'Save attendance' }}</button></div>
   }
 </section>

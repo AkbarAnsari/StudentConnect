@@ -1,34 +1,24 @@
-.marks-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.marks-table th,
-.marks-table td {
-  text-align: left;
-  padding: 0.65rem 1rem;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.marks-table thead th {
-  background: #f9fafb;
-  color: #6b7280;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-}
-
-.marks-table a {
-  color: #2563eb;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.marks-table tfoot td {
-  font-weight: 700;
-  color: #1e3a5f;
-  border-bottom: none;
+.marks-page { display: flex; flex-direction: column; gap: 1.25rem; }
+.marks-page header p:last-child { margin: 0; color: var(--color-neutral-600); }
+.page-kicker { margin: 0 0 .2rem; color: var(--color-accent-700); font-size: .73rem; font-weight: 700; text-transform: uppercase; }
+.back-link { align-self: flex-start; color: var(--color-neutral-600); font-weight: 700; text-decoration: none; }
+.metric-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .75rem; }
+.metric-grid > div { display: flex; min-height: 110px; flex-direction: column; justify-content: space-between; padding: .9rem; background: var(--color-surface); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-sm); }
+.metric-grid span { color: var(--color-neutral-600); font-size: .8rem; font-weight: 700; }
+.metric-grid strong { color: var(--color-primary-900); font-family: var(--font-heading); font-size: 1.65rem; }
+.table-region { max-width: 100%; overflow-x: auto; border-radius: var(--radius-md); }
+.table-region:focus-visible { outline: 2px solid var(--color-accent-600); outline-offset: 2px; }
+.marks-table caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+.marks-table a { color: var(--color-accent-700); font-weight: 700; text-decoration: none; }
+@media (max-width: 640px) {
+  .metric-grid { grid-template-columns: 1fr; }
+  .metric-grid > div { min-height: 90px; }
+  .table-region { overflow: visible; }
+  .marks-table, .marks-table tbody, .marks-table tr, .marks-table td { display: block; width: 100%; }
+  .marks-table { background: transparent; border: 0; box-shadow: none; }
+  .marks-table thead { display: none; }
+  .marks-table tr { margin-bottom: .75rem; padding: .35rem .85rem; background: var(--color-surface); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); }
+  .marks-table td { display: grid; grid-template-columns: minmax(92px,.7fr) minmax(0,1.3fr); gap: .75rem; padding: .55rem 0; border-bottom: 1px solid var(--color-neutral-100); }
+  .marks-table td::before { content: attr(data-label); color: var(--color-neutral-500); font-size: .74rem; font-weight: 700; text-transform: uppercase; }
+  .marks-table td:last-child { border-bottom: 0; }
 }

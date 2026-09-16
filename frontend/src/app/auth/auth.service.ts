@@ -109,6 +109,14 @@ export class AuthService {
     return localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
   }
 
+  markEmailUnverified(): void {
+    const user = this.currentUserSignal();
+    if (!user) return;
+    const updated = { ...user, emailVerified: false };
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updated));
+    this.currentUserSignal.set(updated);
+  }
+
   private storeSession(response: LoginResponse): void {
     const user: CurrentUser = {
       username: response.username,

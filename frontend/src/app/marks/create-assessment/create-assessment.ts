@@ -1,10 +1,11 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, HostListener, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { AttendanceService } from '../../attendance/attendance.service';
 import { AcademicStructureService } from '../../academic-structure/academic-structure.service';
+import { AuthService } from '../../auth/auth.service';
+import { TeacherSubjectAssignmentService } from '../../teachers/teacher-subject-assignment.service';
 import { AssessmentInput } from '../marks.model';
 import { MarksService } from '../marks.service';
 
@@ -17,19 +18,24 @@ import { MarksService } from '../marks.service';
 export class CreateAssessment {
   private readonly fb = inject(FormBuilder);
   private readonly marksService = inject(MarksService);
-  private readonly attendanceService = inject(AttendanceService);
   private readonly academicStructure = inject(AcademicStructureService);
+  private readonly assignmentService = inject(TeacherSubjectAssignmentService);
+  private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
 
-  protected readonly subjects = toSignal(this.attendanceService.getSubjects(), { initialValue: [] });
+  protected readonly assignments = toSignal(
+    this.authService.role() === 'Admin' ? this.assignmentService.getAll() : this.assignmentService.getMine(),
+    { initialValue: [] },
+  );
   protected readonly terms = toSignal(this.academicStructure.getTerms(), { initialValue: [] });
   protected readonly assessmentTypes = ['UnitTest', 'MidTerm', 'FinalExam', 'Quiz', 'Assignment', 'Practical'];
   protected readonly submitting = signal(false);
   protected readonly errorMessage = signal('');
+  private saved = false;
 
   protected readonly form = this.fb.nonNullable.group({
     title: ['', Validators.required],
-    subjectId: [0, [Validators.required, Validators.min(1)]],
+    assignmentId: [0, [Validators.required, Validators.min(1)]],
     date: [new Date().toISOString().slice(0, 10), Validators.required],
     maximumMarks: [100, [Validators.required, Validators.min(1)]],
     assessmentType: ['UnitTest', Validators.required],
@@ -38,7 +44,7 @@ export class CreateAssessment {
     weight: [1, [Validators.required, Validators.min(0.1)]],
   });
 
-  protected onSubmit(): void {
+  protected onSubmit(publish = false): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
@@ -47,9 +53,24 @@ export class CreateAssessment {
     this.submitting.set(true);
     this.errorMessage.set('');
 
-    const { termId, ...rest } = this.form.getRawValue();
-    this.marksService.createAssessment({ ...rest, termId: termId > 0 ? termId : null } as AssessmentInput).subscribe({
-      next: () => this.router.navigate(['/assessments']),
+    const { termId, assignmentId, ...rest } = this.form.getRawValue();
+    const assignment = this.assignments().find((item) => item.id === assignmentId);
+    if (!assignment) {
+      this.errorMessage.set('Select an assigned class.');
+      this.submitting.set(false);
+      return;
+    }
+    this.marksService.createAssessment({
+      ...rest,
+      subjectId: assignment.subjectId,
+      teacherSubjectAssignmentId: assignment.id,
+      termId: termId > 0 ? termId : null,
+      publish,
+    } as AssessmentInput).subscribe({
+      next: () => {
+        this.saved = true;
+        this.router.navigate(['/assessments']);
+      },
       error: (err: HttpErrorResponse) => {
         this.submitting.set(false);
         this.errorMessage.set(
@@ -61,5 +82,14 @@ export class CreateAssessment {
         );
       },
     });
+  }
+
+  hasUnsavedChanges(): boolean {
+    return this.form.dirty && !this.saved && !this.submitting();
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  protected onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.hasUnsavedChanges()) event.preventDefault();
   }
 }

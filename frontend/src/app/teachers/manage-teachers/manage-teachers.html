@@ -1,15 +1,22 @@
 <section class="page page-wide">
   <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
-  <h1>Manage Teachers</h1>
+  <div class="page-header">
+    <div>
+      <h1>Manage Teachers</h1>
+      <p>Create staff records, review login access, and maintain contact details.</p>
+    </div>
+  </div>
 
-  <div class="card">
-    <h2>Add Teacher</h2>
+  <div class="teacher-layout">
+  <section class="section-panel" aria-labelledby="add-teacher-title">
+    <h2 id="add-teacher-title">Add Teacher</h2>
 
     @if (errorMessage()) {
       <p class="error-message">{{ errorMessage() }}</p>
     }
 
     <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <div class="form-grid">
       <label>
         Teacher ID
         <input type="text" formControlName="teacherId" placeholder="e.g. T004" />
@@ -34,46 +41,63 @@
         Password (required if creating a login)
         <input type="password" formControlName="password" />
       </label>
+      </div>
 
       <button type="submit" [disabled]="submitting()">
         {{ submitting() ? 'Saving...' : 'Add Teacher' }}
       </button>
     </form>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2>Existing Teachers</h2>
+  <section class="section-panel teacher-directory" aria-labelledby="teacher-directory-title">
+    <div class="directory-header">
+      <div>
+        <h2 id="teacher-directory-title">Existing Teachers</h2>
+        @if (!loading() && !loadError()) { <p>{{ filteredTeachers().length }} of {{ teachers().length }} teachers</p> }
+      </div>
+      <label class="search-field">
+        Search
+        <input type="search" [value]="query()" (input)="query.set($any($event.target).value)" placeholder="Name, ID, email, username" />
+      </label>
+    </div>
 
-    @if (teachers().length === 0) {
-      <p>No teachers yet.</p>
-    }
+    @if (loading()) {
+      <p class="loading" aria-live="polite">Loading teachers...</p>
+    } @else if (loadError()) {
+      <div class="error-message recovery-state" role="alert"><span>Teachers could not be loaded.</span><button type="button" class="btn btn-secondary" (click)="loadTeachers()">Retry</button></div>
+    } @else if (teachers().length === 0) {
+      <p class="empty">No teachers yet.</p>
+    } @else if (filteredTeachers().length === 0) {
+      <p class="empty">No teachers match your search.</p>
+    } @else {
 
-    <ul class="entity-list">
-      @for (teacher of teachers(); track teacher.id) {
-        <li>
+    <div class="entity-list" role="list">
+      @for (teacher of filteredTeachers(); track teacher.id) {
+        <article class="teacher-record" role="listitem">
           @if (editingId() === teacher.id) {
             <form class="inline-edit-form" [formGroup]="editForm" (ngSubmit)="saveEdit(teacher.id)">
-              <input type="text" formControlName="firstName" placeholder="First name" />
-              <input type="text" formControlName="lastName" placeholder="Last name" />
-              <input type="email" formControlName="email" placeholder="Email" />
-              <button type="submit" [disabled]="editSubmitting()">{{ editSubmitting() ? 'Saving...' : 'Save' }}</button>
-              <button type="button" class="link-button" (click)="cancelEdit()">Cancel</button>
+              <label>First name<input type="text" formControlName="firstName" /></label>
+              <label>Last name<input type="text" formControlName="lastName" /></label>
+              <label>Email<input type="email" formControlName="email" /></label>
+              <div class="record-actions"><button type="submit" [disabled]="editSubmitting()">{{ editSubmitting() ? 'Saving...' : 'Save' }}</button><button type="button" class="btn btn-secondary" (click)="cancelEdit()">Cancel</button></div>
             </form>
             @if (editError()) {
               <p class="error-message">{{ editError() }}</p>
             }
           } @else {
-            <span>
-              {{ teacher.firstName }} {{ teacher.lastName }} ({{ teacher.teacherId }}) — {{ teacher.email }}
+            <div class="teacher-identity">
+              <strong>{{ teacher.firstName }} {{ teacher.lastName }}</strong>
+              <span>{{ teacher.teacherId }} · {{ teacher.email }}</span>
               @if (teacher.username) {
                 <span class="badge badge-success">Login: {{ teacher.username }}</span>
               }
-            </span>
-            <button type="button" class="link-button" (click)="startEdit(teacher)">Edit</button>
-            <button type="button" class="link-button" (click)="deleteTeacher(teacher.id)">Delete</button>
+            </div>
+            <div class="record-actions"><button type="button" class="btn btn-secondary" (click)="startEdit(teacher)">Edit</button><button type="button" class="btn btn-danger" (click)="deleteTeacher(teacher)">Delete</button></div>
           }
-        </li>
+        </article>
       }
-    </ul>
+    </div>
+    }
+  </section>
   </div>
 </section>

@@ -1,12 +1,19 @@
 <section class="page page-narrow">
   <a class="back-link" routerLink="/activity-management">← Back to Activity Management</a>
-  <h1>Create Activity</h1>
+  <div class="form-heading">
+    <div>
+      <h1>Create Activity</h1>
+      <p>Set the audience, registration rules, and publishing state.</p>
+    </div>
+  </div>
 
   @if (errorMessage()) {
     <p class="error-message">{{ errorMessage() }}</p>
   }
 
   <form [formGroup]="form" (ngSubmit)="onSubmit()">
+    <h2>Activity details</h2>
+    <div class="form-grid">
     <label>
       Title
       <input type="text" formControlName="title" placeholder="e.g. Coding Workshop" />
@@ -16,6 +23,11 @@
     </label>
 
     <label>
+      Organizer
+      <input type="text" formControlName="organizerName" placeholder="Defaults to your account name" />
+    </label>
+
+    <label class="full-width">
       Description
       <textarea formControlName="description" rows="3" placeholder="e.g. Learn the basics of programming"></textarea>
       @if (form.controls.description.invalid && form.controls.description.touched) {
@@ -30,13 +42,26 @@
         <span class="field-error">Date is required.</span>
       }
     </label>
+    </div>
 
+    <h2>Audience and capacity</h2>
+    <div class="form-grid">
     <label>
       Location
       <input type="text" formControlName="location" placeholder="e.g. Computer Lab" />
       @if (form.controls.location.invalid && form.controls.location.touched) {
         <span class="field-error">Location is required.</span>
       }
+    </label>
+
+    <label>
+      Section <span class="optional">Optional</span>
+      <select formControlName="sectionId">
+        <option [value]="0">All sections in grade</option>
+        @for (section of sections(); track section.id) {
+          <option [value]="section.id">{{ section.name }}</option>
+        }
+      </select>
     </label>
 
     <label>
@@ -59,9 +84,48 @@
         <span class="field-error">Capacity must be greater than zero.</span>
       }
     </label>
+    </div>
 
-    <button type="submit" [disabled]="submitting()">
-      {{ submitting() ? 'Saving...' : 'Create Activity' }}
-    </button>
+    <h2>Registration</h2>
+    <div class="form-grid">
+      <label>
+        Opens <span class="optional">Optional</span>
+        <input type="datetime-local" formControlName="registrationOpensAtUtc" />
+      </label>
+
+      <label>
+        Closes <span class="optional">Optional</span>
+        <input type="datetime-local" formControlName="registrationClosesAtUtc" />
+      </label>
+
+      <label>
+        Contact email <span class="optional">Optional</span>
+        <input type="email" formControlName="contactEmail" placeholder="activities@school.org" />
+        @if (form.controls.contactEmail.invalid && form.controls.contactEmail.touched) {
+          <span class="field-error">Enter a valid email address.</span>
+        }
+      </label>
+
+      <label>
+        Initial status
+        <select formControlName="status">
+          <option value="Draft">Draft</option>
+          <option value="Open">Open for registration</option>
+        </select>
+      </label>
+      <label>Fee amount <span class="optional">Optional</span><input type="number" min="0" step="0.01" formControlName="feeAmount" /></label>
+    </div>
+
+    <label class="check-row">
+      <input type="checkbox" formControlName="consentRequired" />
+      Require learners to confirm consent before registering
+    </label>
+
+    <div class="form-actions">
+      <a routerLink="/activity-management">Cancel</a>
+      <button type="submit" [disabled]="submitting()">
+        {{ submitting() ? 'Saving...' : 'Create Activity' }}
+      </button>
+    </div>
   </form>
 </section>

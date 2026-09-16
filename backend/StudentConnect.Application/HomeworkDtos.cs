@@ -11,10 +11,17 @@ public class HomeworkDto
     public string SubjectName { get; set; } = string.Empty;
     public int GradeId { get; set; }
     public string GradeName { get; set; } = string.Empty;
+    public int? SectionId { get; set; }
+    public string? SectionName { get; set; }
     public int TeacherId { get; set; }
     public string TeacherName { get; set; } = string.Empty;
     public DateOnly CreatedDate { get; set; }
     public DateOnly DueDate { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public DateTime? ScheduledForUtc { get; set; }
+    public DateTime? PublishedAtUtc { get; set; }
+    public DateTime? ClosedAtUtc { get; set; }
+    public DateTime? ArchivedAtUtc { get; set; }
 
     public static HomeworkDto FromEntity(Homework homework) => new()
     {
@@ -25,10 +32,17 @@ public class HomeworkDto
         SubjectName = homework.Subject?.Name ?? string.Empty,
         GradeId = homework.GradeId,
         GradeName = homework.Grade?.Name ?? string.Empty,
+        SectionId = homework.SectionId,
+        SectionName = homework.Section?.Name,
         TeacherId = homework.TeacherId,
         TeacherName = homework.Teacher is null ? string.Empty : $"{homework.Teacher.FirstName} {homework.Teacher.LastName}",
         CreatedDate = homework.CreatedDate,
         DueDate = homework.DueDate,
+        Status = homework.Status.ToString(),
+        ScheduledForUtc = homework.ScheduledForUtc,
+        PublishedAtUtc = homework.PublishedAtUtc,
+        ClosedAtUtc = homework.ClosedAtUtc,
+        ArchivedAtUtc = homework.ArchivedAtUtc,
     };
 }
 
@@ -56,8 +70,11 @@ public class HomeworkCreateDto
     public string Description { get; set; } = string.Empty;
     public int SubjectId { get; set; }
     public int GradeId { get; set; }
+    public int SectionId { get; set; }
     public int TeacherId { get; set; }
     public DateOnly DueDate { get; set; }
+    public string Status { get; set; } = "Published";
+    public DateTime? ScheduledForUtc { get; set; }
 }
 
 // Only the fields a teacher can realistically correct after creation — not the subject/grade/teacher relationships.

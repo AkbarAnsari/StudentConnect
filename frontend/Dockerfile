@@ -1,5 +1,5 @@
 # Runtime-only image: expects `npm run build` to have already been run on the host (see
-# docs/README docker section) — npm install/build doesn't happen inside this build
+# the root README Docker section) — npm install/build doesn't happen inside this build
 # because this network's proxy blocks registry.npmjs.org from containers. Just serves the
 # pre-built static output with nginx, which also reverse-proxies /api/* to the backend
 # container so the SPA can keep using its relative, same-origin "/api" base URL (see

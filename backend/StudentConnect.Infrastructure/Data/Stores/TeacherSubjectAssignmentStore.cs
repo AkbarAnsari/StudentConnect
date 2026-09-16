@@ -9,7 +9,7 @@ public class TeacherSubjectAssignmentStore(Database db)
     private const string SelectWithNames = """
         SELECT tsa."Id", tsa."TeacherId", tsa."SubjectId", tsa."SectionId", tsa."CreatedAtUtc",
                t."FirstName" AS "TeacherFirstName", t."LastName" AS "TeacherLastName",
-               sub."Name" AS "SubjectName", sec."Name" AS "SectionName", g."Name" AS "GradeName"
+               sub."Name" AS "SubjectName", sec."Name" AS "SectionName", g."Id" AS "GradeId", g."Name" AS "GradeName"
         FROM "TeacherSubjectAssignments" tsa
         JOIN "Teachers" t ON t."Id" = tsa."TeacherId"
         JOIN "Subjects" sub ON sub."Id" = tsa."SubjectId"
@@ -25,7 +25,11 @@ public class TeacherSubjectAssignmentStore(Database db)
         SubjectId = reader.GetInt32("SubjectId"),
         Subject = new Subject { Name = reader.GetString("SubjectName") },
         SectionId = reader.GetInt32("SectionId"),
-        Section = new Section { Name = reader.GetString("SectionName"), Grade = new Grade { Name = reader.GetString("GradeName") } },
+        Section = new Section
+        {
+            Name = reader.GetString("SectionName"),
+            Grade = new Grade { Id = reader.GetInt32("GradeId"), Name = reader.GetString("GradeName") },
+        },
         CreatedAtUtc = reader.GetDateTimeUtc("CreatedAtUtc"),
     };
 
@@ -45,6 +49,16 @@ public class TeacherSubjectAssignmentStore(Database db)
     public async Task<TeacherSubjectAssignment?> GetByIdAsync(int id) =>
         await db.QuerySingleOrDefaultAsync($"""{SelectWithNames} WHERE tsa."Id" = @id""", p => p.AddWithValue("id", id), Map);
 
+    public async Task<TeacherSubjectAssignment?> GetByIdAsync(int id, int schoolId) =>
+        await db.QuerySingleOrDefaultAsync(
+            $"""{SelectWithNames} WHERE tsa."Id" = @id AND g."SchoolId" = @schoolId""",
+            p =>
+            {
+                p.AddWithValue("id", id);
+                p.AddWithValue("schoolId", schoolId);
+            },
+            Map);
+
     public async Task<bool> ExistsAsync(int teacherId, int subjectId, int sectionId) =>
         await db.ExistsAsync(
             """
@@ -56,6 +70,44 @@ public class TeacherSubjectAssignmentStore(Database db)
                 p.AddWithValue("teacherId", teacherId);
                 p.AddWithValue("subjectId", subjectId);
                 p.AddWithValue("sectionId", sectionId);
+            });
+
+    public async Task<bool> ExistsAsync(int teacherId, int subjectId, int sectionId, int schoolId) =>
+        await db.ExistsAsync(
+            """
+            SELECT 1
+            FROM "TeacherSubjectAssignments" tsa
+            JOIN "Sections" sec ON sec."Id" = tsa."SectionId"
+            JOIN "Grades" g ON g."Id" = sec."GradeId"
+            WHERE tsa."TeacherId" = @teacherId
+              AND tsa."SubjectId" = @subjectId
+              AND tsa."SectionId" = @sectionId
+              AND g."SchoolId" = @schoolId
+            """,
+            p =>
+            {
+                p.AddWithValue("teacherId", teacherId);
+                p.AddWithValue("subjectId", subjectId);
+                p.AddWithValue("sectionId", sectionId);
+                p.AddWithValue("schoolId", schoolId);
+            });
+
+    public async Task<bool> TeacherHasSectionAsync(int teacherId, int sectionId, int schoolId) =>
+        await db.ExistsAsync(
+            """
+            SELECT 1
+            FROM "TeacherSubjectAssignments" tsa
+            JOIN "Sections" sec ON sec."Id" = tsa."SectionId"
+            JOIN "Grades" g ON g."Id" = sec."GradeId"
+            WHERE tsa."TeacherId" = @teacherId
+              AND tsa."SectionId" = @sectionId
+              AND g."SchoolId" = @schoolId
+            """,
+            p =>
+            {
+                p.AddWithValue("teacherId", teacherId);
+                p.AddWithValue("sectionId", sectionId);
+                p.AddWithValue("schoolId", schoolId);
             });
 
     public async Task<bool> ExistsAsync(int id, int schoolId) =>

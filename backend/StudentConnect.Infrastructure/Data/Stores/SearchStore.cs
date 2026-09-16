@@ -18,7 +18,7 @@ public class SearchStore(Database db)
         Subtitle = reader.GetString("Subtitle"),
     };
 
-    public async Task<List<SearchResultDto>> SearchAsync(string query, int take) =>
+    public async Task<List<SearchResultDto>> SearchAsync(string query, int take, int schoolId) =>
         await db.QueryAsync(
             """
             SELECT "EntityType", "EntityId", "Title", "Subtitle" FROM (
@@ -29,7 +29,8 @@ public class SearchStore(Database db)
                     ts_rank(to_tsvector('english', s."FirstName" || ' ' || s."LastName" || ' ' || s."StudentId" || ' ' || s."Email"), plainto_tsquery('english', @query)) AS "Rank"
                 FROM "Students" s
                 JOIN "Grades" g ON g."Id" = s."GradeId"
-                WHERE to_tsvector('english', s."FirstName" || ' ' || s."LastName" || ' ' || s."StudentId" || ' ' || s."Email") @@ plainto_tsquery('english', @query)
+                                WHERE s."SchoolId" = @schoolId
+                                    AND to_tsvector('english', s."FirstName" || ' ' || s."LastName" || ' ' || s."StudentId" || ' ' || s."Email") @@ plainto_tsquery('english', @query)
 
                 UNION ALL
 
@@ -39,7 +40,8 @@ public class SearchStore(Database db)
                     t."TeacherId" || ' · ' || t."Email",
                     ts_rank(to_tsvector('english', t."FirstName" || ' ' || t."LastName" || ' ' || t."TeacherId" || ' ' || t."Email"), plainto_tsquery('english', @query))
                 FROM "Teachers" t
-                WHERE to_tsvector('english', t."FirstName" || ' ' || t."LastName" || ' ' || t."TeacherId" || ' ' || t."Email") @@ plainto_tsquery('english', @query)
+                                WHERE t."SchoolId" = @schoolId
+                                    AND to_tsvector('english', t."FirstName" || ' ' || t."LastName" || ' ' || t."TeacherId" || ' ' || t."Email") @@ plainto_tsquery('english', @query)
 
                 UNION ALL
 
@@ -48,7 +50,9 @@ public class SearchStore(Database db)
                     'Due ' || h."DueDate"::text,
                     ts_rank(to_tsvector('english', h."Title" || ' ' || h."Description"), plainto_tsquery('english', @query))
                 FROM "Homework" h
-                WHERE to_tsvector('english', h."Title" || ' ' || h."Description") @@ plainto_tsquery('english', @query)
+                                JOIN "Grades" hg ON hg."Id" = h."GradeId"
+                                WHERE hg."SchoolId" = @schoolId
+                                    AND to_tsvector('english', h."Title" || ' ' || h."Description") @@ plainto_tsquery('english', @query)
 
                 UNION ALL
 
@@ -56,7 +60,9 @@ public class SearchStore(Database db)
                     'LearningMaterial', m."Id", m."Title", m."FileName",
                     ts_rank(to_tsvector('english', m."Title" || ' ' || m."Description"), plainto_tsquery('english', @query))
                 FROM "LearningMaterials" m
-                WHERE to_tsvector('english', m."Title" || ' ' || m."Description") @@ plainto_tsquery('english', @query)
+                                JOIN "Grades" mg ON mg."Id" = m."GradeId"
+                                WHERE mg."SchoolId" = @schoolId
+                                    AND to_tsvector('english', m."Title" || ' ' || m."Description") @@ plainto_tsquery('english', @query)
 
                 UNION ALL
 
@@ -65,7 +71,9 @@ public class SearchStore(Database db)
                     a."Location" || ' · ' || a."Date"::date::text,
                     ts_rank(to_tsvector('english', a."Title" || ' ' || a."Description"), plainto_tsquery('english', @query))
                 FROM "Activities" a
-                WHERE to_tsvector('english', a."Title" || ' ' || a."Description") @@ plainto_tsquery('english', @query)
+                                JOIN "Grades" ag ON ag."Id" = a."GradeId"
+                                WHERE ag."SchoolId" = @schoolId
+                                    AND to_tsvector('english', a."Title" || ' ' || a."Description") @@ plainto_tsquery('english', @query)
             ) results
             ORDER BY "Rank" DESC
             LIMIT @take
@@ -74,6 +82,7 @@ public class SearchStore(Database db)
             {
                 p.AddWithValue("query", query);
                 p.AddWithValue("take", take);
+                p.AddWithValue("schoolId", schoolId);
             },
             Map);
 }

@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StudentConnect.Application;
@@ -16,6 +18,8 @@ public class AcademicYearsController(
     ReferenceDataStore referenceData,
     IAuditService audit,
     Database db,
+    RolloverRunStore rolloverRuns,
+    ICurrentUserService currentUser,
     ICurrentTenantService currentTenant,
     ILogger<AcademicYearsController> logger) : ControllerBase
 {
@@ -116,6 +120,46 @@ public class AcademicYearsController(
         return NoContent();
     }
 
+    [HttpGet("rollover-runs")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<IEnumerable<RolloverRunDto>>> GetRolloverRuns()
+    {
+        if (currentTenant.SchoolId is not { } schoolId) return Forbid();
+        return Ok(await rolloverRuns.GetAllAsync(schoolId));
+    }
+
+    [HttpGet("rollover-runs/{runId:int}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<RolloverRunDetailDto>> GetRolloverRun(int runId)
+    {
+        if (currentTenant.SchoolId is not { } schoolId) return Forbid();
+        var run = await rolloverRuns.GetByIdAsync(runId, schoolId);
+        var snapshot = await rolloverRuns.GetSnapshotAsync(runId, schoolId);
+        if (run is null || snapshot is null) return NotFound();
+        return Ok(ToDetail(run, JsonSerializer.Deserialize<List<RolloverRunStudentDto>>(snapshot) ?? []));
+    }
+
+    [HttpGet("rollover-runs/{runId:int}/csv")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DownloadRolloverRun(int runId)
+    {
+        if (currentTenant.SchoolId is not { } schoolId) return Forbid();
+        var run = await rolloverRuns.GetByIdAsync(runId, schoolId);
+        var snapshot = await rolloverRuns.GetSnapshotAsync(runId, schoolId);
+        if (run is null || snapshot is null) return NotFound();
+
+        var rows = JsonSerializer.Deserialize<List<RolloverRunStudentDto>>(snapshot) ?? [];
+        var csv = new StringBuilder("Student,Previous grade,Previous section,Destination grade,Destination section,Outcome,Reason\r\n");
+        foreach (var row in rows)
+        {
+            csv.Append(Csv(row.StudentName)).Append(',').Append(Csv(row.CurrentGradeName)).Append(',')
+                .Append(Csv(row.CurrentSectionName ?? string.Empty)).Append(',').Append(Csv(row.DestinationGradeName ?? string.Empty)).Append(',')
+                .Append(Csv(row.DestinationSectionName ?? string.Empty)).Append(',').Append(Csv(row.Outcome)).Append(',')
+                .Append(Csv(row.Reason ?? string.Empty)).Append("\r\n");
+        }
+        return File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", $"rollover-{run.AcademicYearName}-{run.Id}.csv");
+    }
+
     // POST /api/academic-years/{id}/rollover-preview — read-only; shows the proposed
     // Grade/Section promotion for every student in the school before anything is committed.
     [HttpPost("{id:int}/rollover-preview")]
@@ -142,7 +186,7 @@ public class AcademicYearsController(
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> CommitRollover(int id, [FromQuery] bool force, [FromBody] RolloverCommitRequestDto request)
     {
-        if (currentTenant.SchoolId is not { } schoolId)
+        if (currentTenant.SchoolId is not { } schoolId || currentUser.UserId is not { } actorUserId)
         {
             return Forbid();
         }
@@ -158,30 +202,72 @@ public class AcademicYearsController(
             return Conflict(new { message = "This academic year has already been rolled over. Pass force=true to re-run it." });
         }
 
+        var duplicateOverride = request.Overrides.GroupBy(o => o.StudentId).FirstOrDefault(group => group.Count() > 1);
+        if (duplicateOverride is not null)
+            return BadRequest(new { message = $"Student #{duplicateOverride.Key} appears more than once in the rollover overrides." });
+
         var preview = await BuildRolloverPreviewAsync(schoolId);
-        var overridesByStudentId = request.Overrides.ToDictionary(o => o.StudentId);
+        var previewByStudentId = preview.ToDictionary(row => row.StudentId);
+        var overridesByStudentId = request.Overrides.ToDictionary(row => row.StudentId);
+        var unknownOverride = request.Overrides.FirstOrDefault(row => !previewByStudentId.ContainsKey(row.StudentId));
+        if (unknownOverride is not null)
+            return BadRequest(new { message = $"Student #{unknownOverride.StudentId} does not belong to this school." });
+
+        var gradesById = (await referenceData.GetAllGradesAsync(schoolId)).ToDictionary(grade => grade.Id);
+        var sectionsById = (await sections.GetAllAsync(schoolId)).ToDictionary(section => section.Id);
+        foreach (var overrideRow in request.Overrides.Where(row => !row.Skip))
+        {
+            var previewRow = previewByStudentId[overrideRow.StudentId];
+            var gradeId = overrideRow.GradeId ?? previewRow.ProposedGradeId;
+            if (gradeId is null || !gradesById.ContainsKey(gradeId.Value))
+                return BadRequest(new { message = $"Select a valid destination grade for {previewRow.StudentName}." });
+
+            var sectionId = overrideRow.GradeId is not null ? overrideRow.SectionId : overrideRow.SectionId ?? previewRow.ProposedSectionId;
+            if (sectionId is not null && (!sectionsById.TryGetValue(sectionId.Value, out var section) || section.GradeId != gradeId))
+                return BadRequest(new { message = $"The destination section for {previewRow.StudentName} does not belong to the selected grade." });
+        }
+
         var applied = new List<(int StudentId, string FromGradeName, int GradeId, int? SectionId)>();
-        var skipped = 0;
+        var snapshotRows = new List<RolloverRunStudentDto>();
+
+        foreach (var row in preview)
+        {
+            overridesByStudentId.TryGetValue(row.StudentId, out var overrideRow);
+            var gradeId = overrideRow?.GradeId ?? row.ProposedGradeId;
+            var sectionId = overrideRow?.GradeId is not null ? overrideRow.SectionId : overrideRow?.SectionId ?? row.ProposedSectionId;
+            var skipReason = row.Excluded ? row.ExclusionReason : overrideRow?.Skip == true ? "Skipped by administrator." : gradeId is null ? "No destination grade selected." : null;
+
+            if (skipReason is null)
+                applied.Add((row.StudentId, row.CurrentGradeName, gradeId!.Value, sectionId));
+
+            snapshotRows.Add(new RolloverRunStudentDto
+            {
+                StudentId = row.StudentId,
+                StudentName = row.StudentName,
+                CurrentGradeName = row.CurrentGradeName,
+                CurrentSectionName = row.CurrentSectionName,
+                DestinationGradeId = skipReason is null ? gradeId : null,
+                DestinationGradeName = skipReason is null ? gradesById[gradeId!.Value].Name : null,
+                DestinationSectionId = skipReason is null ? sectionId : null,
+                DestinationSectionName = skipReason is null && sectionId is not null ? sectionsById[sectionId.Value].Name : null,
+                Outcome = skipReason is null ? "Promoted" : "Skipped",
+                Reason = skipReason,
+            });
+        }
+
+        var skipped = snapshotRows.Count(row => row.Outcome == "Skipped");
+        var runId = 0;
 
         await db.WithTransactionAsync(async (connection, tx) =>
         {
-            foreach (var row in preview)
+            foreach (var row in applied)
             {
-                overridesByStudentId.TryGetValue(row.StudentId, out var overrideRow);
-                var gradeId = overrideRow?.GradeId ?? row.ProposedGradeId;
-
-                if (row.Excluded || overrideRow?.Skip == true || gradeId is null)
-                {
-                    skipped++;
-                    continue;
-                }
-
-                var sectionId = overrideRow?.SectionId ?? row.ProposedSectionId;
-                await students.UpdateGradeSectionInTxAsync(connection, tx, row.StudentId, gradeId.Value, sectionId);
-                applied.Add((row.StudentId, row.CurrentGradeName, gradeId.Value, sectionId));
+                await students.UpdateGradeSectionInTxAsync(connection, tx, row.StudentId, row.GradeId, row.SectionId);
             }
 
             await academicYears.MarkRolledOverInTxAsync(connection, tx, id);
+            runId = await RolloverRunStore.InsertInTxAsync(
+                connection, tx, schoolId, id, actorUserId, force, applied.Count, skipped, JsonSerializer.Serialize(snapshotRows));
             return true;
         });
 
@@ -196,7 +282,7 @@ public class AcademicYearsController(
 
         logger.LogInformation("Academic year {AcademicYearId} rolled over: {Promoted} promoted, {Skipped} skipped", id, applied.Count, skipped);
 
-        return Ok(new { promoted = applied.Count, skipped });
+        return Ok(new { runId, promoted = applied.Count, skipped });
     }
 
     // Default mapping: next Grade in SequenceOrder (falling back to Id order), same-named
@@ -257,4 +343,20 @@ public class AcademicYearsController(
 
         return result;
     }
+
+    private static RolloverRunDetailDto ToDetail(RolloverRunDto run, List<RolloverRunStudentDto> students) => new()
+    {
+        Id = run.Id,
+        AcademicYearId = run.AcademicYearId,
+        AcademicYearName = run.AcademicYearName,
+        ActorUserId = run.ActorUserId,
+        ActorName = run.ActorName,
+        CreatedAtUtc = run.CreatedAtUtc,
+        IsForced = run.IsForced,
+        PromotedCount = run.PromotedCount,
+        SkippedCount = run.SkippedCount,
+        Students = students,
+    };
+
+    private static string Csv(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
 }

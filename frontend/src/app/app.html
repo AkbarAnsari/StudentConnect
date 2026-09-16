@@ -1,95 +1,124 @@
-<header class="site-header">
-  <a class="skip-link" href="#main-content">Skip to main content</a>
-  <div class="header-inner">
-    <a class="brand" routerLink="/" (click)="closeMobileMenu()">
-      <span class="brand-mark">SC</span>
-      <span class="brand-name">StudentConnect</span>
-    </a>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 
-    <button
-      type="button"
-      class="nav-toggle"
-      [class.open]="mobileMenuOpen()"
-      (click)="toggleMobileMenu()"
-      aria-label="Toggle navigation menu"
-      aria-haspopup="true"
-      [attr.aria-expanded]="mobileMenuOpen()"
-    >
-      <span></span><span></span><span></span>
-    </button>
-
-    <nav class="site-nav" [class.open]="mobileMenuOpen()">
-      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" (click)="closeMobileMenu()">Home</a>
-      @if (authService.isAuthenticated()) {
-        <a routerLink="/dashboard" routerLinkActive="active" (click)="closeMobileMenu()">Dashboard</a>
-      }
-      @if (authService.role() === 'Teacher' || authService.role() === 'Admin') {
-        <a routerLink="/students" routerLinkActive="active" (click)="closeMobileMenu()">Students</a>
-        <a routerLink="/search" routerLinkActive="active" (click)="closeMobileMenu()">Search</a>
-
-        <div class="nav-dropdown" [class.open]="manageMenuOpen()">
-          <button
-            type="button"
-            class="nav-dropdown-toggle"
-            (click)="toggleManageMenu()"
-            aria-haspopup="true"
-            [attr.aria-expanded]="manageMenuOpen()"
-          >
-            Manage
-            <svg class="chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
-              <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" />
-            </svg>
-          </button>
-          <div class="nav-dropdown-menu">
-            @if (authService.role() === 'Teacher') {
-              <a routerLink="/my-classes" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">My Classes</a>
-            }
-            <a routerLink="/record-attendance" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Record Attendance</a>
-            <a routerLink="/assessments" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Assessments</a>
-            <a routerLink="/enter-marks" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Enter Marks</a>
-            <a routerLink="/teacher-homework" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Homework</a>
-            <a routerLink="/teacher-materials" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Learning Materials</a>
-            <a routerLink="/activity-management" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Activities</a>
-            <a routerLink="/announcements" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Announcements</a>
-            @if (authService.role() === 'Admin') {
-              <a routerLink="/manage-parents" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Parent Accounts</a>
-              <a routerLink="/manage-teachers" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Teachers</a>
-              <a routerLink="/manage-academic-structure" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Academic Structure</a>
-              <a routerLink="/audit-log" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Audit Log</a>
-              <a routerLink="/email-outbox" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Email Outbox</a>
-              <a routerLink="/ops" routerLinkActive="active" (click)="closeMobileMenu(); closeManageMenu()">Operations</a>
-            }
-          </div>
-        </div>
-      }
-      <a routerLink="/about" routerLinkActive="active" (click)="closeMobileMenu()">About</a>
-      <a routerLink="/contact" routerLinkActive="active" (click)="closeMobileMenu()">Contact</a>
-
-      <div class="nav-auth">
-        @if (authService.currentUser(); as user) {
-          <app-notification-bell />
-          <div class="user-chip">
-            <span class="avatar">{{ initials() }}</span>
-            <span class="user-meta">
-              <span class="user-name">{{ user.displayName }}</span>
-              <span class="user-role">{{ user.role }}</span>
-            </span>
-          </div>
-          <button type="button" class="logout-button" (click)="onLogout()">Logout</button>
-        } @else {
-          <a class="login-link" routerLink="/login" (click)="closeMobileMenu()">Login</a>
-        }
-      </div>
-    </nav>
+@if (!online()) {
+  <div class="network-banner" role="status" aria-live="assertive">
+    You are offline. Saved information remains visible, but new changes cannot be submitted.
   </div>
-</header>
+}
 
-<main id="main-content">
-  <router-outlet />
-</main>
+@if (authService.currentUser(); as user) {
+  <div class="app-shell" [class.drawer-open]="mobileMenuOpen()">
+    <aside class="app-sidebar" aria-label="Primary navigation">
+      <div class="sidebar-brand-row">
+        <a class="brand" routerLink="/dashboard" (click)="closeMobileMenu()">
+          <span class="brand-mark"><ng-icon name="lucideGraduationCap" size="20" /></span>
+          <span>
+            <span class="brand-name">StudentConnect</span>
+            <span class="brand-subtitle">{{ workspaceLabel() }}</span>
+          </span>
+        </a>
+        <button type="button" class="sidebar-close" aria-label="Close navigation" (click)="closeMobileMenu()">
+          <ng-icon name="lucideX" size="20" />
+        </button>
+      </div>
 
-<footer class="site-footer">
-  <p>&copy; 2026 StudentConnect. Built as a learning project for Azure Fundamentals.</p>
-</footer>
+      <nav class="sidebar-nav">
+        @for (group of navigationGroups(); track group.label) {
+          <section class="nav-group" [attr.aria-label]="group.label">
+            <p class="nav-group-label">{{ group.label }}</p>
+            @for (item of group.items; track item.route) {
+              <a
+                class="sidebar-link"
+                [routerLink]="item.route"
+                routerLinkActive="active"
+                [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
+                (click)="closeMobileMenu()"
+              >
+                <ng-icon [name]="item.icon" size="18" />
+                <span>{{ item.label }}</span>
+              </a>
+            }
+          </section>
+        }
+      </nav>
+
+      <div class="sidebar-account">
+        <div class="user-chip">
+          <span class="avatar">{{ initials() }}</span>
+          <span class="user-meta">
+            <span class="user-name">{{ user.displayName }}</span>
+            <span class="user-role">{{ user.role }}</span>
+          </span>
+        </div>
+        <button type="button" class="sidebar-logout" title="Log out" aria-label="Log out" (click)="onLogout()">
+          <ng-icon name="lucideLogOut" size="18" />
+        </button>
+      </div>
+    </aside>
+
+    @if (mobileMenuOpen()) {
+      <button type="button" class="drawer-backdrop" aria-label="Close navigation" (click)="closeMobileMenu()"></button>
+    }
+
+    <div class="app-workspace">
+      <header class="workspace-bar">
+        <button
+          type="button"
+          class="mobile-nav-toggle"
+          aria-label="Open navigation"
+          [attr.aria-expanded]="mobileMenuOpen()"
+          (click)="toggleMobileMenu()"
+        >
+          <ng-icon name="lucideMenu" size="21" />
+        </button>
+        <div class="workspace-context">
+          <span class="workspace-kicker">StudentConnect</span>
+          <strong>{{ workspaceLabel() }}</strong>
+        </div>
+        <div class="workspace-actions">
+          <app-notification-bell />
+          <span class="role-pill">{{ user.role }}</span>
+        </div>
+      </header>
+
+      <main id="main-content" class="workspace-main">
+        <router-outlet />
+      </main>
+    </div>
+  </div>
+} @else {
+  <header class="site-header public-header">
+    <div class="header-inner">
+      <a class="brand" routerLink="/" (click)="closeMobileMenu()">
+        <span class="brand-mark"><ng-icon name="lucideGraduationCap" size="20" /></span>
+        <span class="brand-name">StudentConnect</span>
+      </a>
+      <button
+        type="button"
+        class="nav-toggle"
+        [class.open]="mobileMenuOpen()"
+        (click)="toggleMobileMenu()"
+        aria-label="Toggle navigation menu"
+        [attr.aria-expanded]="mobileMenuOpen()"
+      >
+        <ng-icon [name]="mobileMenuOpen() ? 'lucideX' : 'lucideMenu'" size="22" />
+      </button>
+      <nav class="site-nav public-nav" [class.open]="mobileMenuOpen()">
+        <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" (click)="closeMobileMenu()">Home</a>
+        <a routerLink="/about" routerLinkActive="active" (click)="closeMobileMenu()">About</a>
+        <a routerLink="/contact" routerLinkActive="active" (click)="closeMobileMenu()">Contact</a>
+        <a class="login-link" routerLink="/login" (click)="closeMobileMenu()">Sign in</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <router-outlet />
+  </main>
+
+  <footer class="site-footer">
+    <p>&copy; 2026 StudentConnect. Clear school operations, connected learning.</p>
+  </footer>
+}
 
 <app-confirm-dialog />

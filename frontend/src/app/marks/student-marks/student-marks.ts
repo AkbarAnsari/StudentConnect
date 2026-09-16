@@ -4,6 +4,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, map, of, startWith } from 'rxjs';
 import { MarksSummary } from '../marks.model';
 import { MarksService } from '../marks.service';
+import { StudentRecordNav } from '../../students/student-record-nav/student-record-nav';
 
 interface StudentMarksState {
   loading: boolean;
@@ -15,7 +16,7 @@ const LOADING_STATE: StudentMarksState = { loading: true, error: false, summary:
 
 @Component({
   selector: 'app-student-marks',
-  imports: [RouterLink],
+  imports: [RouterLink, StudentRecordNav],
   templateUrl: './student-marks.html',
   styleUrl: './student-marks.css',
 })
@@ -38,5 +39,9 @@ export class StudentMarks {
     const totalMax = summary.reduce((sum, s) => sum + s.totalMaximumMarks, 0);
     const totalObtained = summary.reduce((sum, s) => sum + s.totalMarksObtained, 0);
     return totalMax === 0 ? 0 : Math.round((totalObtained * 100) / totalMax);
+  }
+
+  protected totalAssessments(summary: MarksSummary[]): number {
+    return summary.reduce((sum, subject) => sum + subject.assessments, 0);
   }
 }

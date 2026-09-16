@@ -1,5 +1,6 @@
 <section class="page">
   <a class="back-link" [routerLink]="['/students', studentId]">← Back to Profile</a>
+  <app-student-record-nav [studentId]="studentId" />
   <h1>Activities</h1>
 
   @if (state().loading) {
@@ -15,12 +16,13 @@
     @if (state().activities.length === 0) {
       <p class="empty">No activities available for your grade yet.</p>
     } @else {
-      <ul class="activity-list">
+      <div class="activity-list" role="list">
         @for (activity of state().activities; track activity.id) {
-          <li class="activity-card">
+          <article class="activity-card" role="listitem">
             <div class="activity-info">
               <span class="title">{{ activity.title }}</span>
-              <span class="meta">{{ activity.date }} — {{ activity.location }}</span>
+              <span class="meta">{{ activity.date }} · {{ activity.location }}</span>
+              <span class="meta">Organized by {{ activity.organizerName || 'your school' }}</span>
               <span class="seats">
                 @if (activity.availableSeats > 0) {
                   {{ activity.availableSeats }} seats available
@@ -39,18 +41,26 @@
                 } @else {
                   <span class="status status-registered">Registered</span>
                 }
-                <button type="button" class="cancel-button" (click)="onCancel(registration.id)">Cancel Registration</button>
-              } @else if (isPast(activity)) {
-                <span class="status status-closed">Registration Closed</span>
-              } @else {
-                <button type="button" class="register-button" (click)="onRegister(activity.id)">
+                @if (canManageRegistration()) {
+                  <button type="button" class="cancel-button" (click)="onCancel(registration.id)">Cancel Registration</button>
+                }
+              } @else if (registrationUnavailableReason(activity); as reason) {
+                <span class="status status-closed">{{ reason }}</span>
+              } @else if (canManageRegistration()) {
+                @if (activity.consentRequired) {
+                  <label class="consent-check">
+                    <input type="checkbox" [checked]="hasConsent(activity.id)" (change)="onConsentChange(activity.id, $any($event.target).checked)" />
+                    I confirm the required consent
+                  </label>
+                }
+                <button type="button" class="register-button" [disabled]="activity.consentRequired && !hasConsent(activity.id)" (click)="onRegister(activity)">
                   {{ activity.availableSeats > 0 ? 'Register' : 'Join Waitlist' }}
                 </button>
               }
             </div>
-          </li>
+          </article>
         }
-      </ul>
+      </div>
     }
 
     <h2>My Registered Activities</h2>
@@ -67,7 +77,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (registration of state().registrations; track registration.id) {
+          @for (registration of myRegistrations(); track registration.id) {
             <tr>
               <td>{{ registration.activityTitle }}</td>
               <td>{{ registration.activityDate }}</td>

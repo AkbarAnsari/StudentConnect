@@ -8,36 +8,65 @@
       Unable to load registrations. Please check whether the StudentConnect API is running.
     </p>
   } @else if (state().activity; as a) {
-    <h1>{{ a.title }}</h1>
-    <p class="meta">Capacity: {{ a.capacity }} — Registered: {{ a.currentRegistrations }} — Available: {{ a.availableSeats }}</p>
+    <div class="roster-header">
+      <div>
+        <span class="status" [attr.data-status]="a.status">{{ a.status }}</span>
+        <h1>{{ a.title }}</h1>
+        <p class="meta">{{ a.gradeName }}{{ a.sectionName ? ' · ' + a.sectionName : '' }} · {{ a.location }}</p>
+      </div>
+      <button type="button" class="export-button" (click)="onExport(a)">Export CSV</button>
+    </div>
+
+    <div class="roster-stats" aria-label="Registration summary">
+      <div><strong>{{ a.currentRegistrations }}</strong><span>Registered</span></div>
+      <div><strong>{{ a.availableSeats }}</strong><span>Available</span></div>
+      <div><strong>{{ a.currentWaitlisted }}</strong><span>Waitlisted</span></div>
+    </div>
+
+    @if (actionError()) { <p class="error-message">{{ actionError() }}</p> }
+    @if (successMessage()) { <p class="success-message">{{ successMessage() }}</p> }
+
+    <section class="participant-message"><h2>Message participants</h2><label>Status<select [ngModel]="messageStatus()" (ngModelChange)="messageStatus.set($event)"><option>Registered</option><option>Waitlisted</option></select></label><label>Priority<select [ngModel]="messagePriority()" (ngModelChange)="messagePriority.set($event)"><option>Normal</option><option>Important</option><option>Urgent</option></select></label><label>Title<input type="text" [ngModel]="messageTitle()" (ngModelChange)="messageTitle.set($event)" /></label><label class="message-body">Message<textarea rows="2" [ngModel]="messageBody()" (ngModelChange)="messageBody.set($event)"></textarea></label><button type="button" (click)="notifyParticipants()">Queue message</button></section>
 
     @if (state().registrations.length === 0) {
       <p class="empty">No students have registered yet.</p>
     } @else {
-      <table class="registrations-table">
+      <div class="table-shell"><table class="registrations-table">
         <thead>
           <tr>
             <th>Student</th>
             <th>Registration Date</th>
             <th>Status</th>
+            <th>Consent</th>
+            <th>Fee</th>
+            <th>Check-in</th>
           </tr>
         </thead>
         <tbody>
           @for (registration of state().registrations; track registration.id) {
             <tr>
-              <td>{{ registration.studentName }}</td>
-              <td>{{ registration.registrationDate }}</td>
-              <td
+              <td data-label="Student"><strong>{{ registration.studentName }}</strong></td>
+              <td data-label="Registered">{{ registration.registrationDate }}</td>
+              <td data-label="Status"
                 [class.status-registered]="registration.status === 'Registered'"
                 [class.status-cancelled]="registration.status === 'Cancelled'"
                 [class.status-late]="registration.status === 'Waitlisted'"
               >
                 {{ registration.status }}
               </td>
+              <td data-label="Consent">@if(registration.consentDocumentFileName){<button type="button" class="check-button" (click)="downloadConsent(registration)">{{registration.consentDocumentFileName}}</button>}@else if(a.consentRequired){<label class="upload-consent">Upload<input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg" [disabled]="updatingId()===registration.id" (change)="uploadConsent(registration,$event)" /></label>}@else{Not required}</td>
+              <td data-label="Fee">@if(registration.feeStatus==='Pending'){<input type="text" placeholder="Payment reference" [ngModel]="paymentReferences()[registration.id]||''" (ngModelChange)="setPaymentReference(registration.id,$event)" /><button type="button" class="check-button" (click)="markPaid(registration)">Mark paid</button>}@else{<span>{{registration.feeStatus}}</span>@if(registration.paymentReference){<small>{{registration.paymentReference}}</small>}}</td>
+              <td data-label="Check-in">
+                @if (registration.status === 'Registered') {
+                  <button type="button" class="check-button" [class.checked]="registration.checkedInAtUtc" [disabled]="updatingId() === registration.id" (click)="onCheckIn(registration, !registration.checkedInAtUtc)">
+                    {{ registration.checkedInAtUtc ? 'Checked in' : 'Check in' }}
+                  </button>
+                } @else { <span>Unavailable</span> }
+              </td>
             </tr>
           }
         </tbody>
-      </table>
+      </table></div>
     }
   }
 </section>

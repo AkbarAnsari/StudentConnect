@@ -6,6 +6,7 @@ export interface TeacherSubjectAssignment {
   subjectName: string;
   sectionId: number;
   sectionName: string;
+  gradeId: number;
   gradeName: string;
 }
 

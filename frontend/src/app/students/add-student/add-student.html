@@ -80,6 +80,48 @@
       <input type="text" formControlName="address" />
     </label>
 
+    <fieldset class="subject-picker">
+      <legend>Subjects</legend>
+      <p>{{ curriculumNotice() }}</p>
+      @for (subject of subjects(); track subject.id) {
+        <label class="checkbox-row">
+          <input
+            type="checkbox"
+            [checked]="selectedSubjectIds().includes(subject.id)"
+            (change)="toggleSubject(subject.id, $any($event.target).checked)"
+          />
+          {{ subject.name }} ({{ subject.code }})
+        </label>
+      }
+      @if (subjectError()) {
+        <span class="field-error">{{ subjectError() }}</span>
+      }
+    </fieldset>
+
+    <fieldset class="subject-picker">
+      <legend>Guardian access (optional)</legend>
+      <label>Existing family account<select formControlName="guardianParentUserId"><option [value]="0">No guardian link</option>@for (parent of parents(); track parent.id) { <option [value]="parent.id">{{ parent.username }} · {{ parent.email || 'No email' }}</option> }</select></label>
+      @if (form.controls.guardianParentUserId.value) {
+        <label>Relationship<select formControlName="guardianRelationshipType"><option>Parent</option><option>Guardian</option><option>Grandparent</option><option>Other</option></select></label>
+        <label class="checkbox-row"><input type="checkbox" formControlName="guardianIsPrimaryContact" /> Primary contact for this student</label>
+      }
+    </fieldset>
+
+    <label class="checkbox-row">
+      <input type="checkbox" formControlName="createLogin" />
+      Create a Student login and email a password-setup invitation
+    </label>
+
+    @if (form.controls.createLogin.value) {
+      <label>
+        Username
+        <input type="text" formControlName="username" autocomplete="off" />
+        @if (form.controls.username.invalid && form.controls.username.touched) {
+          <span class="field-error">Username is required for a Student login.</span>
+        }
+      </label>
+    }
+
     <button type="submit" [disabled]="submitting()">
       {{ submitting() ? 'Saving...' : 'Add Student' }}
     </button>

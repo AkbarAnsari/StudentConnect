@@ -47,14 +47,25 @@ builder.Services.AddScoped<EmailVerificationTokenStore>();
 builder.Services.AddScoped<RefreshTokenStore>();
 builder.Services.AddScoped<NotificationStore>();
 builder.Services.AddScoped<AnalyticsStore>();
+builder.Services.AddScoped<AnalyticsDashboardStore>();
 builder.Services.AddScoped<NotificationRecipientResolver>();
 builder.Services.AddScoped<AuditLogStore>();
 builder.Services.AddScoped<SearchStore>();
 builder.Services.AddScoped<ReportStore>();
+builder.Services.AddScoped<ReportIssuanceStore>();
 builder.Services.AddScoped<EmailOutboxStore>();
 builder.Services.AddScoped<AnnouncementStore>();
 builder.Services.AddScoped<GradingBandStore>();
 builder.Services.AddScoped<TeacherSubjectAssignmentStore>();
+builder.Services.AddScoped<SetupDependencyStore>();
+builder.Services.AddScoped<RolloverRunStore>();
+builder.Services.AddScoped<CurriculumDefaultStore>();
+builder.Services.AddScoped<LeaveRequestStore>();
+builder.Services.AddScoped<ReportTemplateStore>();
+builder.Services.AddScoped<ReportGovernanceStore>();
+builder.Services.AddScoped<OperationalSettingsStore>();
+builder.Services.AddHttpClient();
+builder.Services.AddHostedService<OperationalGovernanceProcessor>();
 
 // Today files live on local disk; a future AzureBlobStorage class could implement the
 // same IFileStorage interface without any controller/service code changing.
@@ -101,6 +112,9 @@ else
 }
 builder.Services.AddHostedService<EmailOutboxProcessor>();
 builder.Services.AddHostedService<NotificationDigestProcessor>();
+builder.Services.AddHostedService<AnnouncementDispatchProcessor>();
+builder.Services.AddHostedService<HomeworkDispatchProcessor>();
+builder.Services.AddHostedService<LearningMaterialDispatchProcessor>();
 
 // Unauthenticated /health endpoint (see below) — the kind of thing a load balancer or
 // container orchestrator polls, so it deliberately bypasses the FallbackPolicy below.
@@ -158,6 +172,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Secret)),
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var userIdValue = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var schoolIdValue = context.Principal?.FindFirst("SchoolId")?.Value;
+                if (!int.TryParse(userIdValue, out var userId) || !int.TryParse(schoolIdValue, out var schoolId) ||
+                    !await context.HttpContext.RequestServices.GetRequiredService<UserStore>().IsActiveAsync(userId, schoolId))
+                {
+                    context.Fail("Account is inactive.");
+                }
+            },
         };
     });
 

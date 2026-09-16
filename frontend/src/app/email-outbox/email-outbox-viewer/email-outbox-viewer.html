@@ -1,51 +1,56 @@
-<section class="page page-wide">
+<section class="page page-wide outbox-page">
   <a class="back-link" routerLink="/dashboard">← Back to Dashboard</a>
-  <h1>Email Outbox</h1>
-  <p class="hint">Emails triggered by notifications are enqueued here and delivered asynchronously by a background processor.</p>
+  <div class="page-header"><div><p class="eyebrow">Delivery operations</p><h1>Email Outbox</h1><p>Inspect queued delivery, diagnose failures, and retry selected failed messages.</p></div><a class="btn btn-secondary" routerLink="/ops">View system health</a></div>
 
-  @if (loadError()) {
-    <p class="error-message">Unable to load the email outbox. Please check whether the StudentConnect API is running.</p>
-  } @else if (entries().length === 0) {
-    <p>No emails have been enqueued yet.</p>
+  <form class="filter-band" (ngSubmit)="applyFilters()">
+    <label>Status<select name="status" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"><option value="">All statuses</option><option value="pending">Pending</option><option value="failed">Failed</option><option value="sent">Sent</option></select></label>
+    <label>Recipient or subject<input type="search" name="query" [ngModel]="query()" (ngModelChange)="query.set($event)" placeholder="Search email or subject" /></label>
+    <label>From (UTC)<input type="date" name="fromDate" [ngModel]="fromDate()" (ngModelChange)="fromDate.set($event)" /></label>
+    <label>To (UTC)<input type="date" name="toDate" [ngModel]="toDate()" (ngModelChange)="toDate.set($event)" /></label>
+    <div class="filter-actions"><button type="button" class="btn btn-secondary" (click)="resetFilters()">Reset</button><button type="submit">Apply filters</button></div>
+  </form>
+
+  @if (actionError()) { <p class="error-message" role="alert">{{ actionError() }}</p> }
+  @if (actionMessage()) { <p class="success-message" role="status">{{ actionMessage() }}</p> }
+
+  @if (loading()) {
+    <p class="loading" aria-live="polite">Loading delivery records...</p>
+  } @else if (loadError()) {
+    <div class="error-message recovery-state" role="alert"><span>{{ loadError() }}</span><button type="button" class="btn btn-secondary" (click)="reload()">Retry</button></div>
   } @else {
-    @if (retryError()) {
-      <p class="error-message">{{ retryError() }}</p>
-    }
-    <table class="outbox-table">
-      <thead>
-        <tr>
-          <th>To</th>
-          <th>Subject</th>
-          <th>Created (UTC)</th>
-          <th>Status</th>
-          <th>Attempts</th>
-          <th>Last Error</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (entry of entries(); track entry.id) {
+    <div class="result-bar">
+      <div><p>Showing {{ resultStart() }}–{{ resultEnd() }} of {{ totalCount() }} messages</p>@if (selectedIds().size > 0) { <strong>{{ selectedIds().size }} failed selected</strong> }</div>
+      <div class="result-actions"><button type="button" class="btn btn-secondary" [disabled]="selectedIds().size === 0 || retrying()" (click)="retrySelected()">{{ retrying() ? 'Queuing...' : 'Retry selected' }}</button><label>Rows<select [ngModel]="pageSize()" (ngModelChange)="pageSize.set($event); applyFilters()"><option [ngValue]="25">25</option><option [ngValue]="50">50</option><option [ngValue]="100">100</option></select></label></div>
+    </div>
+    @if (entries().length === 0) {
+      <p class="empty">No delivery records match these filters.</p>
+    } @else {
+      <div class="table-shell"><table class="outbox-table">
+        <thead><tr><th><input type="checkbox" aria-label="Select all failed emails on this page" [checked]="failedOnPage().length > 0 && selectedIds().size === failedOnPage().length" [disabled]="failedOnPage().length === 0" (change)="toggleAllFailed($any($event.target).checked)" /></th><th>Recipient</th><th>Subject</th><th>Created (UTC)</th><th>Status</th><th>Attempts</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+        <tbody>@for (entry of entries(); track entry.id) {
           <tr>
-            <td>{{ entry.toEmail }}</td>
-            <td>{{ entry.subject }}</td>
-            <td>{{ entry.createdAtUtc | date: 'yyyy-MM-dd HH:mm:ss' }}</td>
-            <td>
-              <span class="badge" [class.badge-success]="status(entry) === 'sent'" [class.badge-danger]="status(entry) === 'failed'">
-                {{ status(entry) }}
-              </span>
-            </td>
-            <td>{{ entry.attempts }}</td>
-            <td>{{ entry.lastError }}</td>
-            <td>
-              @if (status(entry) === 'failed') {
-                <button type="button" class="link-button" [disabled]="retryingId() === entry.id" (click)="retry(entry.id)">
-                  {{ retryingId() === entry.id ? 'Retrying...' : 'Retry' }}
-                </button>
-              }
-            </td>
+            <td data-label="Select">@if (status(entry) === 'failed') { <input type="checkbox" title="Select failed email" [attr.aria-label]="'Select failed email to ' + entry.toEmail" [checked]="isSelected(entry.id)" (change)="toggleSelected(entry.id, $any($event.target).checked)" /> }</td>
+            <td data-label="Recipient"><strong>{{ entry.toEmail }}</strong></td>
+            <td data-label="Subject">{{ entry.subject }}</td>
+            <td data-label="Created (UTC)">{{ entry.createdAtUtc | date: 'yyyy-MM-dd HH:mm:ss' : 'UTC' }}</td>
+            <td data-label="Status"><span class="status-badge" [attr.data-status]="status(entry)">{{ status(entry) }}</span></td>
+            <td data-label="Attempts">{{ entry.attempts }}</td>
+            <td data-label="Actions"><div class="row-actions"><button type="button" class="btn btn-secondary compact" [disabled]="detailLoading()" (click)="openDetail(entry.id)">View</button>@if (status(entry) === 'failed') { <button type="button" class="btn btn-danger compact" [disabled]="retrying()" (click)="retryOne(entry)">Retry</button> }</div></td>
           </tr>
-        }
-      </tbody>
-    </table>
+        }</tbody>
+      </table></div>
+      <nav class="pagination" aria-label="Email outbox pages"><button type="button" class="btn btn-secondary" [disabled]="page() === 1" (click)="goToPage(page() - 1)">Previous</button><span>Page {{ page() }} of {{ totalPages() }}</span><button type="button" class="btn btn-secondary" [disabled]="page() === totalPages()" (click)="goToPage(page() + 1)">Next</button></nav>
+    }
   }
 </section>
+
+@if (selected(); as entry) {
+  <button type="button" class="drawer-backdrop" aria-label="Close email detail" (click)="closeDetail()"></button>
+  <aside class="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="email-detail-title">
+    <div class="drawer-header"><div><p class="eyebrow">Delivery record #{{ entry.id }}</p><h2 id="email-detail-title">{{ entry.subject }}</h2></div><button type="button" class="close-button" aria-label="Close email detail" (click)="closeDetail()">×</button></div>
+    <dl><div><dt>Recipient</dt><dd>{{ entry.toEmail }}</dd></div><div><dt>Status</dt><dd><span class="status-badge" [attr.data-status]="status(entry)">{{ status(entry) }}</span></dd></div><div><dt>Created</dt><dd>{{ entry.createdAtUtc | date: 'medium' : 'UTC' }} UTC</dd></div><div><dt>Sent</dt><dd>{{ entry.sentAtUtc ? (entry.sentAtUtc | date: 'medium' : 'UTC') + ' UTC' : 'Not sent' }}</dd></div><div><dt>Attempts</dt><dd>{{ entry.attempts }}</dd></div></dl>
+    @if (entry.lastError) { <section class="failure-detail"><h3>Last delivery error</h3><pre>{{ entry.lastError }}</pre></section> }
+    @if(entry.lastError){<section><h3>Dead-letter ownership</h3>@if(entry.deadLetterOwnerUserId){<p>Assigned {{entry.deadLetterAssignedAtUtc|date:'medium':'UTC'}} UTC</p><p>{{entry.resolutionNotes||'No resolution notes.'}}</p>}@else{<label>Resolution notes<textarea rows="3" [ngModel]="resolutionNotes()" (ngModelChange)="resolutionNotes.set($event)"></textarea></label><button type="button" (click)="assignToMe(entry)">Assign to me</button>}</section>}
+    <section class="message-body"><h3>Message body</h3><pre>{{ entry.body }}</pre></section>
+  </aside>
+}

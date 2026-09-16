@@ -29,7 +29,12 @@ public class AttendanceController(
     [Authorize(Roles = "Teacher,Admin")]
     public async Task<ActionResult<IEnumerable<AttendanceRecordDto>>> GetAttendance()
     {
-        var records = await attendance.GetAllAsync();
+        if (currentTenant.SchoolId is not { } schoolId)
+        {
+            return Forbid();
+        }
+
+        var records = await attendance.GetAllAsync(schoolId);
         return Ok(records.Select(AttendanceRecordDto.FromEntity));
     }
 
@@ -68,7 +73,7 @@ public class AttendanceController(
 
     // GET /api/attendance/student/{studentId}/subject/{subjectId}
     [HttpGet("student/{studentId:int}/subject/{subjectId:int}")]
-    public async Task<ActionResult<IEnumerable<AttendanceRecordDto>>> GetStudentSubjectAttendance(int studentId, int subjectId)
+    public async Task<ActionResult<IEnumerable<AttendanceRecordDto>>> GetStudentSubjectAttendance(int studentId, int subjectId, [FromQuery] DateOnly? dateFrom = null, [FromQuery] DateOnly? dateTo = null)
     {
         if (!currentUser.CanAccessStudent(studentId))
         {
@@ -85,13 +90,40 @@ public class AttendanceController(
             return NotFound(new { message = "Subject not found." });
         }
 
-        var records = await attendance.GetByStudentAndSubjectAsync(studentId, subjectId);
+        if (!IsValidRange(dateFrom, dateTo)) return BadRequest(new { message = "Choose a valid date range of no more than three years." });
+        var records = await attendance.GetByStudentAndSubjectAsync(studentId, subjectId, dateFrom, dateTo);
         return Ok(records.Select(AttendanceRecordDto.FromEntity));
+    }
+
+    [HttpGet("student/{studentId:int}/subject/{subjectId:int}/corrections")]
+    public async Task<ActionResult<IEnumerable<AttendanceCorrectionDto>>> GetStudentSubjectAttendanceCorrections(
+        int studentId,
+        int subjectId,
+        [FromQuery] DateOnly? dateFrom = null,
+        [FromQuery] DateOnly? dateTo = null)
+    {
+        if (!currentUser.CanAccessStudent(studentId))
+        {
+            return Forbid();
+        }
+
+        if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(studentId, schoolId))
+        {
+            return NotFound(new { message = "Student not found." });
+        }
+
+        if (!await referenceData.SubjectExistsAsync(subjectId, schoolId))
+        {
+            return NotFound(new { message = "Subject not found." });
+        }
+
+        if (!IsValidRange(dateFrom, dateTo)) return BadRequest(new { message = "Choose a valid date range of no more than three years." });
+        return Ok(await attendance.GetCorrectionsForStudentSubjectAsync(studentId, subjectId, schoolId, dateFrom, dateTo));
     }
 
     // GET /api/attendance/student/{studentId}/summary
     [HttpGet("student/{studentId:int}/summary")]
-    public async Task<ActionResult<IEnumerable<AttendanceSummaryDto>>> GetStudentAttendanceSummary(int studentId)
+    public async Task<ActionResult<IEnumerable<AttendanceSummaryDto>>> GetStudentAttendanceSummary(int studentId, [FromQuery] DateOnly? dateFrom = null, [FromQuery] DateOnly? dateTo = null)
     {
         if (!currentUser.CanAccessStudent(studentId))
         {
@@ -104,7 +136,8 @@ public class AttendanceController(
         }
 
         // Percentage is calculated here, on the backend — never in Angular.
-        var summary = await attendance.GetSummaryAsync(studentId);
+        if (!IsValidRange(dateFrom, dateTo)) return BadRequest(new { message = "Choose a valid date range of no more than three years." });
+        var summary = await attendance.GetSummaryAsync(studentId, dateFrom, dateTo);
         return Ok(summary);
     }
 
@@ -115,7 +148,7 @@ public class AttendanceController(
     {
         if (!TryParseStatus(dto.Status, out var status))
         {
-            return BadRequest(new { message = "Status must be 'Present' or 'Absent'." });
+            return BadRequest(new { message = "Status must be Present, Absent, Late, or Excused." });
         }
 
         if (currentTenant.SchoolId is not { } schoolId)
@@ -131,6 +164,13 @@ public class AttendanceController(
         if (!await referenceData.SubjectExistsAsync(dto.SubjectId, schoolId))
         {
             return BadRequest(new { message = "Subject does not exist." });
+        }
+
+        var sectionIds = await students.GetSectionIdsAsync([dto.StudentId]);
+        if (!sectionIds.TryGetValue(dto.StudentId, out var sectionId) || sectionId is null ||
+            !await students.AreActiveStudentsEnrolledInClassAsync([dto.StudentId], sectionId.Value, dto.SubjectId, schoolId))
+        {
+            return BadRequest(new { message = "Student is not actively enrolled in this subject and section." });
         }
 
         if (!await IsAssignedToTeachAsync(dto.SubjectId, [dto.StudentId]))
@@ -182,6 +222,11 @@ public class AttendanceController(
             return Forbid();
         }
 
+        if (currentUser.UserId is not { } changedByUserId)
+        {
+            return Forbid();
+        }
+
         var subject = await referenceData.GetSubjectByIdAsync(dto.SubjectId, schoolId);
         if (subject is null)
         {
@@ -202,6 +247,11 @@ public class AttendanceController(
             return BadRequest(new { message = $"Unknown student id(s): {string.Join(", ", missingStudentIds)}" });
         }
 
+        if (!await students.AreActiveStudentsEnrolledInClassAsync(studentIds, dto.SectionId, dto.SubjectId, schoolId))
+        {
+            return BadRequest(new { message = "Every student must be actively enrolled in the selected section and subject." });
+        }
+
         if (!await IsAssignedToTeachAsync(dto.SubjectId, studentIds))
         {
             return Forbid();
@@ -219,6 +269,13 @@ public class AttendanceController(
         }
 
         var existingByStudent = await attendance.GetExistingForSubjectDateAsync(dto.SubjectId, dto.Date, studentIds);
+        if (parsedRecords.Any(record =>
+            existingByStudent.TryGetValue(record.StudentId, out var existing) &&
+            existing.Status != record.Status &&
+            string.IsNullOrWhiteSpace(record.Reason)))
+        {
+            return BadRequest(new { message = "A correction reason is required when changing existing attendance." });
+        }
 
         try
         {
@@ -232,7 +289,14 @@ public class AttendanceController(
                         // required/stamped on rows that were re-saved unchanged.
                         if (existingRecord.Status != status)
                         {
-                            await attendance.UpdateStatusInTxAsync(connection, tx, existingRecord.Id, status, reason);
+                            await attendance.UpdateStatusInTxAsync(
+                                connection,
+                                tx,
+                                existingRecord.Id,
+                                existingRecord.Status,
+                                status,
+                                reason!,
+                                changedByUserId);
                         }
                     }
                     else
@@ -250,7 +314,9 @@ public class AttendanceController(
             return StatusCode(500, new { message = "Unable to save attendance. Please try again." });
         }
 
-        foreach (var (studentId, status, _) in parsedRecords.Where(r => r.Status == AttendanceStatus.Absent))
+        foreach (var (studentId, status, _) in parsedRecords.Where(r =>
+                 r.Status == AttendanceStatus.Absent &&
+                 (!existingByStudent.TryGetValue(r.StudentId, out var existing) || existing.Status != AttendanceStatus.Absent)))
         {
             await NotifyAbsence(studentId, subject.Name, dto.Date);
         }
@@ -266,7 +332,7 @@ public class AttendanceController(
     {
         if (!TryParseStatus(dto.Status, out var status))
         {
-            return BadRequest(new { message = "Status must be 'Present' or 'Absent'." });
+            return BadRequest(new { message = "Status must be Present, Absent, Late, or Excused." });
         }
 
         if (string.IsNullOrWhiteSpace(dto.Reason))
@@ -285,9 +351,19 @@ public class AttendanceController(
             return NotFound();
         }
 
+        if (!await IsAssignedToTeachAsync(record.SubjectId, [record.StudentId]))
+        {
+            return Forbid();
+        }
+
+        if (currentUser.UserId is not { } changedByUserId)
+        {
+            return Forbid();
+        }
+
         try
         {
-            await attendance.UpdateStatusAsync(id, status, dto.Reason);
+            await attendance.CorrectAsync(id, record.Status, status, dto.Reason, changedByUserId);
         }
         catch (PostgresException ex)
         {
@@ -317,6 +393,11 @@ public class AttendanceController(
             return NotFound();
         }
 
+        if (!await IsAssignedToTeachAsync(record.SubjectId, [record.StudentId]))
+        {
+            return Forbid();
+        }
+
         try
         {
             await attendance.DeleteAsync(id);
@@ -332,6 +413,9 @@ public class AttendanceController(
 
     private static bool TryParseStatus(string? status, out AttendanceStatus result) =>
         Enum.TryParse(status, ignoreCase: true, out result) && Enum.IsDefined(result);
+
+    private static bool IsValidRange(DateOnly? dateFrom, DateOnly? dateTo) =>
+        dateFrom is null || dateTo is null || (dateFrom <= dateTo && dateFrom >= dateTo.Value.AddYears(-3));
 
     // Admin may write for any section; a Teacher must have an explicit TeacherSubjectAssignment
     // for the subject in every section the target students belong to.
@@ -354,7 +438,7 @@ public class AttendanceController(
 
         foreach (var sectionId in sectionIds)
         {
-            if (!await teacherSubjectAssignments.ExistsAsync(teacherId, subjectId, sectionId))
+            if (currentTenant.SchoolId is not { } schoolId || !await teacherSubjectAssignments.ExistsAsync(teacherId, subjectId, sectionId, schoolId))
             {
                 return false;
             }

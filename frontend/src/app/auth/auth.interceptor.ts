@@ -18,8 +18,9 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   return next(authorizedReq).pipe(
     catchError((error: unknown) => {
       if (error instanceof HttpErrorResponse && error.status === 401 && token && !req.url.includes('/auth/')) {
+        const returnUrl = router.url;
         authService.logout();
-        router.navigate(['/login'], { queryParams: { sessionExpired: true } });
+        router.navigate(['/login'], { queryParams: { sessionExpired: true, returnUrl } });
       }
       return throwError(() => error);
     }),

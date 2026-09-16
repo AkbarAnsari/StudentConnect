@@ -4,8 +4,10 @@
     <a class="add-link" routerLink="/create-activity">+ Create Activity</a>
   </div>
 
-  @if (deleteError()) {
-    <p class="error-message">{{ deleteError() }}</p>
+  <div class="controls"><label>View<select [ngModel]="viewMode()" (ngModelChange)="viewMode.set($event)"><option value="list">List</option><option value="calendar">Calendar</option></select></label><label>Status<select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"><option>All</option><option>Draft</option><option>Open</option><option>Closed</option><option>Cancelled</option><option>Completed</option><option>Archived</option></select></label><label>Grade<select [ngModel]="gradeFilter()" (ngModelChange)="gradeFilter.set(+$event)"><option [value]="0">All grades</option>@for(grade of grades();track grade[0]){<option [value]="grade[0]">{{grade[1]}}</option>}</select></label>@if(viewMode()==='calendar'){<label>Month containing date<input type="date" [ngModel]="monthFilter()+'-01'" (ngModelChange)="monthFilter.set($event.slice(0,7))" /></label>}</div>
+
+  @if (actionError()) {
+    <p class="error-message">{{ actionError() }}</p>
   }
 
   @if (state().loading) {
@@ -16,22 +18,57 @@
     </p>
   } @else if (state().activities.length === 0) {
     <p class="empty">No activities created yet.</p>
+  } @else if(viewMode()==='calendar') {
+    <div class="activity-calendar">@for(group of calendarGroups();track group[0]){<section><h2>{{group[0]}}</h2>@for(activity of group[1]??[];track activity.id){<article><div><strong>{{activity.title}}</strong><span>{{activity.location}} · {{activity.gradeName}}</span></div><span class="status" [attr.data-status]="activity.status">{{activity.status}}</span></article>}</section>}@empty{<p class="empty">No activities in this month.</p>}</div>
   } @else {
-    <ul class="activity-list">
-      @for (activity of state().activities; track activity.id) {
-        <li class="activity-card">
-          <div class="activity-info">
-            <span class="title">{{ activity.title }}</span>
-            <span class="meta">{{ activity.gradeName }} — {{ activity.location }} — {{ activity.date }}</span>
-            <span class="meta">Registered {{ activity.currentRegistrations }} / {{ activity.capacity }}</span>
-          </div>
-          <div class="actions">
-            <a class="action-link" [routerLink]="['/activity-management', activity.id, 'registrations']">View Registrations</a>
-            <a class="action-link" [routerLink]="['/activity-management', activity.id, 'edit']">Edit</a>
-            <button type="button" class="delete-button" (click)="onDelete(activity.id)">Delete</button>
-          </div>
-        </li>
-      }
-    </ul>
+    <div class="table-shell">
+      <table class="activities-table">
+        <thead>
+          <tr>
+            <th>Activity</th>
+            <th>Audience</th>
+            <th>Schedule</th>
+            <th>Registration</th>
+            <th>Status</th>
+            <th><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (activity of filteredActivities(); track activity.id) {
+            <tr>
+              <td data-label="Activity">
+                <strong>{{ activity.title }}</strong>
+                <span>{{ activity.organizerName || 'School activity' }} · {{ activity.moderationStatus }}</span>
+              </td>
+              <td data-label="Audience">{{ activity.gradeName }}{{ activity.sectionName ? ' · ' + activity.sectionName : '' }}</td>
+              <td data-label="Schedule">
+                <span>{{ activity.date }}</span>
+                <span>{{ activity.location }}</span>
+              </td>
+              <td data-label="Registration">
+                <strong>{{ activity.currentRegistrations }} / {{ activity.capacity }}</strong>
+                @if (activity.currentWaitlisted) { <span>{{ activity.currentWaitlisted }} waitlisted</span> }
+                @if (activity.feeAmount) { <span>Fee {{ activity.feeAmount }}</span> }
+              </td>
+              <td data-label="Status"><span class="status" [attr.data-status]="activity.status">{{ activity.status }}</span></td>
+              <td data-label="Actions">
+                <div class="actions">
+                  <a class="action-link" [routerLink]="['/activity-management', activity.id, 'registrations']">Participants</a>
+                  <a class="action-link" [routerLink]="['/activity-management', activity.id, 'edit']">Edit</a>
+                  @if(auth.role()==='Teacher'&&activity.moderationStatus!=='Pending'){<button type="button" class="status-button" (click)="moderate(activity,'Submit')">Submit for approval</button>}
+                  @if((auth.role()==='Admin'||auth.role()==='Coordinator')&&activity.moderationStatus==='Pending'){<input type="text" placeholder="Moderation note" [ngModel]="moderationReason()[activity.id]||''" (ngModelChange)="setModerationReason(activity.id,$event)" /><button type="button" class="status-button" (click)="moderate(activity,'Approve')">Approve</button><button type="button" class="status-button danger" (click)="moderate(activity,'Reject')">Reject</button>}
+                  @for (status of nextStatuses(activity); track status) {
+                    <button type="button" class="status-button" [class.danger]="status === 'Cancelled'" [disabled]="updatingId() === activity.id" (click)="onStatus(activity, status)">{{ actionLabel(status) }}</button>
+                  }
+                  @if (activity.status === 'Draft' && activity.currentRegistrations === 0 && activity.currentWaitlisted === 0) {
+                    <button type="button" class="delete-button" (click)="onDelete(activity.id)">Delete</button>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
   }
 </section>

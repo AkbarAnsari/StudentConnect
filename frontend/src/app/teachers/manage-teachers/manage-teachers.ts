@@ -1,7 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { ConfirmDialogService } from '../../shared/confirm-dialog/confirm-dialog.service';
 import { Teacher } from '../teacher.model';
 import { TeacherService } from '../teacher.service';
 
@@ -14,14 +15,24 @@ import { TeacherService } from '../teacher.service';
 export class ManageTeachers {
   private readonly fb = inject(FormBuilder);
   private readonly teacherService = inject(TeacherService);
+  private readonly confirmDialog = inject(ConfirmDialogService);
 
   protected readonly teachers = signal<Teacher[]>([]);
   protected readonly submitting = signal(false);
   protected readonly errorMessage = signal('');
+  protected readonly loading = signal(true);
+  protected readonly loadError = signal(false);
+  protected readonly query = signal('');
 
   protected readonly editingId = signal<number | null>(null);
   protected readonly editSubmitting = signal(false);
   protected readonly editError = signal('');
+  protected readonly filteredTeachers = computed(() => {
+    const query = this.query().trim().toLowerCase();
+    return query
+      ? this.teachers().filter((teacher) => `${teacher.firstName} ${teacher.lastName} ${teacher.teacherId} ${teacher.email} ${teacher.username ?? ''}`.toLowerCase().includes(query))
+      : this.teachers();
+  });
 
   protected readonly form = this.fb.nonNullable.group({
     teacherId: ['', Validators.required],
@@ -42,8 +53,19 @@ export class ManageTeachers {
     this.loadTeachers();
   }
 
-  private loadTeachers(): void {
-    this.teacherService.getTeachers().subscribe((result) => this.teachers.set(result.items));
+  protected loadTeachers(): void {
+    this.loading.set(true);
+    this.loadError.set(false);
+    this.teacherService.getTeachers().subscribe({
+      next: (result) => {
+        this.teachers.set(result.items);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.loadError.set(true);
+      },
+    });
   }
 
   protected startEdit(teacher: Teacher): void {
@@ -55,6 +77,7 @@ export class ManageTeachers {
   protected cancelEdit(): void {
     this.editingId.set(null);
     this.editError.set('');
+    this.editForm.markAsPristine();
   }
 
   protected saveEdit(id: number): void {
@@ -70,6 +93,7 @@ export class ManageTeachers {
       next: () => {
         this.editSubmitting.set(false);
         this.editingId.set(null);
+        this.editForm.markAsPristine();
         this.loadTeachers();
       },
       error: (err: HttpErrorResponse) => {
@@ -111,11 +135,21 @@ export class ManageTeachers {
       });
   }
 
-  protected deleteTeacher(id: number): void {
+  protected async deleteTeacher(teacher: Teacher): Promise<void> {
+    if (!(await this.confirmDialog.confirm(`Delete ${teacher.firstName} ${teacher.lastName}? Their teacher record and assignments may be affected.`))) return;
     this.errorMessage.set('');
-    this.teacherService.deleteTeacher(id).subscribe({
+    this.teacherService.deleteTeacher(teacher.id).subscribe({
       next: () => this.loadTeachers(),
       error: (err: HttpErrorResponse) => this.errorMessage.set(err.error?.message ?? 'Unable to delete the teacher.'),
     });
+  }
+
+  hasUnsavedChanges(): boolean {
+    return (this.form.dirty || (this.editingId() !== null && this.editForm.dirty)) && !this.submitting() && !this.editSubmitting();
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  protected onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.hasUnsavedChanges()) event.preventDefault();
   }
 }

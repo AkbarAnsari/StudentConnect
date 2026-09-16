@@ -1,11 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Npgsql;
+using System.Text;
 using StudentConnect.Application;
 using StudentConnect.Domain;
 using StudentConnect.Infrastructure.Data;
 using StudentConnect.Infrastructure.Data.Stores;
 using StudentConnect.Infrastructure.Notifications;
+using StudentConnect.Infrastructure.Storage;
 
 namespace StudentConnect.Api.Controllers;
 
@@ -20,7 +23,9 @@ public class ActivityRegistrationsController(
     INotificationService notifications,
     ICurrentUserService currentUser,
     ICurrentTenantService currentTenant,
-    ILogger<ActivityRegistrationsController> logger) : ControllerBase
+    ILogger<ActivityRegistrationsController> logger,
+    IFileStorage? fileStorage = null,
+    IOptions<FileStorageOptions>? storageOptions = null) : ControllerBase
 {
     // GET /api/activity-registrations/student/{studentId}
     [HttpGet("student/{studentId:int}")]
@@ -42,13 +47,14 @@ public class ActivityRegistrationsController(
 
     // GET /api/activity-registrations/activity/{activityId}
     [HttpGet("activity/{activityId:int}")]
-    [Authorize(Roles = "Teacher,Admin")]
+    [Authorize(Roles = "Teacher,Admin,Coordinator")]
     public async Task<ActionResult<IEnumerable<ActivityRegistrationDto>>> GetActivityRegistrations(int activityId)
     {
-        if (currentTenant.SchoolId is not { } schoolId || await activities.GetByIdAsync(activityId, schoolId) is null)
+        if (currentTenant.SchoolId is not { } schoolId || await activities.GetByIdAsync(activityId, schoolId) is not { } activity)
         {
             return NotFound(new { message = "Activity not found." });
         }
+        if (!CanManage(activity)) return Forbid();
 
         var byActivity = await registrations.GetByActivityAsync(activityId);
         return Ok(byActivity.Select(ActivityRegistrationDto.FromEntity));
@@ -75,6 +81,13 @@ public class ActivityRegistrationsController(
             return NotFound();
         }
 
+        if (currentUser.IsTeacherOrAdmin)
+        {
+            var activity = await activities.GetByIdAsync(registration.ActivityId, schoolId);
+            if (activity is null) return NotFound();
+            if (!CanManage(activity)) return Forbid();
+        }
+
         return Ok(ActivityRegistrationDto.FromEntity(registration));
     }
 
@@ -94,7 +107,7 @@ public class ActivityRegistrationsController(
             return Forbid();
         }
 
-        var student = await students.GetByIdAsync(studentId);
+        var student = await students.GetByIdAsync(studentId, schoolId);
         if (student is null)
         {
             return BadRequest(new { message = "Student does not exist." });
@@ -106,14 +119,35 @@ public class ActivityRegistrationsController(
             return BadRequest(new { message = "Activity does not exist." });
         }
 
-        if (activity.Date < DateTime.UtcNow)
+        var now = DateTime.UtcNow;
+        if (activity.Status != ActivityStatus.Open)
         {
-            return BadRequest(new { message = "Registration is closed because the activity has already occurred." });
+            return BadRequest(new { message = "Registration is not open for this activity." });
+        }
+
+        if (activity.Date < now || activity.RegistrationClosesAtUtc <= now)
+        {
+            return BadRequest(new { message = "Registration is closed for this activity." });
+        }
+
+        if (activity.RegistrationOpensAtUtc > now)
+        {
+            return BadRequest(new { message = "Registration has not opened yet." });
         }
 
         if (student.GradeId != activity.GradeId)
         {
             return BadRequest(new { message = "Student is not eligible for this activity." });
+        }
+
+        if (activity.SectionId is not null && student.SectionId != activity.SectionId)
+        {
+            return BadRequest(new { message = "Student is not eligible for this section activity." });
+        }
+
+        if (activity.ConsentRequired && !dto.ConsentConfirmed)
+        {
+            return BadRequest(new { message = "Consent must be confirmed before registration." });
         }
 
         // A transaction narrows (without fully eliminating) the race where two near-simultaneous
@@ -141,11 +175,11 @@ public class ActivityRegistrationsController(
 
                 if (existingId is not null)
                 {
-                    await registrations.ReactivateInTxAsync(connection, tx, existingId.Value, registrationDate, targetStatus, schoolId);
+                    await registrations.ReactivateInTxAsync(connection, tx, existingId.Value, registrationDate, targetStatus, schoolId, dto.ConsentConfirmed);
                     return (existingId.Value, false);
                 }
 
-                var newId = await registrations.InsertInTxAsync(connection, tx, studentId, dto.ActivityId, registrationDate, targetStatus, schoolId);
+                var newId = await registrations.InsertInTxAsync(connection, tx, studentId, dto.ActivityId, registrationDate, targetStatus, schoolId, dto.ConsentConfirmed);
                 return (newId ?? 0, false);
             });
 
@@ -193,6 +227,13 @@ public class ActivityRegistrationsController(
         if (currentTenant.SchoolId is not { } schoolId || !await students.ExistsAsync(registration.StudentId, schoolId))
         {
             return NotFound();
+        }
+
+        if (currentUser.IsTeacherOrAdmin)
+        {
+            var activity = await activities.GetByIdAsync(registration.ActivityId, schoolId);
+            if (activity is null) return NotFound();
+            if (!CanManage(activity)) return Forbid();
         }
 
         var freedASeat = registration.Status == ActivityRegistrationStatus.Registered;
@@ -244,4 +285,109 @@ public class ActivityRegistrationsController(
         registration.Status = ActivityRegistrationStatus.Cancelled;
         return Ok(ActivityRegistrationDto.FromEntity(registration));
     }
+
+    [HttpPut("{id:int}/check-in")]
+    [Authorize(Roles = "Teacher,Admin,Coordinator")]
+    public async Task<ActionResult<ActivityRegistrationDto>> SetCheckIn(int id, ActivityCheckInDto dto)
+    {
+        if (currentTenant.SchoolId is not { } schoolId || currentUser.UserId is not { } userId) return Forbid();
+        var registration = await registrations.GetByIdAsync(id);
+        if (registration is null || await activities.GetByIdAsync(registration.ActivityId, schoolId) is not { } activity) return NotFound();
+        if (!CanManage(activity)) return Forbid();
+        if (registration.Status != ActivityRegistrationStatus.Registered)
+            return BadRequest(new { message = "Only registered participants can be checked in." });
+
+        await registrations.SetCheckInAsync(id, dto.CheckedIn, userId, schoolId);
+        return Ok(ActivityRegistrationDto.FromEntity((await registrations.GetByIdAsync(id))!));
+    }
+
+    [HttpPut("{id:int}/payment")]
+    [Authorize(Roles = "Teacher,Admin,Coordinator")]
+    public async Task<ActionResult<ActivityRegistrationDto>> MarkPaid(int id, ActivityPaymentDto dto)
+    {
+        if (currentTenant.SchoolId is not { } schoolId) return Forbid();
+        var registration = await registrations.GetByIdAsync(id);
+        if (registration is null || await activities.GetByIdAsync(registration.ActivityId, schoolId) is not { } activity) return NotFound();
+        if (!CanManage(activity)) return Forbid();
+        if (string.IsNullOrWhiteSpace(dto.PaymentReference)) return BadRequest(new { message = "Payment reference is required." });
+        await registrations.SetPaidAsync(id, dto.PaymentReference.Trim(), schoolId);
+        return Ok(ActivityRegistrationDto.FromEntity((await registrations.GetByIdAsync(id))!));
+    }
+
+    [HttpPut("{id:int}/consent-document")]
+    [RequestSizeLimit(10 * 1024 * 1024)]
+    public async Task<ActionResult<ActivityRegistrationDto>> UploadConsentDocument(int id, IFormFile file)
+    {
+        if (currentTenant.SchoolId is not { } schoolId || fileStorage is null || storageOptions is null) return Forbid();
+        var registration = await registrations.GetByIdAsync(id);
+        if (registration is null || await activities.GetByIdAsync(registration.ActivityId, schoolId) is not { } activity) return NotFound();
+        if (!currentUser.CanAccessStudent(registration.StudentId) && !CanManage(activity)) return Forbid();
+        if (!activity.ConsentRequired) return Conflict(new { message = "This activity does not require consent." });
+        if (file is not { Length: > 0 }) return BadRequest(new { message = "Select a consent document." });
+        if (file.Length > storageOptions.Value.MaxFileSizeBytes) return BadRequest(new { message = "Consent document is too large." });
+        var extension = Path.GetExtension(file.FileName);
+        if (!AllowedFileTypes.IsExtensionAllowed(extension)) return BadRequest(new { message = "This file type is not supported." });
+        await using (var check = file.OpenReadStream()) if (!await AllowedFileTypes.MatchesSignatureAsync(extension, check)) return BadRequest(new { message = "This file type is not supported." });
+        var storedFileName = $"consent-{Guid.NewGuid()}{extension}";
+        await using (var content = file.OpenReadStream()) await fileStorage.SaveFileAsync(storedFileName, content);
+        if (registration.ConsentDocumentStoredFileName is not null) await fileStorage.DeleteFileAsync(registration.ConsentDocumentStoredFileName);
+        await registrations.SetConsentDocumentAsync(id, file.FileName, storedFileName, file.ContentType, file.Length, schoolId);
+        return Ok(ActivityRegistrationDto.FromEntity((await registrations.GetByIdAsync(id))!));
+    }
+
+    [HttpGet("{id:int}/consent-document")]
+    public async Task<IActionResult> DownloadConsentDocument(int id)
+    {
+        if (currentTenant.SchoolId is not { } schoolId || fileStorage is null) return Forbid();
+        var registration = await registrations.GetByIdAsync(id);
+        if (registration is null || await activities.GetByIdAsync(registration.ActivityId, schoolId) is not { } activity) return NotFound();
+        if (!currentUser.CanAccessStudent(registration.StudentId) && !CanManage(activity)) return Forbid();
+        if (registration.ConsentDocumentStoredFileName is null) return NotFound();
+        var stream = await fileStorage.GetFileAsync(registration.ConsentDocumentStoredFileName);
+        return stream is null ? NotFound() : File(stream, registration.ConsentDocumentContentType ?? "application/octet-stream", registration.ConsentDocumentFileName ?? "consent-document");
+    }
+
+    [HttpPost("activity/{activityId:int}/notify")]
+    [Authorize(Roles = "Teacher,Admin,Coordinator")]
+    public async Task<IActionResult> NotifyParticipants(int activityId, ActivityParticipantMessageDto dto)
+    {
+        if (currentTenant.SchoolId is not { } schoolId) return Forbid();
+        var activity = await activities.GetByIdAsync(activityId, schoolId);
+        if (activity is null) return NotFound();
+        if (!CanManage(activity)) return Forbid();
+        if (string.IsNullOrWhiteSpace(dto.Title) || string.IsNullOrWhiteSpace(dto.Message)) return BadRequest(new { message = "Title and message are required." });
+        var selected = (await registrations.GetByActivityAsync(activityId)).Where(item => string.Equals(item.Status.ToString(), dto.RegistrationStatus, StringComparison.OrdinalIgnoreCase)).ToList();
+        foreach (var registration in selected)
+        {
+            var userIds = await recipients.ForStudentAsync(registration.StudentId);
+            await notifications.NotifyManyTrackedAsync(userIds, dto.Title.Trim(), dto.Message.Trim(), NotificationType.General, $"/students/{registration.StudentId}/activities/{activityId}", dto.Priority, null);
+        }
+        return Ok(new { message = "Participant message queued.", count = selected.Count });
+    }
+
+    [HttpGet("activity/{activityId:int}/export")]
+    [Authorize(Roles = "Teacher,Admin,Coordinator")]
+    public async Task<IActionResult> ExportActivityRegistrations(int activityId)
+    {
+        if (currentTenant.SchoolId is not { } schoolId) return Forbid();
+        var activity = await activities.GetByIdAsync(activityId, schoolId);
+        if (activity is null) return NotFound();
+        if (!CanManage(activity)) return Forbid();
+
+        var csv = new StringBuilder("Student,Registered at,Status,Consent confirmed,Checked in at\r\n");
+        foreach (var item in await registrations.GetByActivityAsync(activityId))
+        {
+            csv.Append(Csv(item.Student is null ? string.Empty : $"{item.Student.FirstName} {item.Student.LastName}"));
+            csv.Append(',').Append(item.RegistrationDate.ToString("O"));
+            csv.Append(',').Append(item.Status);
+            csv.Append(',').Append(item.ConsentConfirmed ? "Yes" : "No");
+            csv.Append(',').Append(item.CheckedInAtUtc?.ToString("O") ?? string.Empty).Append("\r\n");
+        }
+        var safeTitle = string.Join('-', activity.Title.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+        return File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", $"{safeTitle}-participants.csv");
+    }
+
+    private bool CanManage(Activity activity) => currentUser.Role is "Admin" or "Coordinator" || activity.OwnerUserId == currentUser.UserId;
+
+    private static string Csv(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
 }

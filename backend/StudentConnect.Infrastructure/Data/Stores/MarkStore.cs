@@ -4,12 +4,14 @@ using StudentConnect.Domain;
 
 namespace StudentConnect.Infrastructure.Data.Stores;
 
+public sealed record MarkSnapshot(int Id, int MarksObtained, string? Comment, int Version);
+
 public class MarkStore(Database db)
 {
     private const string SelectWithAssessment = """
-        SELECT m."Id", m."StudentId", m."AssessmentId", m."MarksObtained",
+        SELECT m."Id", m."StudentId", m."AssessmentId", m."MarksObtained", m."Comment", m."Version", m."UpdatedAtUtc", m."UpdatedByUserId",
                asm."Title" AS "AssessmentTitle", asm."SubjectId" AS "AssessmentSubjectId", asm."Date" AS "AssessmentDate",
-               asm."MaximumMarks" AS "AssessmentMaximumMarks", asm."TermId" AS "AssessmentTermId",
+               asm."MaximumMarks" AS "AssessmentMaximumMarks", asm."TermId" AS "AssessmentTermId", asm."Status" AS "AssessmentStatus",
                sub."Name" AS "SubjectName"
         FROM "Marks" m
         JOIN "Assessments" asm ON asm."Id" = m."AssessmentId"
@@ -22,6 +24,10 @@ public class MarkStore(Database db)
         StudentId = reader.GetInt32("StudentId"),
         AssessmentId = reader.GetInt32("AssessmentId"),
         MarksObtained = reader.GetInt32("MarksObtained"),
+        Comment = reader.GetNullableString("Comment"),
+        Version = reader.GetInt32("Version"),
+        UpdatedAtUtc = reader.GetNullableDateTimeUtc("UpdatedAtUtc"),
+        UpdatedByUserId = reader.GetNullableInt32("UpdatedByUserId"),
         Assessment = new Assessment
         {
             Title = reader.GetString("AssessmentTitle"),
@@ -29,19 +35,20 @@ public class MarkStore(Database db)
             Date = reader.GetDateOnly("AssessmentDate"),
             MaximumMarks = reader.GetInt32("AssessmentMaximumMarks"),
             TermId = reader.GetNullableInt32("AssessmentTermId"),
+            Status = reader.GetEnum<AssessmentStatus>("AssessmentStatus"),
             Subject = new Subject { Name = reader.GetString("SubjectName") },
         },
     };
 
-    public async Task<List<Mark>> GetByStudentAsync(int studentId) =>
+    public async Task<List<Mark>> GetByStudentAsync(int studentId, bool publishedOnly = false) =>
         await db.QueryAsync(
-            $"""{SelectWithAssessment} WHERE m."StudentId" = @studentId ORDER BY asm."Date" DESC""",
+            $"""{SelectWithAssessment} WHERE m."StudentId" = @studentId {(publishedOnly ? """AND asm."Status" = 'Published'""" : string.Empty)} ORDER BY asm."Date" DESC""",
             p => p.AddWithValue("studentId", studentId),
             Map);
 
-    public async Task<List<Mark>> GetByStudentAndSubjectAsync(int studentId, int subjectId) =>
+    public async Task<List<Mark>> GetByStudentAndSubjectAsync(int studentId, int subjectId, bool publishedOnly = false) =>
         await db.QueryAsync(
-            $"""{SelectWithAssessment} WHERE m."StudentId" = @studentId AND asm."SubjectId" = @subjectId ORDER BY asm."Date" DESC""",
+            $"""{SelectWithAssessment} WHERE m."StudentId" = @studentId AND asm."SubjectId" = @subjectId {(publishedOnly ? """AND asm."Status" = 'Published'""" : string.Empty)} ORDER BY asm."Date" DESC""",
             p =>
             {
                 p.AddWithValue("studentId", studentId);
@@ -55,7 +62,8 @@ public class MarkStore(Database db)
     public async Task<List<AssessmentResultDto>> GetAssessmentResultsAsync(int assessmentId) =>
         await db.QueryAsync(
             """
-            SELECT m."Id" AS "MarkId", m."StudentId", st."FirstName", st."LastName", m."MarksObtained", asm."MaximumMarks"
+                 SELECT m."Id" AS "MarkId", m."StudentId", st."StudentId" AS "StudentCode", st."FirstName", st."LastName", m."MarksObtained", asm."MaximumMarks",
+                     m."Comment", m."Version", m."UpdatedAtUtc"
             FROM "Marks" m
             JOIN "Students" st ON st."Id" = m."StudentId"
             JOIN "Assessments" asm ON asm."Id" = m."AssessmentId"
@@ -67,17 +75,21 @@ public class MarkStore(Database db)
             {
                 MarkId = reader.GetInt32("MarkId"),
                 StudentId = reader.GetInt32("StudentId"),
+                StudentCode = reader.GetString("StudentCode"),
                 StudentName = $"{reader.GetString("FirstName")} {reader.GetString("LastName")}",
                 MarksObtained = reader.GetInt32("MarksObtained"),
                 MaximumMarks = reader.GetInt32("MaximumMarks"),
+                Comment = reader.GetNullableString("Comment"),
+                Version = reader.GetInt32("Version"),
+                UpdatedAtUtc = reader.GetNullableDateTimeUtc("UpdatedAtUtc"),
             });
 
-    public async Task<List<MarksSummaryDto>> GetSummaryAsync(int studentId)
+    public async Task<List<MarksSummaryDto>> GetSummaryAsync(int studentId, bool publishedOnly = false)
     {
         // Weighted average: each mark contributes (marksObtained/maximumMarks) * assessment
         // weight; default Weight is 1.00 so unweighted assessments behave exactly as before.
         var summary = await db.QueryAsync(
-            """
+            $"""
             SELECT asm."SubjectId", sub."Name" AS "SubjectName",
                    COUNT(m."Id") AS "Assessments",
                    COALESCE(SUM(m."MarksObtained"), 0) AS "TotalMarksObtained",
@@ -88,6 +100,7 @@ public class MarkStore(Database db)
             JOIN "Assessments" asm ON asm."Id" = m."AssessmentId"
             JOIN "Subjects" sub ON sub."Id" = asm."SubjectId"
             WHERE m."StudentId" = @studentId
+            {(publishedOnly ? """AND asm."Status" = 'Published'""" : string.Empty)}
             GROUP BY asm."SubjectId", sub."Name"
             ORDER BY asm."SubjectId"
             """,
@@ -122,14 +135,21 @@ public class MarkStore(Database db)
                 p.AddWithValue("assessmentId", assessmentId);
             });
 
-    public async Task<int> CreateAsync(int studentId, int assessmentId, int marksObtained) =>
+    public async Task<int> GetMaximumRecordedAsync(int assessmentId) =>
         await db.ExecuteScalarAsync<int>(
-            """INSERT INTO "Marks" ("StudentId", "AssessmentId", "MarksObtained") VALUES (@studentId, @assessmentId, @marksObtained) RETURNING "Id" """,
+            """SELECT COALESCE(MAX("MarksObtained"), 0) FROM "Marks" WHERE "AssessmentId" = @assessmentId""",
+            p => p.AddWithValue("assessmentId", assessmentId));
+
+    public async Task<int> CreateAsync(int studentId, int assessmentId, int marksObtained, string? comment = null, int? updatedByUserId = null) =>
+        await db.ExecuteScalarAsync<int>(
+            """INSERT INTO "Marks" ("StudentId", "AssessmentId", "MarksObtained", "Comment", "UpdatedAtUtc", "UpdatedByUserId") VALUES (@studentId, @assessmentId, @marksObtained, @comment, now(), @updatedByUserId) RETURNING "Id" """,
             p =>
             {
                 p.AddWithValue("studentId", studentId);
                 p.AddWithValue("assessmentId", assessmentId);
                 p.AddWithValue("marksObtained", marksObtained);
+                p.AddWithValue("comment", (object?)comment ?? DBNull.Value);
+                p.AddWithValue("updatedByUserId", (object?)updatedByUserId ?? DBNull.Value);
             });
 
     public async Task UpdateMarksObtainedAsync(int id, int marksObtained) =>
@@ -143,16 +163,61 @@ public class MarkStore(Database db)
 
     // --- Transactional bulk-save support (mirrors ActivityRegistrationStore's *InTxAsync pattern) ---
 
-    public async Task<int> CreateInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int studentId, int assessmentId, int marksObtained)
+    public async Task<int> CreateInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int studentId, int assessmentId, int marksObtained, string? comment = null, int? updatedByUserId = null)
     {
         await using var command = new NpgsqlCommand(
-            """INSERT INTO "Marks" ("StudentId", "AssessmentId", "MarksObtained") VALUES (@studentId, @assessmentId, @marksObtained) RETURNING "Id" """,
+            """INSERT INTO "Marks" ("StudentId", "AssessmentId", "MarksObtained", "Comment", "UpdatedAtUtc", "UpdatedByUserId") VALUES (@studentId, @assessmentId, @marksObtained, @comment, now(), @updatedByUserId) RETURNING "Id" """,
             connection, tx);
         command.Parameters.AddWithValue("studentId", studentId);
         command.Parameters.AddWithValue("assessmentId", assessmentId);
         command.Parameters.AddWithValue("marksObtained", marksObtained);
+        command.Parameters.AddWithValue("comment", (object?)comment ?? DBNull.Value);
+        command.Parameters.AddWithValue("updatedByUserId", (object?)updatedByUserId ?? DBNull.Value);
         return (int)(await command.ExecuteScalarAsync())!;
     }
+
+    public async Task<bool> UpdateWithHistoryInTxAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction tx,
+        MarkSnapshot previous,
+        int marksObtained,
+        string? comment,
+        int expectedVersion,
+        int changedByUserId)
+    {
+        await using var update = new NpgsqlCommand(
+            """
+            UPDATE "Marks" SET "MarksObtained" = @marksObtained, "Comment" = @comment, "Version" = "Version" + 1,
+                "UpdatedAtUtc" = now(), "UpdatedByUserId" = @changedByUserId
+            WHERE "Id" = @id AND "Version" = @expectedVersion
+            RETURNING "Version"
+            """, connection, tx);
+        update.Parameters.AddWithValue("id", previous.Id);
+        update.Parameters.AddWithValue("marksObtained", marksObtained);
+        update.Parameters.AddWithValue("comment", (object?)comment ?? DBNull.Value);
+        update.Parameters.AddWithValue("changedByUserId", changedByUserId);
+        update.Parameters.AddWithValue("expectedVersion", expectedVersion);
+        var newVersion = await update.ExecuteScalarAsync();
+        if (newVersion is null) return false;
+
+        await using var history = new NpgsqlCommand(
+            """
+            INSERT INTO "MarkHistory" ("MarkId", "PreviousMarks", "NewMarks", "PreviousComment", "NewComment", "Version", "ChangedByUserId")
+            VALUES (@markId, @previousMarks, @newMarks, @previousComment, @newComment, @version, @changedByUserId)
+            """, connection, tx);
+        history.Parameters.AddWithValue("markId", previous.Id);
+        history.Parameters.AddWithValue("previousMarks", previous.MarksObtained);
+        history.Parameters.AddWithValue("newMarks", marksObtained);
+        history.Parameters.AddWithValue("previousComment", (object?)previous.Comment ?? DBNull.Value);
+        history.Parameters.AddWithValue("newComment", (object?)comment ?? DBNull.Value);
+        history.Parameters.AddWithValue("version", (int)newVersion);
+        history.Parameters.AddWithValue("changedByUserId", changedByUserId);
+        await history.ExecuteNonQueryAsync();
+        return true;
+    }
+
+    public async Task<bool> UpdateWithHistoryAsync(MarkSnapshot previous, int marksObtained, string? comment, int expectedVersion, int changedByUserId) =>
+        await db.WithTransactionAsync((connection, tx) => UpdateWithHistoryInTxAsync(connection, tx, previous, marksObtained, comment, expectedVersion, changedByUserId));
 
     public async Task UpdateMarksObtainedInTxAsync(NpgsqlConnection connection, NpgsqlTransaction tx, int id, int marksObtained)
     {
@@ -187,4 +252,34 @@ public class MarkStore(Database db)
 
         return rows.ToDictionary(r => r.StudentId, r => r.Id);
     }
+
+    public async Task<Dictionary<int, MarkSnapshot>> GetExistingForAssessmentAsync(int assessmentId, IReadOnlyCollection<int> studentIds)
+    {
+        if (studentIds.Count == 0) return [];
+        var rows = await db.QueryAsync(
+            """SELECT "Id", "StudentId", "MarksObtained", "Comment", "Version" FROM "Marks" WHERE "AssessmentId" = @assessmentId AND "StudentId" = ANY(@studentIds)""",
+            p => { p.AddWithValue("assessmentId", assessmentId); p.AddWithValue("studentIds", studentIds.ToArray()); },
+            reader => (StudentId: reader.GetInt32("StudentId"), Snapshot: new MarkSnapshot(reader.GetInt32("Id"), reader.GetInt32("MarksObtained"), reader.GetNullableString("Comment"), reader.GetInt32("Version"))));
+        return rows.ToDictionary(row => row.StudentId, row => row.Snapshot);
+    }
+
+    public async Task<List<MarkHistoryDto>> GetHistoryAsync(int markId, int schoolId) =>
+        await db.QueryAsync(
+            """
+            SELECT h."Id", h."MarkId", h."PreviousMarks", h."NewMarks", h."PreviousComment", h."NewComment", h."Version",
+                   h."ChangedByUserId", u."Username" AS "ChangedByName", h."ChangedAtUtc"
+            FROM "MarkHistory" h
+            JOIN "Marks" m ON m."Id" = h."MarkId"
+            JOIN "Students" s ON s."Id" = m."StudentId"
+            JOIN "Users" u ON u."Id" = h."ChangedByUserId"
+            WHERE h."MarkId" = @markId AND s."SchoolId" = @schoolId
+            ORDER BY h."ChangedAtUtc" DESC, h."Id" DESC
+            """,
+            p => { p.AddWithValue("markId", markId); p.AddWithValue("schoolId", schoolId); },
+            reader => new MarkHistoryDto
+            {
+                Id = reader.GetInt64("Id"), MarkId = reader.GetInt32("MarkId"), PreviousMarks = reader.GetInt32("PreviousMarks"), NewMarks = reader.GetInt32("NewMarks"),
+                PreviousComment = reader.GetNullableString("PreviousComment"), NewComment = reader.GetNullableString("NewComment"), Version = reader.GetInt32("Version"),
+                ChangedByUserId = reader.GetInt32("ChangedByUserId"), ChangedByName = reader.GetString("ChangedByName"), ChangedAtUtc = reader.GetDateTimeUtc("ChangedAtUtc"),
+            });
 }

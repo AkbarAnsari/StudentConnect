@@ -1,8 +1,8 @@
 #cloud-config
 # StudentConnect VM bootstrap: installs Docker, mounts the attached data disk for
 # persistent Postgres/file-storage data, sets up a nightly Postgres backup, enables
-# automatic security patching, and locks down the host firewall as defense-in-depth
-# behind the NSG.
+# automatic security patching, and locks down the host firewall as defense-in-depth behind
+# the NSG.
 
 package_update: true
 package_upgrade: true
@@ -128,7 +128,7 @@ runcmd:
   # App directory — the deploy script copies build artifacts + compose file here.
   - mkdir -p /opt/studentconnect
 
-  # Host firewall as defense-in-depth behind the NSG (deny by default, allow SSH/HTTP/HTTPS).
+  # Host firewall as defense-in-depth behind the NSG — deny by default, allow SSH/HTTP/HTTPS.
   - ufw default deny incoming
   - ufw default allow outgoing
   - ufw allow 22/tcp

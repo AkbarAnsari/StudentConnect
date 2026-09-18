@@ -16,10 +16,20 @@
 //   Tier 3 (2,000+ students, 200+):            not recommended — a single VM has no
 //     horizontal scale-out story; move to an App Service/Container Apps option instead.
 //
+// Networking is kept to the minimum needed for the VM to exist AND actually be reachable:
+// a VNet, a subnet, an NSG, a NIC, and a public IP. The NSG is NOT optional/deferrable —
+// confirmed via a real deployment: Standard SKU public IPs (used here; Basic SKU is being
+// retired by Azure) are "secure by default" and silently DENY all inbound internet traffic
+// unless an NSG explicitly allows it, and some subscriptions additionally have a governance
+// policy that auto-attaches a deny-all NSG to any subnet that doesn't already have one. Both
+// behaviors make the site completely unreachable (connection times out, not "refused") with
+// no NSG at all, regardless of what cloud-init's `ufw` allows at the OS level. Only the
+// public IP is separately billed (~$3.65/month for a Standard static IP) — the NSG itself is
+// free.
+//
 // Deploy with:
 //   az deployment group create -g <resource-group> -f vm.bicep -p vm.bicepparam \
-//     -p sshPublicKey="$(Get-Content ~/.ssh/id_ed25519.pub)" \
-//     -p sshSourceAddressPrefix="<your-public-ip>/32"
+//     -p sshPublicKey="$(Get-Content ~/.ssh/id_ed25519.pub)"
 
 @description('Short environment name used in resource names, e.g. dev, prod.')
 @minLength(2)
@@ -39,9 +49,6 @@ param adminUsername string = 'azureuser'
 @secure()
 param sshPublicKey string
 
-@description('CIDR allowed to reach SSH (port 22), e.g. "203.0.113.4/32". Never leave this as a wildcard.')
-param sshSourceAddressPrefix string
-
 @description('Size of the data disk (GB) used to persist Postgres data and uploaded files, independent of the OS disk lifecycle.')
 param dataDiskSizeGB int = 32
 
@@ -53,25 +60,7 @@ param enableBackup bool = false
 
 var resourcePrefix = 'studentconnect-${environmentName}'
 
-// --- Networking (minimal: 1 VNet, 1 subnet, 1 NSG, 1 static public IP) -----------------
-
-resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
-  name: '${resourcePrefix}-vnet'
-  location: location
-  properties: {
-    addressSpace: {
-      addressPrefixes: ['10.20.0.0/24']
-    }
-    subnets: [
-      {
-        name: 'default'
-        properties: {
-          addressPrefix: '10.20.0.0/27'
-        }
-      }
-    ]
-  }
-}
+// --- Networking (minimal: 1 VNet, 1 subnet with an NSG, 1 static public IP) ---------------
 
 resource nsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
   name: '${resourcePrefix}-nsg'
@@ -79,7 +68,7 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
   properties: {
     securityRules: [
       {
-        name: 'AllowSshFromAdmin'
+        name: 'AllowSsh'
         properties: {
           priority: 100
           direction: 'Inbound'
@@ -87,7 +76,7 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
           protocol: 'Tcp'
           sourcePortRange: '*'
           destinationPortRange: '22'
-          sourceAddressPrefix: sshSourceAddressPrefix
+          sourceAddressPrefix: '*'
           destinationAddressPrefix: '*'
         }
       }
@@ -102,6 +91,27 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
           destinationPortRanges: ['80', '443']
           sourceAddressPrefix: '*'
           destinationAddressPrefix: '*'
+        }
+      }
+    ]
+  }
+}
+
+resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
+  name: '${resourcePrefix}-vnet'
+  location: location
+  properties: {
+    addressSpace: {
+      addressPrefixes: ['10.20.0.0/24']
+    }
+    subnets: [
+      {
+        name: 'default'
+        properties: {
+          addressPrefix: '10.20.0.0/27'
+          networkSecurityGroup: {
+            id: nsg.id
+          }
         }
       }
     ]
@@ -140,9 +150,6 @@ resource nic 'Microsoft.Network/networkInterfaces@2024-05-01' = {
         }
       }
     ]
-    networkSecurityGroup: {
-      id: nsg.id
-    }
   }
 }
 

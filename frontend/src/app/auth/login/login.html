@@ -1,38 +1,92 @@
-<section class="page page-narrow">
-  <h1>Login</h1>
-  @if (showDevelopmentAccounts) {
-    <p class="notice">
-      Development accounts only: student1/student2, teacher1, admin1 — password pattern
-      <code>Role123!</code> (e.g. Student123!).
-    </p>
-  }
+<section class="auth-split">
+  <div class="auth-brand-panel">
+    <div class="auth-brand-content">
+      <a class="auth-brand-mark" routerLink="/">
+        <ng-icon name="lucideGraduationCap" size="22" />
+        <span>StudentConnect</span>
+      </a>
+      <h1>Welcome back to your school's workspace</h1>
+      <p>Sign in to manage attendance, assessments, homework, announcements, and more — all in one connected place.</p>
+      <ul class="auth-brand-points">
+        <li><ng-icon name="lucideCheck" size="16" /> Role-aware access for every account</li>
+        <li><ng-icon name="lucideCheck" size="16" /> Each school's data kept fully isolated</li>
+        <li><ng-icon name="lucideCheck" size="16" /> Built-in reporting and audit history</li>
+      </ul>
+    </div>
+  </div>
 
-  @if (errorMessage()) {
-    <p class="error-message">{{ errorMessage() }}</p>
-  }
+  <div class="auth-form-panel">
+    <div class="auth-form-card">
+      <a class="auth-compact-brand" routerLink="/">
+        <span class="auth-compact-brand-mark"><ng-icon name="lucideGraduationCap" size="20" /></span>
+        <span>StudentConnect</span>
+      </a>
 
-  <form [formGroup]="form" (ngSubmit)="onSubmit()">
-    <label>
-      Username
-      <input type="text" formControlName="username" autocomplete="username" />
-      @if (form.controls.username.invalid && form.controls.username.touched) {
-        <span class="field-error">Username is required.</span>
+      <span class="auth-form-icon"><ng-icon name="lucideShieldCheck" size="22" /></span>
+      <h2>Sign in</h2>
+      <p class="auth-form-subtitle">Enter your credentials to continue to your workspace.</p>
+
+      @if (showDevelopmentAccounts) {
+        <p class="notice">
+          Development accounts only: student1/student2, teacher1, admin1 — password pattern
+          <code>Role123!</code> (e.g. Student123!).
+        </p>
       }
-    </label>
 
-    <label>
-      Password
-      <input type="password" formControlName="password" autocomplete="current-password" />
-      @if (form.controls.password.invalid && form.controls.password.touched) {
-        <span class="field-error">Password is required.</span>
+      @if (errorMessage()) {
+        <p class="error-message">{{ errorMessage() }}</p>
       }
-    </label>
 
-    <button type="submit" [disabled]="submitting()">
-      {{ submitting() ? 'Logging in...' : 'Login' }}
-    </button>
-  </form>
+      <form [formGroup]="form" (ngSubmit)="onSubmit()">
+        <label>
+          Username
+          <span class="input-with-icon">
+            <ng-icon name="lucideUserRound" size="17" />
+            <input type="text" formControlName="username" autocomplete="username" placeholder="e.g. admin1" />
+          </span>
+          @if (form.controls.username.invalid && form.controls.username.touched) {
+            <span class="field-error">Username is required.</span>
+          }
+        </label>
 
-  <p class="notice"><a routerLink="/forgot-password">Forgot your password?</a></p>
-  <p class="notice">New school? <a routerLink="/register-school">Register your school here</a>.</p>
+        <label>
+          <span class="password-label-row">
+            Password
+            <a routerLink="/forgot-password" class="forgot-link">Forgot password?</a>
+          </span>
+          <span class="input-with-icon">
+            <ng-icon name="lucideLock" size="17" />
+            <input
+              [type]="showPassword() ? 'text' : 'password'"
+              formControlName="password"
+              autocomplete="current-password"
+              placeholder="Enter your password"
+            />
+            <button
+              type="button"
+              class="password-toggle"
+              (click)="toggleShowPassword()"
+              [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+            >
+              <ng-icon [name]="showPassword() ? 'lucideEyeOff' : 'lucideEye'" size="17" />
+            </button>
+          </span>
+          @if (form.controls.password.invalid && form.controls.password.touched) {
+            <span class="field-error">Password is required.</span>
+          }
+        </label>
+
+        <button type="submit" class="auth-submit" [disabled]="submitting()">
+          {{ submitting() ? 'Signing in...' : 'Sign in' }}
+        </button>
+      </form>
+
+      <div class="auth-form-footer">
+        <span>New school?</span>
+        <a routerLink="/register-school">Register your school here</a>
+      </div>
+
+      <p class="auth-trust-line"><ng-icon name="lucideLock" size="13" /> Secured sign-in — your session is encrypted and role-protected.</p>
+    </div>
+  </div>
 </section>

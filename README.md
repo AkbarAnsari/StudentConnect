@@ -139,15 +139,16 @@ automated for you — see below).
 
 ```powershell
 az deployment group create -g <resource-group> -f infra/vm.bicep -p infra/vm.bicepparam `
-  -p sshPublicKey="$(Get-Content ~/.ssh/id_ed25519.pub -Raw)" `
-  -p sshSourceAddressPrefix="<your-public-ip>/32"
+  -p sshPublicKey="$(Get-Content ~/.ssh/id_ed25519.pub -Raw)"
 ```
 
-This creates the VM, a static public IP, an NSG (only 22/80/443 open, SSH restricted to the
-CIDR you pass in), and a data disk mounted at `/mnt/pgdata` for Postgres data and uploaded
-files — independent of the OS disk/container lifecycle. `infra/cloud-init.yaml` installs
-Docker, mounts the disk, enables automatic security patching (`unattended-upgrades`), a host
-firewall (`ufw`) as defense-in-depth behind the NSG, and a nightly `pg_dump` backup
+This creates the VM, an NSG allowing 22/80/443 (required — Standard SKU public IPs deny all
+inbound by default without one, confirmed via a real deployment where the site was
+unreachable until this was added), a static public IP, and a data disk mounted at
+`/mnt/pgdata` for Postgres data and uploaded files — independent of the OS disk/container
+lifecycle. `infra/cloud-init.yaml` installs Docker, mounts the disk, enables automatic
+security patching (`unattended-upgrades`), a host firewall (`ufw`, allowing only 22/80/443 as
+defense-in-depth behind the NSG) and a nightly `pg_dump` backup
 (14-day retention) as a zero-cost substitute for managed-database backups.
 
 **Deploy the app** (builds locally, same as the Docker workflow above, then ships the
@@ -163,6 +164,35 @@ Re-run `infra/deploy-vm.ps1` after any source change to rebuild and redeploy; it
 deletes data on the VM. For a custom domain + HTTPS, point DNS at the VM's static IP and run
 `certbot --nginx` inside the `frontend` container's mounted config, or front the VM with a
 reverse proxy that terminates TLS.
+
+**If SSH/SCP is blocked from your machine** (some corporate/home networks block outbound
+port 22 while HTTP(S) and the Azure management API work fine), `infra/deploy-vm.ps1` won't be
+reachable. Use the run-command-based fallback instead, which ships files entirely through
+`az vm run-command` (no port 22 needed, only `az` CLI access):
+
+```powershell
+./infra/stage-via-runcommand.ps1 -TarPath <path-to-tarball.tar.gz>
+```
+
+This base64-encodes the tarball, transfers it to the VM in ~150,000-character chunks (larger
+single invocations silently truncate with no error — verified the hard way), verifies the
+transferred size on the remote side before trusting it, then extracts it into
+`/opt/studentconnect`. You still need to run your own `docker compose up --build -d` via a
+follow-up `az vm run-command invoke` to actually rebuild/restart containers after staging.
+
+For the common case of a **frontend-only change** (no backend/database changes), skip all of
+that and just run:
+
+```powershell
+./infra/redeploy-frontend-azure.ps1
+```
+
+This builds the Angular app, packages `frontend/{Dockerfile,dist,nginx.conf}`, stages it via
+`infra/stage-via-runcommand.ps1`, then rebuilds and restarts only the `frontend` container on
+the VM — leaving the API, database, and `.env` untouched. Pass `-SkipBuild` to reuse an
+already-built `frontend/dist`. The same pattern works for backend-only changes by packaging
+`backend/{StudentConnect.Api/Dockerfile,publish,database}` instead and targeting the `api`
+service in the final `docker compose up --build -d` step.
 
 If you later need high availability, autoscaling, or fully managed Postgres backups/PITR,
 `infra/main.bicep` provisions the equivalent managed-PaaS architecture (App Service, Postgres

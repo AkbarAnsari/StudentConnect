@@ -446,6 +446,227 @@ tbody tr:hover {
   color: var(--color-info-700);
 }
 
+/* ---------- Public marketing pages (home / about / contact) ---------- */
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: var(--color-accent-50);
+  color: var(--color-accent-700);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.marketing-hero {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(155deg, var(--color-primary-900) 0%, var(--color-primary-800) 55%, var(--color-accent-700) 130%);
+  color: #eef5f4;
+}
+
+.marketing-hero::before,
+.marketing-hero::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.marketing-hero::before {
+  width: 480px;
+  height: 480px;
+  top: -220px;
+  right: -140px;
+  background: radial-gradient(circle, rgba(0, 122, 102, 0.55) 0%, rgba(0, 122, 102, 0) 70%);
+}
+
+.marketing-hero::after {
+  width: 360px;
+  height: 360px;
+  bottom: -180px;
+  left: -120px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 70%);
+}
+
+.marketing-hero-inner {
+  position: relative;
+  z-index: 1;
+  max-width: var(--page-max-width-wide);
+  margin: 0 auto;
+  padding: 4.5rem 2rem 5rem;
+}
+
+.marketing-hero p {
+  color: #cfe3e0;
+}
+
+.marketing-hero .eyebrow {
+  background: rgba(255, 255, 255, 0.12);
+  color: #d7f5ee;
+}
+
+.marketing-hero-sm .marketing-hero-inner {
+  padding: 3.25rem 2rem 3.5rem;
+}
+
+/* Stat / trust chips used under a hero */
+
+.stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #eef5f4;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.stat-chip ng-icon {
+  color: #7fe8cf;
+}
+
+/* Feature grid shared by home/about/contact */
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1.25rem;
+}
+
+.feature-card {
+  background: #fff;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  padding: 1.6rem 1.5rem;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-accent-100);
+}
+
+.feature-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-50);
+  color: var(--color-accent-700);
+  margin-bottom: 1rem;
+}
+
+.feature-card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.02rem;
+  color: var(--color-primary-800);
+}
+
+.feature-card p {
+  margin: 0;
+  color: var(--color-neutral-600);
+  font-size: 0.9rem;
+}
+
+.section-heading {
+  max-width: 640px;
+  margin: 0 auto 2.25rem;
+  text-align: center;
+}
+
+.section-heading .eyebrow {
+  margin-bottom: 0.75rem;
+}
+
+.section-heading p {
+  color: var(--color-neutral-600);
+  margin: 0.5rem 0 0;
+}
+
+.marketing-section {
+  max-width: var(--page-max-width-wide);
+  margin: 0 auto;
+  padding: 4rem 2rem;
+}
+
+.marketing-section-tight {
+  padding-top: 0;
+}
+
+.marketing-section-muted {
+  background: var(--color-neutral-50);
+  border-top: 1px solid var(--color-neutral-200);
+  border-bottom: 1px solid var(--color-neutral-200);
+}
+
+/* CTA banner near the bottom of a page */
+
+.cta-banner {
+  max-width: var(--page-max-width-wide);
+  margin: 0 auto 4.5rem;
+  padding: 2.75rem 2.5rem;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(120deg, var(--color-primary-800), var(--color-accent-700));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  box-shadow: var(--shadow-lg);
+}
+
+.cta-banner h2 {
+  color: #fff;
+  margin: 0 0 0.3rem;
+}
+
+.cta-banner p {
+  color: #d7ece8;
+  margin: 0;
+}
+
+.cta-banner-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .marketing-hero-inner {
+    padding: 3rem 1.25rem 3rem;
+  }
+
+  .marketing-section {
+    padding: 2.75rem 1.25rem;
+  }
+
+  .cta-banner {
+    padding: 2rem 1.5rem;
+    justify-content: center;
+    text-align: center;
+  }
+}
+
 @media (max-width: 720px) {
   .page,
   .page-wide,

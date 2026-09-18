@@ -1,20 +1,153 @@
-<section class="hero">
-  <h1>Welcome to StudentConnect</h1>
-  <p>A connected workspace for school operations, teaching, learning, and family engagement.</p>
-  <a class="cta" routerLink="/login">Sign in to your workspace</a>
+<section class="marketing-hero home-hero">
+  <div class="marketing-hero-inner home-hero-inner">
+    <div class="home-hero-copy">
+      <span class="eyebrow"><ng-icon name="lucideSchool" size="14" /> Multi-tenant school operations platform</span>
+      <h1>The connected workspace for modern school operations</h1>
+      <p>
+        Attendance, assessments, homework, announcements, and reporting — one role-aware
+        workspace for administrators, teachers, students, and families, with every school's
+        data kept completely separate and secure.
+      </p>
+      <div class="home-hero-actions">
+        <a class="btn btn-hero-primary" routerLink="/login">
+          Sign in to your workspace <ng-icon name="lucideArrowRight" size="16" />
+        </a>
+        <a class="btn btn-hero-secondary" routerLink="/register-school">Register your school</a>
+      </div>
+      <div class="stat-row">
+        <span class="stat-chip"><ng-icon name="lucideUsers" size="14" /> 5 tailored roles</span>
+        <span class="stat-chip"><ng-icon name="lucideShieldCheck" size="14" /> Isolated per-school data</span>
+        <span class="stat-chip"><ng-icon name="lucideActivity" size="14" /> Real-time attendance &amp; grading</span>
+      </div>
+    </div>
+
+    <div class="home-hero-visual" aria-hidden="true">
+      <div class="preview-window">
+        <div class="preview-window-bar">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="preview-window-body">
+          <div class="preview-row">
+            <div class="preview-stat">
+              <span class="preview-stat-label">Attendance today</span>
+              <span class="preview-stat-value">96.2%</span>
+            </div>
+            <div class="preview-stat">
+              <span class="preview-stat-label">Assignments open</span>
+              <span class="preview-stat-value">12</span>
+            </div>
+          </div>
+          <div class="preview-bars">
+            <span class="bar-1"></span>
+            <span class="bar-2"></span>
+            <span class="bar-3"></span>
+            <span class="bar-4"></span>
+            <span class="bar-5"></span>
+            <span class="bar-6"></span>
+            <span class="bar-7"></span>
+          </div>
+          <div class="preview-list">
+            <div class="preview-list-item">
+              <span class="preview-dot preview-dot-success"></span>
+              Report cards issued — Grade 8
+            </div>
+            <div class="preview-list-item">
+              <span class="preview-dot preview-dot-info"></span>
+              Announcement scheduled for tomorrow
+            </div>
+            <div class="preview-list-item">
+              <span class="preview-dot preview-dot-warning"></span>
+              3 homework submissions pending review
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </section>
 
-<section class="highlights">
-  <div class="card">
-    <h2>For Students</h2>
-    <p>Follow attendance, marks, homework, materials, activities, and school updates.</p>
+<section class="marketing-section">
+  <div class="section-heading">
+    <span class="eyebrow">Everything in one place</span>
+    <h2>All the day-to-day of running a school, connected</h2>
+    <p>No more spreadsheets and disconnected tools — every workflow shares the same student, class, and academic-year records.</p>
   </div>
-  <div class="card">
-    <h2>For Teachers</h2>
-    <p>Work from assigned classes to record attendance, grade, and share learning resources.</p>
-  </div>
-  <div class="card">
-    <h2>For Schools</h2>
-    <p>Coordinate people, academic structure, communication, reporting, and operations.</p>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="feature-icon"><ng-icon name="lucideCalendarCheck" size="22" /></span>
+      <h3>Attendance</h3>
+      <p>Present, absent, late, and excused states, correction history, and family leave requests with approval workflows.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon"><ng-icon name="lucideChartNoAxesCombined" size="22" /></span>
+      <h3>Assessments &amp; marks</h3>
+      <p>Draft/published release, versioned edits, CSV import/export, and configurable grading bands.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon"><ng-icon name="lucideBookOpen" size="22" /></span>
+      <h3>Homework &amp; materials</h3>
+      <p>Class-targeted assignments, file submissions and feedback, and versioned learning material libraries.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon"><ng-icon name="lucideMegaphone" size="22" /></span>
+      <h3>Announcements</h3>
+      <p>Scoped audiences, scheduling, priority, read receipts, and both in-app and email delivery.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon"><ng-icon name="lucideHeartHandshake" size="22" /></span>
+      <h3>Activities</h3>
+      <p>Capacity and waitlists, consent documents, optional fees, and check-in for school events and clubs.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon"><ng-icon name="lucideFileText" size="22" /></span>
+      <h3>Reports &amp; analytics</h3>
+      <p>Risk thresholds, report-card batch issuance, transcripts, and tenant-scoped audit history.</p>
+    </div>
   </div>
 </section>
+
+<section class="marketing-section marketing-section-muted">
+  <div class="section-heading">
+    <span class="eyebrow">Built for every role</span>
+    <h2>Everyone sees exactly what they need — nothing else</h2>
+    <p>Role-aware by design: each person only reaches the data and actions appropriate to them.</p>
+  </div>
+  <div class="role-grid">
+    <div class="role-card">
+      <span class="feature-icon"><ng-icon name="lucideShieldCheck" size="20" /></span>
+      <h3>Admin</h3>
+      <p>Academic structure, staffing, governance, and school-wide reporting.</p>
+    </div>
+    <div class="role-card">
+      <span class="feature-icon"><ng-icon name="lucideUserRound" size="20" /></span>
+      <h3>Teacher</h3>
+      <p>Attendance, gradebooks, homework, and class materials for assigned classes.</p>
+    </div>
+    <div class="role-card">
+      <span class="feature-icon"><ng-icon name="lucideGraduationCap" size="20" /></span>
+      <h3>Student</h3>
+      <p>Grades, attendance, homework, materials, and activities in one view.</p>
+    </div>
+    <div class="role-card">
+      <span class="feature-icon"><ng-icon name="lucideHeartHandshake" size="20" /></span>
+      <h3>Parent</h3>
+      <p>Linked children's progress, announcements, and notification preferences.</p>
+    </div>
+    <div class="role-card">
+      <span class="feature-icon"><ng-icon name="lucideUsers" size="20" /></span>
+      <h3>Coordinator</h3>
+      <p>Activity moderation, registrations, and event communication.</p>
+    </div>
+  </div>
+</section>
+
+<div class="cta-banner">
+  <div>
+    <h2>Ready to bring your school online?</h2>
+    <p>Register your school in minutes, or sign in if your workspace is already set up.</p>
+  </div>
+  <div class="cta-banner-actions">
+    <a class="btn btn-hero-primary" routerLink="/register-school">Register your school</a>
+    <a class="btn btn-hero-secondary" routerLink="/login">Sign in</a>
+  </div>
+</div>

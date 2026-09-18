@@ -105,9 +105,6 @@ Set-Location frontend
 npm start
 ```
 
-Frontend: `http://localhost:4200`
-API: `http://localhost:5286`
-
 ## Docker deployment
 
 The local network permits host package restore but can block package registries inside

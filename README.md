@@ -6,8 +6,41 @@
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-StudentConnect is a multi-tenant school operations portal. Each school owns an isolated
-set of users, students, classes, academic records, communications, files, and reports.
+StudentConnect is a multi-tenant school operations portal designed to help schools and educational institutions manage their day-to-day academic and administrative activities through a secure, centralized platform.
+
+Each school operates within its own isolated tenant, managing its users, students, classes, academic records, communications, files, and reports.
+
+🎓 Built for Learning. Designed Like a Real-World Enterprise Application.
+
+StudentConnect is also an educational initiative created to help school and college students learn modern software engineering and enterprise application development through a practical, real-world project.
+
+Rather than learning individual technologies in isolation, students can explore how different components of a modern application work together — from the user interface and APIs to business logic, databases, cloud infrastructure and deployment.
+
+The project provides a hands-on opportunity to understand how enterprise applications are architected, developed, secured, containerized and deployed.
+
+🎯 Learning Objectives
+
+Through StudentConnect, students can explore:
+
+Frontend Development: Building modern, responsive applications using Angular.
+
+Backend Development: Designing REST APIs using ASP.NET Core.
+
+Software Architecture: Understanding layered architecture and separation of concerns.
+
+Database Engineering: Designing relational databases, schemas and SQL queries using PostgreSQL.
+
+Multi-Tenant Architecture: Understanding how a single application securely serves multiple schools while isolating their data.
+
+Authentication & Security: Learning JWT-based authentication and authorization.
+
+Cloud Computing: Understanding cloud storage, identity and application hosting using Microsoft Azure.
+
+Containerization: Packaging and running applications using Docker and Docker Compose.
+
+Infrastructure as Code: Provisioning cloud infrastructure using Azure Bicep.
+
+Enterprise Engineering Practices: Working with reusable components, interfaces, dependency management and background processing.
 
 ## Current capabilities
 
